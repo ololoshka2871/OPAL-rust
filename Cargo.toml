@@ -1,0 +1,47 @@
+[package]
+authors = ["ololoshka2871"]
+edition = "2018"
+readme = "README.md"
+name = "stm32-usb-self-writer"
+version = "0.1.0"
+
+[dependencies]
+cortex-m = "0.7.3"
+cortex-m-rt = "0.6.11" # need by stm32l4 == 0.13.0
+#cortex-m-semihosting = "0.3.3"
+panic-halt = "0.2.0"
+
+# free-rtos
+freertos-rust = "0.1.2"
+
+# Uncomment for the device example.
+# Update `memory.x`, set target to `thumbv7em-none-eabihf` in `.cargo/config`,
+# and then use `cargo build --examples device` to build it.
+#[dependencies.stm32l4] # https://docs.rs/crate/stm32l4/0.13.0
+#features = ["stm32l4x3", "rt"]
+#version = "0.13.0"
+
+[dependencies.stm32l4xx-hal]
+features = ["stm32l4x3", "rt"]
+version= "0.6.0"
+
+[dependencies.cortex-m-log]
+version = "0.7.0"
+features = ["semihosting"]
+
+[dependencies.heatshrink-rust]
+git = "file:///home/tolyan/src/rust/clibs/heatshrink-rust"
+
+[build-dependencies]
+freertos-cargo-build = "0.1.1"
+
+# this lets you use `cargo fix`!
+[[bin]]
+name = "stm32-usb-self-writer"
+test = false
+bench = false
+
+[profile.release]
+codegen-units = 1 # better optimizations
+debug = true # symbols are nice and they don't increase the size on Flash
+lto = true # better optimizations
