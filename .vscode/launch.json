@@ -26,6 +26,7 @@
                 "set non-stop on",
                 "skip -rfunction ^core::",
                 "skip -rfu ^compiler_builtins::",
+                "skip -rfu ^alloc::",
 
                 // дефольные брейкпоинты
                 //"break DefaultHandler",

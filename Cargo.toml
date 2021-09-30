@@ -29,6 +29,15 @@ version= "0.6.0"
 version = "0.7.0"
 features = ["semihosting"]
 
+[dependencies.stm32-usbd]
+version = "0.6.0"
+
+[dependencies.usbd-serial]
+version = "0.1"
+
+[dependencies.usb-device]
+version = "0.2"
+
 [dependencies.heatshrink-rust]
 git = "file:///home/tolyan/src/rust/clibs/heatshrink-rust"
 
