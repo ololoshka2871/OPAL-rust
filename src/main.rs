@@ -4,7 +4,7 @@
 #![feature(lang_items)]
 #![feature(alloc_error_handler)]
 
-extern crate panic_halt; // panic handler
+mod logging;
 
 use core::alloc::Layout;
 use cortex_m::asm;
@@ -30,7 +30,9 @@ static GLOBAL: FreeRtosAllocator = FreeRtosAllocator;
 
 #[entry]
 fn main() -> ! {
+    defmt::trace!("Start up");
     configure_clocks();
+    defmt::trace!("Clocks configured");
     /*
             Task::new()
                 .name("thread")
@@ -55,13 +57,15 @@ fn main() -> ! {
                 })
                 .unwrap();
     */
-    let _ = Task::new()
+    defmt::trace!("Creating usb thread...");
+    let r = Task::new()
         .name("usbd")
         .stack_size(2048)
         .priority(TaskPriority(2))
-        .start(move || threads::usbd::usbd(unsafe { stm32::Peripherals::steal() }))
-        .unwrap();
+        .start(move || threads::usbd::usbd(unsafe { stm32::Peripherals::steal() }));
+    defmt::trace!("Result: {}", r.is_ok());
 
+    defmt::trace!("Starting FreeRTOS sharuler");
     FreeRtosUtils::start_scheduler();
 }
 
@@ -74,6 +78,7 @@ fn configure_clocks() {
     let mut flash = dp.FLASH.constrain();
     let mut pwr = dp.PWR.constrain(&mut rcc.apb1r1);
 
+    defmt::info!("Set CLK48MHz source to PLLQ/2");
     {
         // set USB 48Mhz clock src to PLLQ
         // can be configured only before PLL enable
@@ -90,7 +95,7 @@ fn configure_clocks() {
         unsafe { _rcc.ccipr.modify(|_, w| w.clk48sel().bits(0b10)) };
     }
 
-    let _ = rcc
+    let clocks = rcc
         .cfgr
         .hse(
             12.mhz(), // onboard crystall
@@ -105,6 +110,13 @@ fn configure_clocks() {
         .pclk1(24.mhz())
         .pclk2(24.mhz())
         .freeze(&mut flash.acr, &mut pwr);
+
+    defmt::info!(
+        "Clock config: CPU={}, pclk1={}, pclk2={}",
+        clocks.sysclk().0,
+        clocks.pclk1().0,
+        clocks.pclk2().0
+    );
 }
 
 #[exception]
