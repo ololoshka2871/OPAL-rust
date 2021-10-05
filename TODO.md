@@ -13,15 +13,37 @@
         use stm32l4xx_hal::stm32;
 
 * [v] "Перешагивать" код, где нет отладочных символов
-    dbb: skip -rfu ^core::
+    gdb: skip -rfu ^core::
 
-* [_] USB
+* [v] USB
     * [v] Настрить минимальную сборку
     * [v] Разобраться с получением stm32::Peripherals::take()
         unsafe {stm32::Peripherals::steal()}
-    * [_] Клокинг USB от PLLR (/2)
-    * [_] Виртуальный COM-порт работает
+    * [v] Клокинг USB от PLLR (/2)
+    * [v] Виртуальный COM-порт работает
 
-* [_] Частота проца в конфиге FreeRTOS
+* [x] Частота проца в конфиге FreeRTOS
+    \- Переехали на RTIC \-
 
-* [_] Разобраться с cargo embed
+* [v] Разобраться с cargo embed
+    Смотри полную справку в обсидиане
+    [v] Config: `.embed.toml`
+    [v] Прошивка
+    [v] Логирование: `rtt-target`
+    [v] Отладка
+
+* [_] USB Mass Storage
+    https://github.com/cs2dsb/stm32-usb.rs/tree/master/firmware/usbd_mass_storage
+    * [_] Выбрать VID/PID
+    * [v] Пример запускается, но пока с заглушкой вместо чтения-записи
+    * [_] Удалось создать Mass Storage + ACM, но работает нестабильно
+    * [v] Пример c Mass Storage жрет почти все мето в контроллере, почему?
+        добавил оптимизацию 1 уровня - размер уменьшился в 2 раза `[profile.dev]/opt-level = 1`
+    * [_] Проверить распознает ли винда диск Mass Storage
+        Не работает, вероятно проблема в "string descriptor 0 read error: -71"
+    * [x] RTIC Запуск задачи вне контекста прерывания
+        Все задачи RTIC - это прерывания
+
+* [_] defmt : https://ferrous-systems.com/blog/defmt/
+
+* [_] Определить, оставляем RTIC или FreeRTOS

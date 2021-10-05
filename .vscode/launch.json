@@ -39,6 +39,70 @@
                 // сбросить проц при подключении
                 "monitor reset halt"
             ]
+        },
+        {
+            "type": "gdb",
+            "request": "attach",
+            "name": "Attach (cargo embed)", 
+            "target": "./target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer",
+            "gdbpath" : "arm-none-eabi-gdb", // Это тупо какой gdb использовать
+            "runToMain": true,
+            "cwd": "${workspaceRoot}",
+            "valuesFormatting": "parseText",
+            "autorun": [
+                "file ./target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer", // бинарь
+                "target extended-remote :2331", // куда коннектиться к openocd
+                "set print asm-demangle on",
+                "set backtrace limit 32",
+
+                "set target-async 1",
+                "set pagination off",
+                "set non-stop on",
+                "skip -rfunction ^core::",
+                "skip -rfu ^compiler_builtins::",
+                "skip -rfu ^alloc::",
+
+                // дефольные брейкпоинты
+                //"break DefaultHandler",
+                //"break HardFault",
+                //"break rust_begin_unwind",
+                "break main",
+                
+                // сбросить проц при подключении
+                "monitor reset"
+            ]
+        },
+        {
+            "type": "gdb",
+            "request": "attach",
+            "name": "Attach (cargo embed) release", 
+            "target": "./target/thumbv7em-none-eabihf/release/stm32-usb-self-writer",
+            "gdbpath" : "arm-none-eabi-gdb", // Это тупо какой gdb использовать
+            "runToMain": true,
+            "cwd": "${workspaceRoot}",
+            "valuesFormatting": "parseText",
+            "autorun": [
+                "file ./target/thumbv7em-none-eabihf/release/stm32-usb-self-writer", // бинарь
+                "target extended-remote :2331", // куда коннектиться к openocd
+                "set print asm-demangle on",
+                "set backtrace limit 32",
+
+                "set target-async 1",
+                "set pagination off",
+                "set non-stop on",
+                "skip -rfunction ^core::",
+                "skip -rfu ^compiler_builtins::",
+                "skip -rfu ^alloc::",
+
+                // дефольные брейкпоинты
+                //"break DefaultHandler",
+                //"break HardFault",
+                //"break rust_begin_unwind",
+                "break main",
+                
+                // сбросить проц при подключении
+                "monitor reset"
+            ]
         }
     ]
 }

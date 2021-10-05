@@ -12,10 +12,10 @@ use cortex_m_rt::exception;
 use cortex_m_rt::{entry, ExceptionFrame};
 use freertos_rust::*;
 
-use cortex_m_log::printer::{semihosting, Printer};
+//use cortex_m_log::printer::{semihosting, Printer};
 
-use heatshrink_rust::decoder::HeatshrinkDecoder;
-use heatshrink_rust::encoder::HeatshrinkEncoder;
+//use heatshrink_rust::decoder::HeatshrinkDecoder;
+//use heatshrink_rust::encoder::HeatshrinkEncoder;
 
 use stm32l4xx_hal::{prelude::*, stm32};
 
@@ -32,28 +32,28 @@ static GLOBAL: FreeRtosAllocator = FreeRtosAllocator;
 fn main() -> ! {
     configure_clocks();
     /*
-        Task::new()
-            .name("thread")
-            .stack_size(2548)
-            .priority(TaskPriority(3))
-            .start(move || {
-                let mut shost = semihosting::InterruptOk::<_>::stdout().unwrap();
+            Task::new()
+                .name("thread")
+                .stack_size(2548)
+                .priority(TaskPriority(3))
+                .start(move || {
+                    let mut shost = semihosting::InterruptOk::<_>::stdout().unwrap();
 
-                let src = [0u8; 8];
+                    let src = [0u8; 8];
 
-                let mut it_src = src.iter().map(|a| *a);
+                    let mut it_src = src.iter().map(|a| *a);
 
-                let mut enc = HeatshrinkEncoder::from_source(&mut it_src);
-                let mut dec = HeatshrinkDecoder::from_source(&mut enc);
-                loop {
-                    if let Some(b) = dec.next() {
-                        shost.println(format_args!("=={:X}", b));
-                    } else {
-                        break;
+                    let mut enc = HeatshrinkEncoder::from_source(&mut it_src);
+                    let mut dec = HeatshrinkDecoder::from_source(&mut enc);
+                    loop {
+                        if let Some(b) = dec.next() {
+                            shost.println(format_args!("=={:X}", b));
+                        } else {
+                            break;
+                        }
                     }
-                }
-            })
-            .unwrap();
+                })
+                .unwrap();
     */
     let _ = Task::new()
         .name("usbd")
@@ -75,38 +75,35 @@ fn configure_clocks() {
     let mut pwr = dp.PWR.constrain(&mut rcc.apb1r1);
 
     {
-        // set USB 48Mhz clock src
+        // set USB 48Mhz clock src to PLLQ
         // can be configured only before PLL enable
-        let rcc = unsafe { &*stm32::RCC::ptr() };
+        let _rcc = unsafe { &*stm32::RCC::ptr() };
 
-        rcc.pllcfgr.modify(|_, w| unsafe {
+        _rcc.pllcfgr.modify(|_, w| unsafe {
             w.pllq()
-                .bits(0b00) // /2
+                .bits(0b00) // PLLQ = PLL/2
                 .pllqen()
                 .set_bit() // enable PLLQ
         });
 
         // PLLQ -> CLK48MHz
-        unsafe { rcc.ccipr.modify(|_, w| w.clk48sel().bits(0b10)) };
+        unsafe { _rcc.ccipr.modify(|_, w| w.clk48sel().bits(0b10)) };
     }
 
     let _ = rcc
         .cfgr
-        // enable HSE
         .hse(
-            12.mhz(),
+            12.mhz(), // onboard crystall
             stm32l4xx_hal::rcc::CrystalBypass::Disable,
             stm32l4xx_hal::rcc::ClockSecuritySystem::Enable,
         )
-        // set new cpu speed and PLL config
-        .sysclk_with_pll(24.mhz(), PllConfig::new(1, 8, PllDivider::Div4))
-        // set PLL source
+        .sysclk_with_pll(
+            24.mhz(),                               // CPU clock
+            PllConfig::new(1, 8, PllDivider::Div4), // PLL config
+        )
         .pll_source(stm32l4xx_hal::rcc::PllSource::HSE)
-        // set pclk1 speed
         .pclk1(24.mhz())
-        // set pclk2 speed
         .pclk2(24.mhz())
-        // apply changes
         .freeze(&mut flash.acr, &mut pwr);
 }
 
