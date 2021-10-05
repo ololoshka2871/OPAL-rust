@@ -25,7 +25,7 @@ unsafe impl UsbPeripheral for UsbPeriph {
     const EP_MEMORY_ACCESS_2X16: bool = true;
 
     fn enable() {
-        let crs = unsafe { &(*stm32::CRS::ptr()) };
+        let crs = unsafe { &*stm32::CRS::ptr() };
         let rcc = unsafe { &*RCC::ptr() };
         let pwr = unsafe { &*stm32::PWR::ptr() };
 

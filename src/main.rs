@@ -15,6 +15,7 @@ use freertos_rust::*;
 //use heatshrink_rust::encoder::HeatshrinkEncoder;
 
 use stm32l4xx_hal::{prelude::*, stm32};
+use support::{usb_connection_checker::UsbConnectionChecker, vusb_monitor::VUsbMonitor};
 
 mod threads;
 
@@ -27,9 +28,21 @@ static GLOBAL: FreeRtosAllocator = FreeRtosAllocator;
 
 #[entry]
 fn main() -> ! {
-    defmt::trace!("Start up");
-    configure_clocks();
-    defmt::trace!("Clocks configured");
+    defmt::trace!("!Start up!");
+
+    if is_usb_connected() {
+        defmt::info!("USB connected, CPU max performance mode");
+
+        // high speed
+        configure_clocks();
+    } else {
+        defmt::info!("USB not connected, self-writer mode");
+
+        // slow speed
+        configure_clocks();
+    }
+
+    
     /*
             Task::new()
                 .name("thread")
@@ -54,6 +67,8 @@ fn main() -> ! {
                 })
                 .unwrap();
     */
+
+    /*
     defmt::trace!("Creating usb thread...");
     let r = Task::new()
         .name("usbd")
@@ -61,7 +76,7 @@ fn main() -> ! {
         .priority(TaskPriority(2))
         .start(move || threads::usbd::usbd(unsafe { stm32::Peripherals::steal() }));
     defmt::trace!("Result: {}", r.is_ok());
-
+    */
     defmt::trace!("Starting FreeRTOS sharuler");
     FreeRtosUtils::start_scheduler();
 }
@@ -114,4 +129,11 @@ fn configure_clocks() {
         clocks.pclk1().0,
         clocks.pclk2().0
     );
+}
+
+fn is_usb_connected() -> bool {
+    let rcc = unsafe { &*stm32::RCC::ptr() };
+    let pwr = unsafe { &*stm32::PWR::ptr() };
+
+    VUsbMonitor::new(rcc, pwr).is_usb_connected()
 }
