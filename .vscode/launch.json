@@ -51,7 +51,7 @@
             "valuesFormatting": "parseText",
             "autorun": [
                 "file ./target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer", // бинарь
-                "target extended-remote :2331", // куда коннектиться к openocd
+                "target remote :2331", // куда коннектиться к openocd
                 "set print asm-demangle on",
                 "set backtrace limit 32",
 

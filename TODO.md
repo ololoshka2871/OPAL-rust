@@ -44,6 +44,8 @@
     * [x] RTIC Запуск задачи вне контекста прерывания
         Все задачи RTIC - это прерывания
 
-* [_] defmt : https://ferrous-systems.com/blog/defmt/
+* [v] defmt : https://ferrous-systems.com/blog/defmt/
+    Множественные изменение в настройках сборки
 
-* [_] Определить, оставляем RTIC или FreeRTOS
+* [v] Определить, оставляем RTIC или FreeRTOS 
+    Выбрана FreeRTOS

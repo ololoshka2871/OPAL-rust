@@ -1,3 +1,5 @@
+use core::convert::TryInto;
+
 use freertos_rust::{CurrentTask, Duration};
 use stm32l4xx_hal::gpio::{Alternate, Floating, Input, AF10, PA11, PA12};
 use stm32l4xx_hal::pac::{Peripherals, RCC, USB};
@@ -6,6 +8,7 @@ use stm32l4xx_hal::{prelude::*, stm32};
 use stm32_usbd::{UsbBus, UsbPeripheral};
 
 use usb_device::prelude::*;
+use usbd_scsi::{BlockDevice, BlockDeviceError, Scsi};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 pub struct Peripheral {
@@ -84,6 +87,41 @@ unsafe impl UsbPeripheral for Peripheral {
     }
 }
 
+
+pub struct Storage {}
+
+static mut DATA: [u8; 512] = [0_u8; 512];
+
+impl BlockDevice for Storage {
+    const BLOCK_BYTES: usize = 512;
+
+    fn read_block(&self, _lba: u32, block: &mut [u8]) -> Result<(), BlockDeviceError> {
+        let block: &mut [u8; 512] = block
+            .try_into()
+            .map_err(|_e| BlockDeviceError::InvalidAddress)?;
+
+        unsafe {
+            core::ptr::copy_nonoverlapping(DATA.as_ptr(), block.as_mut_ptr(), 512);
+        }
+        Ok(())
+    }
+
+    fn write_block(&mut self, _lba: u32, block: &[u8]) -> Result<(), BlockDeviceError> {
+        let block: &[u8; 512] = block
+            .try_into()
+            .map_err(|_e| BlockDeviceError::InvalidAddress)?;
+
+        unsafe {
+            core::ptr::copy_nonoverlapping(block.as_ptr(), DATA.as_mut_ptr(), 512);
+        }
+        Ok(())
+    }
+
+    fn max_lba(&self) -> u32 {
+        0 // Это не размер а максимальный номер блока по 512 байт
+    }
+}
+
 pub fn usbd(dp: Peripherals) -> ! {
     defmt::info!("Usb thread started!");
 
@@ -100,6 +138,15 @@ pub fn usbd(dp: Peripherals) -> ! {
     defmt::info!("Allocating ACM device");
     let mut serial = SerialPort::new(&usb_bus);
 
+    defmt::info!("Allocating SCSI device");
+    let mut scsi = Scsi::new(
+        &usb_bus,
+        64,
+        Storage {},
+        "SCTB", // <= 8 больших букв
+        "SelfWriter",
+        "L442",
+    );
 
     let vid_pid = UsbVidPid(0x16c0, 0x27dd);
     defmt::info!("Building usb device: vid={} pid={}", &vid_pid.0, &vid_pid.1);
@@ -107,11 +154,12 @@ pub fn usbd(dp: Peripherals) -> ! {
         .manufacturer("Fake company")
         .product("Serial port")
         .serial_number("TEST")
-        .device_class(USB_CLASS_CDC)
+        //.device_class(USB_CLASS_CDC)
+        .device_class(usbd_mass_storage::USB_CLASS_MSC)
         .build();
 
     loop {
-        if !usb_dev.poll(&mut [&mut serial]) {
+        if !usb_dev.poll(&mut [&mut serial, &mut scsi]) {
             //CurrentTask::delay(Duration::ms(1));
             continue;
         }
