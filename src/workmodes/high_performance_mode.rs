@@ -9,30 +9,28 @@ use super::WorkMode;
 pub struct HighPerformanceMode {
     rcc: stm32l4xx_hal::rcc::Rcc,
     flash: stm32l4xx_hal::flash::Parts,
-    pwr: Option<stm32l4xx_hal::pwr::Pwr>,
+    pwr: stm32l4xx_hal::pwr::Pwr,
 
     clocks: Option<stm32l4xx_hal::rcc::Clocks>,
 
     usb: stm32l4xx_hal::stm32::USB,
-    gpioa: Option<stm32l4xx_hal::gpio::gpioa::Parts>,
+    gpioa: stm32l4xx_hal::gpio::gpioa::Parts,
 }
 
 impl HighPerformanceMode {
     pub fn new(dp: Peripherals) -> Self {
-        let mut res = HighPerformanceMode {
-            rcc: dp.RCC.constrain(),
+        let mut rcc = dp.RCC.constrain();
+
+         HighPerformanceMode {
             flash: dp.FLASH.constrain(),
             usb: dp.USB,
 
-            gpioa: None,
-            pwr: None,
+            gpioa: dp.GPIOA.split(&mut rcc.ahb2),
+            pwr: dp.PWR.constrain(&mut rcc.apb1r1),
             clocks: None,
-        };
 
-        res.pwr = Some(dp.PWR.constrain(&mut res.rcc.apb1r1));
-        res.gpioa = Some(dp.GPIOA.split(&mut res.rcc.ahb2));
-
-        res
+            rcc: rcc,
+        }
     }
 }
 
@@ -90,7 +88,7 @@ impl WorkMode for HighPerformanceMode {
         let clocks = self
             .rcc
             .cfgr
-            .freeze(&mut self.flash.acr, self.pwr.as_mut().unwrap());
+            .freeze(&mut self.flash.acr, &mut self.pwr);
 
         defmt::info!(
             "Clock config: CPU={}, pclk1={}, pclk2={}, USB - HSI48",
@@ -103,20 +101,16 @@ impl WorkMode for HighPerformanceMode {
     }
 
     fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
-        if let Some(gpioa) = self.gpioa {
-            defmt::trace!("Creating usb thread...");
-            let usbperith = threads::usbd::UsbdPeriph {
-                usb: self.usb,
-                gpioa
-            };
+        defmt::trace!("Creating usb thread...");
+        let usbperith = threads::usbd::UsbdPeriph {
+            usb: self.usb,
+            gpioa: self.gpioa
+        };
 
-            Task::new()
-                .stack_size(2048)
-                .priority(TaskPriority(2))
-                .start(move || threads::usbd::usbd(usbperith))?;
-            Ok(())
-        } else {
-            defmt::panic!("GpioA not initialised!");
-        }
+        Task::new()
+            .stack_size(2048)
+            .priority(TaskPriority(2))
+            .start(move || threads::usbd::usbd(usbperith))?;
+        Ok(())
     }
 }
