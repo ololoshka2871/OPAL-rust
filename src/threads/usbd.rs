@@ -1,6 +1,3 @@
-use stm32l4xx_hal::pac::Peripherals;
-use stm32l4xx_hal::prelude::*;
-
 use stm32_usbd::UsbBus;
 
 use usb_device::prelude::*;
@@ -9,17 +6,25 @@ use usbd_serial::SerialPort;
 
 use crate::threads::{storage::Storage, usb_periph::UsbPeriph};
 
-pub fn usbd(dp: Peripherals) -> ! {
-    defmt::info!("Usb thread started!");
+pub struct UsbdPeriph {
+    pub usb: stm32l4xx_hal::device::USB,
+    pub gpioa: stm32l4xx_hal::gpio::gpioa::Parts,
+}
 
-    let mut rcc = dp.RCC.constrain();
-    let mut gpioa = dp.GPIOA.split(&mut rcc.ahb2);
+pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
+    defmt::info!("Usb thread started!");
 
     defmt::info!("Creating usb low-level driver: PA11, PA12, AF10");
     let usb_bus = UsbBus::new(UsbPeriph {
-        usb: dp.USB,
-        pin_dm: gpioa.pa11.into_af10(&mut gpioa.moder, &mut gpioa.afrh),
-        pin_dp: gpioa.pa12.into_af10(&mut gpioa.moder, &mut gpioa.afrh),
+        usb: usbd_periph.usb,
+        pin_dm: usbd_periph
+            .gpioa
+            .pa11
+            .into_af10(&mut usbd_periph.gpioa.moder, &mut usbd_periph.gpioa.afrh),
+        pin_dp: usbd_periph
+            .gpioa
+            .pa12
+            .into_af10(&mut usbd_periph.gpioa.moder, &mut usbd_periph.gpioa.afrh),
     });
 
     defmt::info!("Allocating ACM device");
@@ -50,7 +55,6 @@ pub fn usbd(dp: Peripherals) -> ! {
             //CurrentTask::delay(Duration::ms(1));
             continue;
         }
-        defmt::trace!("USB device polled succesfuly!");
 
         let mut buf = [0u8; 64];
 

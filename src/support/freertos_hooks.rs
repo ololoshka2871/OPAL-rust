@@ -1,11 +1,11 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+#![allow(improper_ctypes_definitions)]
 
 use core::alloc::Layout;
 
-use cortex_m_rt::{ExceptionFrame, exception};
+use cortex_m_rt::{exception, ExceptionFrame};
 use freertos_rust::{FreeRtosCharPtr, FreeRtosTaskHandle};
-
 
 #[exception]
 unsafe fn DefaultHandler(irqn: i16) {
@@ -19,7 +19,6 @@ unsafe fn DefaultHandler(irqn: i16) {
 unsafe fn HardFault(_ef: &ExceptionFrame) -> ! {
     defmt::panic!("Hard Fault");
 }
-
 
 // define what happens in an Out Of Memory (OOM) condition
 #[alloc_error_handler]
@@ -35,4 +34,14 @@ fn vApplicationStackOverflowHook(_pxTask: FreeRtosTaskHandle, pcTaskName: FreeRt
 #[no_mangle]
 fn vApplicationMallocFailedHook() {
     defmt::panic!("malloc() failed");
+}
+
+#[allow(unused_variables)]
+#[no_mangle]
+pub extern "C" fn rust_begin_unwind(
+    _fmt: ::core::fmt::Arguments,
+    file: &'static str,
+    line: u32,
+) -> ! {
+    defmt::panic!("unwind() failed at {}:{}", file, line);
 }

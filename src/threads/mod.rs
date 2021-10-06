@@ -1,4 +1,4 @@
 pub mod usbd;
 
-mod usb_periph;
+pub mod usb_periph;
 mod storage;
