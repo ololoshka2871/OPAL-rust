@@ -1,6 +1,5 @@
 #![no_std]
 #![no_main]
-
 // For allocator
 #![feature(lang_items)]
 #![feature(alloc_error_handler)]
@@ -39,21 +38,23 @@ fn main() -> ! {
 
     let start_res = if is_usb_connected() {
         defmt::info!("USB connected, CPU max performance mode");
-        start_at_mode(HighPerformanceMode::new(dp))
+        start_at_mode::<HighPerformanceMode>(dp)
     } else {
         defmt::info!("USB not connected, self-writer mode");
-        start_at_mode(PowerSaveMode::new(dp))
+        start_at_mode::<PowerSaveMode>(dp)
     };
-    
-    start_res.unwrap_or_else(|e| {
-        defmt::panic!("Failed to start thread: {}", FreeRtosErrorContainer(e))
-    }); 
+
+    start_res
+        .unwrap_or_else(|e| defmt::panic!("Failed to start thread: {}", FreeRtosErrorContainer(e)));
 
     freertos_rust::FreeRtosUtils::start_scheduler();
 }
 
-fn start_at_mode<T>(mut mode :T) -> Result<(), freertos_rust::FreeRtosError>
-where T: WorkMode {
+fn start_at_mode<T>(dp: stm32::Peripherals) -> Result<(), freertos_rust::FreeRtosError>
+where
+    T: WorkMode<T>,
+{
+    let mut mode = T::new(dp);
     mode.configure_clock();
     mode.print_clock_config();
     mode.start_threads()

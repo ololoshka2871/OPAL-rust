@@ -18,8 +18,8 @@ pub struct PowerSaveMode {
     clocks: Option<stm32l4xx_hal::rcc::Clocks>,
 }
 
-impl PowerSaveMode {
-    pub fn new(dp: Peripherals) -> Self {
+impl WorkMode<PowerSaveMode> for PowerSaveMode {
+    fn new(dp: Peripherals) -> Self {
         let mut res = PowerSaveMode {
             rcc: dp.RCC.constrain(),
             flash: dp.FLASH.constrain(),
@@ -31,12 +31,10 @@ impl PowerSaveMode {
 
         res
     }
-}
 
-impl WorkMode for PowerSaveMode {
-    //! Работа от внешнего кварца HSE = 12 MHz
-    //! Установить частоту CPU = 12 MHz
-    //! USB не тактируется
+    // Работа от внешнего кварца HSE = 12 MHz
+    // Установить частоту CPU = 12 MHz
+    // USB не тактируется
     fn configure_clock(&mut self) {
         fn setut_cfgr(work_cfgr: &mut stm32l4xx_hal::rcc::CFGR) {
             let mut cfgr = unsafe {
@@ -103,6 +101,6 @@ impl WorkMode for PowerSaveMode {
     }
 
     fn print_clock_config(&self) {
-        super::common::print_clock_config(&self.clocks);
+        super::common::print_clock_config(&self.clocks, "OFF");
     }
 }

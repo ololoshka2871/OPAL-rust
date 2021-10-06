@@ -9,7 +9,7 @@ speed = 1500 # ref: openocd: target/stm32l4x.cfg
 chip = "STM32L442KCTx"
 
 [default.flashing]
-enabled = false
+#enabled = false
 
 [default.rtt]
 enabled = true

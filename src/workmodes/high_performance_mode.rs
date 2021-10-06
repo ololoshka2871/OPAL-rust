@@ -17,8 +17,8 @@ pub struct HighPerformanceMode {
     gpioa: stm32l4xx_hal::gpio::gpioa::Parts,
 }
 
-impl HighPerformanceMode {
-    pub fn new(dp: Peripherals) -> Self {
+impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
+    fn new(dp: Peripherals) -> Self {
         let mut rcc = dp.RCC.constrain();
 
         HighPerformanceMode {
@@ -32,29 +32,34 @@ impl HighPerformanceMode {
             rcc: rcc,
         }
     }
-}
 
-impl WorkMode for HighPerformanceMode {
-    //! Работа от внешнего кварца HSE = 12 MHz
-    //! Установить частоту CPU = 80 MHz (12 / 3 * 40 / 2 == 80)
-    //! USB работает от PLLSAI1Q = 48 MHz (12 / 3 * 24 / 2 == 48)
+    // Работа от внешнего кварца HSE = 12 MHz
+    // Установить частоту CPU = 80 MHz (12 / 3 * 40 / 2 == 80)
+    // USB работает от PLLSAI1Q = 48 MHz (12 / 3 * 24 / 2 == 48)
     fn configure_clock(&mut self) {
         fn configure_usb48() {
             let _rcc = unsafe { &*stm32::RCC::ptr() };
 
-            // set USB 48Mhz clock src to PLLQ
-            // can be configured only before PLL enable
-            /*
-            _rcc.pllcfgr.modify(|_, w| unsafe {
-                w.pllq()
-                    .bits(0b00) // PLLQ = PLL/2
-                    .pllqen()
-                    .set_bit() // enable PLLQ
+            // set USB 48Mhz clock src to PLLSAI1Q
+            // mast be configured only before PLL enable
+
+            _rcc.cr.modify(|_, w| w.pllsai1on().clear_bit());
+            while _rcc.cr.read().pllsai1rdy().bit_is_set() {}
+
+            _rcc.pllsai1cfgr.modify(|_, w| unsafe {
+                w.pllsai1n()
+                    .bits(24) // * 24
+                    .pllsai1q()
+                    .bits(0b00) // /2
+                    .pllsai1qen()
+                    .set_bit() // enable PLLSAI1Q
             });
-            */
+
+            _rcc.cr.modify(|_, w| w.pllsai1on().set_bit());
+            while _rcc.cr.read().pllsai1rdy().bit_is_set() {}
 
             // PLLSAI1Q -> CLK48MHz
-            unsafe { _rcc.ccipr.modify(|_, w| w.clk48sel().bits(0b00)) };
+            unsafe { _rcc.ccipr.modify(|_, w| w.clk48sel().bits(0b01)) };
         }
 
         fn setut_cfgr(work_cfgr: &mut stm32l4xx_hal::rcc::CFGR) {
@@ -82,10 +87,10 @@ impl WorkMode for HighPerformanceMode {
             core::mem::swap(&mut cfgr, work_cfgr);
         }
 
-        configure_usb48();
         setut_cfgr(&mut self.rcc.cfgr);
 
         let clocks = self.rcc.cfgr.freeze(&mut self.flash.acr, &mut self.pwr);
+        configure_usb48();
 
         self.clocks = Some(clocks);
     }
@@ -105,6 +110,6 @@ impl WorkMode for HighPerformanceMode {
     }
 
     fn print_clock_config(&self) {
-        super::common::print_clock_config(&self.clocks);
+        super::common::print_clock_config(&self.clocks, "HSI48");
     }
 }
