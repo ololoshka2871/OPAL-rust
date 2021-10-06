@@ -33,20 +33,16 @@ static GLOBAL: freertos_rust::FreeRtosAllocator = freertos_rust::FreeRtosAllocat
 
 #[entry]
 fn main() -> ! {
-    defmt::trace!("-- Start up! --");
+    defmt::trace!("++ Start up! ++");
 
     let dp = stm32::Peripherals::take().unwrap();
 
     let start_res = if is_usb_connected() {
         defmt::info!("USB connected, CPU max performance mode");
-        let mut mode = HighPerformanceMode::new(dp);
-        mode.configure_clock();
-        mode.start_threads()
+        start_at_mode(HighPerformanceMode::new(dp))
     } else {
         defmt::info!("USB not connected, self-writer mode");
-        let mut mode = PowerSaveMode::new(dp);
-        mode.configure_clock();
-        mode.start_threads()
+        start_at_mode(PowerSaveMode::new(dp))
     };
     
     start_res.unwrap_or_else(|e| {
@@ -54,6 +50,13 @@ fn main() -> ! {
     }); 
 
     freertos_rust::FreeRtosUtils::start_scheduler();
+}
+
+fn start_at_mode<T>(mut mode :T) -> Result<(), freertos_rust::FreeRtosError>
+where T: WorkMode {
+    mode.configure_clock();
+    mode.print_clock_config();
+    mode.start_threads()
 }
 
 fn is_usb_connected() -> bool {

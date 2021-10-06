@@ -101,4 +101,8 @@ impl WorkMode for PowerSaveMode {
             })?;
         Ok(())
     }
+
+    fn print_clock_config(&self) {
+        super::common::print_clock_config(&self.clocks);
+    }
 }

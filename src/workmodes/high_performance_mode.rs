@@ -21,7 +21,7 @@ impl HighPerformanceMode {
     pub fn new(dp: Peripherals) -> Self {
         let mut rcc = dp.RCC.constrain();
 
-         HighPerformanceMode {
+        HighPerformanceMode {
             flash: dp.FLASH.constrain(),
             usb: dp.USB,
 
@@ -85,17 +85,7 @@ impl WorkMode for HighPerformanceMode {
         configure_usb48();
         setut_cfgr(&mut self.rcc.cfgr);
 
-        let clocks = self
-            .rcc
-            .cfgr
-            .freeze(&mut self.flash.acr, &mut self.pwr);
-
-        defmt::info!(
-            "Clock config: CPU={}, pclk1={}, pclk2={}, USB - HSI48",
-            clocks.sysclk().0,
-            clocks.pclk1().0,
-            clocks.pclk2().0
-        );
+        let clocks = self.rcc.cfgr.freeze(&mut self.flash.acr, &mut self.pwr);
 
         self.clocks = Some(clocks);
     }
@@ -104,7 +94,7 @@ impl WorkMode for HighPerformanceMode {
         defmt::trace!("Creating usb thread...");
         let usbperith = threads::usbd::UsbdPeriph {
             usb: self.usb,
-            gpioa: self.gpioa
+            gpioa: self.gpioa,
         };
 
         Task::new()
@@ -112,5 +102,9 @@ impl WorkMode for HighPerformanceMode {
             .priority(TaskPriority(2))
             .start(move || threads::usbd::usbd(usbperith))?;
         Ok(())
+    }
+
+    fn print_clock_config(&self) {
+        super::common::print_clock_config(&self.clocks);
     }
 }
