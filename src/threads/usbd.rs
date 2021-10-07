@@ -1,10 +1,17 @@
+use freertos_rust::{Duration, InterruptContext};
 use stm32_usbd::UsbBus;
+
+use stm32l4xx_hal::interrupt;
+
+use stm32l4xx_hal::stm32l4::stm32l4x2::Interrupt;
 
 use usb_device::prelude::*;
 use usbd_scsi::Scsi;
 use usbd_serial::SerialPort;
 
 use crate::threads::{storage::Storage, usb_periph::UsbPeriph};
+
+static mut USBD_THREAD: Option<freertos_rust::Task> = None;
 
 pub struct UsbdPeriph {
     pub usb: stm32l4xx_hal::device::USB,
@@ -13,6 +20,10 @@ pub struct UsbdPeriph {
 
 pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
     defmt::info!("Usb thread started!");
+
+    unsafe {
+        USBD_THREAD = Some(freertos_rust::Task::current().unwrap());
+    }
 
     defmt::info!("Creating usb low-level driver: PA11, PA12, AF10");
     let usb_bus = UsbBus::new(UsbPeriph {
@@ -52,7 +63,13 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
 
     loop {
         if !usb_dev.poll(&mut [&mut serial, &mut scsi]) {
-            //CurrentTask::delay(Duration::ms(1));
+            // block until usb interrupt
+            unsafe { cortex_m::peripheral::NVIC::unmask(Interrupt::USB); }
+            core::mem::forget(
+                freertos_rust::Task::current()
+                    .unwrap()
+                    .wait_for_notification(0, 0, Duration::ms(10)),
+            );
             continue;
         }
 
@@ -81,4 +98,21 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
             _ => {}
         }
     }
+}
+
+// USB exception
+
+// ucCurrentPriority >= ucMaxSysCallPriority (80)
+#[interrupt]
+unsafe fn USB() {
+    let interrupt_ctx = InterruptContext::new();
+    if let Some(usbd) = USBD_THREAD.as_ref() {
+        // Результат не особо важен
+        core::mem::forget(
+            usbd.notify_from_isr(&interrupt_ctx, freertos_rust::TaskNotification::NoAction),
+        );
+    }
+    
+    cortex_m::peripheral::NVIC::mask(Interrupt::USB);
+    cortex_m::peripheral::NVIC::unpend(Interrupt::USB);
 }

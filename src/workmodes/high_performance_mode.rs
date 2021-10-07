@@ -1,10 +1,16 @@
 use freertos_rust::{Task, TaskPriority};
 use stm32l4xx_hal::rcc::{PllConfig, PllDivider};
-use stm32l4xx_hal::{prelude::*, stm32, stm32l4::stm32l4x2::Peripherals};
+use stm32l4xx_hal::{prelude::*, stm32};
 
 use crate::threads;
 
 use super::WorkMode;
+
+// see: src/config/FreeRTOSConfig.h: configMAX_SYSCALL_INTERRUPT_PRIORITY
+static IRQ_HIGEST_PRIO: u8 = 80;
+
+/// USB interrupt ptiority
+static USB_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 1;
 
 pub struct HighPerformanceMode {
     rcc: stm32l4xx_hal::rcc::Rcc,
@@ -15,10 +21,20 @@ pub struct HighPerformanceMode {
 
     usb: stm32l4xx_hal::stm32::USB,
     gpioa: stm32l4xx_hal::gpio::gpioa::Parts,
+
+    nvic: cortex_m::peripheral::NVIC,
+}
+
+impl HighPerformanceMode {
+    fn set_interrupt_prio(&mut self, irq: stm32l4xx_hal::stm32l4::stm32l4x2::Interrupt, prio: u8) {
+        unsafe {
+            self.nvic.set_priority(irq, prio);
+        }
+    }
 }
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
-    fn new(dp: Peripherals) -> Self {
+    fn new(p: cortex_m::Peripherals, dp: stm32l4xx_hal::stm32l4::stm32l4x2::Peripherals) -> Self {
         let mut rcc = dp.RCC.constrain();
 
         HighPerformanceMode {
@@ -28,6 +44,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             gpioa: dp.GPIOA.split(&mut rcc.ahb2),
             pwr: dp.PWR.constrain(&mut rcc.apb1r1),
             clocks: None,
+
+            nvic: p.NVIC,
 
             rcc: rcc,
         }
@@ -95,7 +113,12 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         self.clocks = Some(clocks);
     }
 
-    fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
+    fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
+        use stm32l4xx_hal::stm32l4::stm32l4x2::Interrupt;
+
+        defmt::trace!("Set usb interrupt prio = {}", USB_INTERRUPT_PRIO);
+        self.set_interrupt_prio(Interrupt::USB, USB_INTERRUPT_PRIO);
+
         defmt::trace!("Creating usb thread...");
         let usbperith = threads::usbd::UsbdPeriph {
             usb: self.usb,

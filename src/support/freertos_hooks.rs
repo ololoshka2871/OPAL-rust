@@ -17,7 +17,9 @@ unsafe fn DefaultHandler(irqn: i16) {
 
 #[exception]
 unsafe fn HardFault(_ef: &ExceptionFrame) -> ! {
-    defmt::panic!("Hard Fault");
+    loop {
+        cortex_m::asm::bkpt();
+    }
 }
 
 // define what happens in an Out Of Memory (OOM) condition

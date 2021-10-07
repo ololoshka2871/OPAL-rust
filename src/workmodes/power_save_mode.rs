@@ -19,7 +19,7 @@ pub struct PowerSaveMode {
 }
 
 impl WorkMode<PowerSaveMode> for PowerSaveMode {
-    fn new(dp: Peripherals) -> Self {
+    fn new(_p: cortex_m::Peripherals, dp: Peripherals) -> Self {
         let mut res = PowerSaveMode {
             rcc: dp.RCC.constrain(),
             flash: dp.FLASH.constrain(),
