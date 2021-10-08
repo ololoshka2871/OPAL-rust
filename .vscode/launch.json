@@ -53,7 +53,7 @@
                 "file ./target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer", // бинарь
                 "target remote :2331", // куда коннектиться к openocd
                 "set print asm-demangle on",
-                "set backtrace limit 16",
+                "set backtrace limit 8",
 
                 "set target-async 1",
                 "set pagination off",
@@ -85,7 +85,7 @@
                 "file ./target/thumbv7em-none-eabihf/release/stm32-usb-self-writer", // бинарь
                 "target extended-remote :2331", // куда коннектиться к openocd
                 "set print asm-demangle on",
-                "set backtrace limit 32",
+                "set backtrace limit 8",
 
                 "set target-async 1",
                 "set pagination off",

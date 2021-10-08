@@ -19,13 +19,13 @@ pub struct UsbdPeriph {
 }
 
 pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
-    defmt::info!("Usb thread started!");
+    //defmt::info!("Usb thread started!");
 
     unsafe {
         USBD_THREAD = Some(freertos_rust::Task::current().unwrap());
     }
 
-    defmt::info!("Creating usb low-level driver: PA11, PA12, AF10");
+    //defmt::info!("Creating usb low-level driver: PA11, PA12, AF10");
     let usb_bus = UsbBus::new(UsbPeriph {
         usb: usbd_periph.usb,
         pin_dm: usbd_periph
@@ -38,10 +38,10 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
             .into_af10(&mut usbd_periph.gpioa.moder, &mut usbd_periph.gpioa.afrh),
     });
 
-    defmt::info!("Allocating ACM device");
+    //defmt::info!("Allocating ACM device");
     let mut serial = SerialPort::new(&usb_bus);
 
-    defmt::info!("Allocating SCSI device");
+    //defmt::info!("Allocating SCSI device");
     let mut scsi = Scsi::new(
         &usb_bus,
         64,
@@ -52,7 +52,7 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
     );
 
     let vid_pid = UsbVidPid(0x16c0, 0x27dd);
-    defmt::info!("Building usb device: vid={} pid={}", &vid_pid.0, &vid_pid.1);
+    //defmt::info!("Building usb device: vid={} pid={}", &vid_pid.0, &vid_pid.1);
     let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, vid_pid)
         .manufacturer("Fake company")
         .product("Serial port")
@@ -64,7 +64,7 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
     loop {
         if !usb_dev.poll(&mut [&mut serial, &mut scsi]) {
             // block until usb interrupt
-            unsafe { cortex_m::peripheral::NVIC::unmask(Interrupt::USB); }
+            //unsafe { cortex_m::peripheral::NVIC::unmask(Interrupt::USB); }
             core::mem::forget(
                 freertos_rust::Task::current()
                     .unwrap()
@@ -77,7 +77,7 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
 
         match serial.read(&mut buf) {
             Ok(count) if count > 0 => {
-                defmt::info!("Serial> Ressived {} bytes", count);
+                //defmt::info!("Serial> Ressived {} bytes", count);
                 // Echo back in upper case
                 for c in buf[0..count].iter_mut() {
                     if 0x61 <= *c && *c <= 0x7a {
@@ -113,6 +113,10 @@ unsafe fn USB() {
         );
     }
     
+    // Как только прерывание случилось, мы посылаем сигнал потоку
+    // НО ивент вызвавший прерыывание пока не снялся, поэтому мы будем
+    // бесконечно в него заходить по кругу, нужно запретить пока что это 
+    // прерывание
     cortex_m::peripheral::NVIC::mask(Interrupt::USB);
     cortex_m::peripheral::NVIC::unpend(Interrupt::USB);
 }

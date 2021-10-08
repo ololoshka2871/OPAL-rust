@@ -18,7 +18,7 @@ unsafe fn DefaultHandler(irqn: i16) {
 #[exception]
 unsafe fn HardFault(_ef: &ExceptionFrame) -> ! {
     loop {
-        cortex_m::asm::bkpt();
+        //cortex_m::asm::bkpt();
     }
 }
 
@@ -38,6 +38,7 @@ fn vApplicationMallocFailedHook() {
     defmt::panic!("malloc() failed");
 }
 
+// libcore panic -> this function
 #[allow(unused_variables)]
 #[no_mangle]
 pub extern "C" fn rust_begin_unwind(

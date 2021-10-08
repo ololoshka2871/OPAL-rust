@@ -1,8 +1,9 @@
-use freertos_rust::{Task, TaskPriority};
+use freertos_rust::{Duration, Task, TaskPriority};
 use stm32l4xx_hal::rcc::{PllConfig, PllDivider};
 use stm32l4xx_hal::{prelude::*, stm32};
 
 use crate::threads;
+use crate::workmodes::common::calc_monitoring_period;
 
 use super::WorkMode;
 
@@ -90,7 +91,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             let mut cfgr = cfgr
                 .hsi48(true)
                 .hse(
-                    12.mhz(), // onboard crystall
+                    crate::workmodes::common::HSE_FREQ, // onboard crystall
                     stm32l4xx_hal::rcc::CrystalBypass::Disable,
                     stm32l4xx_hal::rcc::ClockSecuritySystem::Enable,
                 )
@@ -116,19 +117,30 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
         use stm32l4xx_hal::stm32l4::stm32l4x2::Interrupt;
 
-        defmt::trace!("Set usb interrupt prio = {}", USB_INTERRUPT_PRIO);
+        //defmt::trace!("Set usb interrupt prio = {}", USB_INTERRUPT_PRIO);
         self.set_interrupt_prio(Interrupt::USB, USB_INTERRUPT_PRIO);
 
-        defmt::trace!("Creating usb thread...");
-        let usbperith = threads::usbd::UsbdPeriph {
-            usb: self.usb,
-            gpioa: self.gpioa,
-        };
-
-        Task::new()
-            .stack_size(2048)
-            .priority(TaskPriority(2))
-            .start(move || threads::usbd::usbd(usbperith))?;
+        {
+            //defmt::trace!("Creating usb thread...");
+            let usbperith = threads::usbd::UsbdPeriph {
+                usb: self.usb,
+                gpioa: self.gpioa,
+            };
+            Task::new()
+                .stack_size(2048)
+                .priority(TaskPriority(2))
+                .start(move || threads::usbd::usbd(usbperith))?;
+        }
+        // ---
+        {
+            //defmt::trace!("Creating monitor thread...");
+            let monitoring_period =
+                calc_monitoring_period(Duration::ms(1000), self.clocks.unwrap().sysclk());
+            Task::new()
+                .stack_size(1024)
+                .priority(TaskPriority(1))
+                .start(move || threads::monitor::monitord(monitoring_period))?;
+        }
         Ok(())
     }
 

@@ -1,4 +1,4 @@
-use freertos_rust::{Task, TaskPriority};
+use freertos_rust::{Duration, Task, TaskPriority};
 use stm32l4xx_hal::{
     prelude::*,
     rcc::{PllConfig, PllDivider},
@@ -7,6 +7,8 @@ use stm32l4xx_hal::{
 
 use heatshrink_rust::decoder::HeatshrinkDecoder;
 use heatshrink_rust::encoder::HeatshrinkEncoder;
+
+use crate::{threads, workmodes::common::{calc_monitoring_period, print_clock_config}};
 
 use super::WorkMode;
 
@@ -69,18 +71,12 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
             .rcc
             .cfgr
             .freeze(&mut self.flash.acr, self.pwr.as_mut().unwrap());
-
-        defmt::info!(
-            "Clock config: CPU={}, pclk1={}, pclk2={}, USB - off",
-            clocks.sysclk().0,
-            clocks.pclk1().0,
-            clocks.pclk2().0
-        );
-
+            
         self.clocks = Some(clocks);
     }
 
     fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
+        {
         Task::new()
             .name("thread")
             .stack_size(2548)
@@ -94,9 +90,20 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
                 let dec = HeatshrinkDecoder::from_source(&mut enc);
 
                 for (i, b) in dec.enumerate() {
-                    defmt::debug!("decoded[{}] = {:X}", i, b);
+                    //defmt::debug!("decoded[{}] = {:X}", i, b);
                 }
             })?;
+        }
+        // ---
+        {
+            //defmt::trace!("Creating monitor thread...");
+            let monitoring_period =
+                calc_monitoring_period(Duration::ms(1000), self.clocks.unwrap().sysclk());
+            Task::new()
+                .stack_size(1024)
+                .priority(TaskPriority(1))
+                .start(move || threads::monitor::monitord(monitoring_period))?;
+        }
         Ok(())
     }
 

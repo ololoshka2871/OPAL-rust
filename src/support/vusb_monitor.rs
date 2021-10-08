@@ -10,14 +10,14 @@ pub struct VUsbMonitor<'a> {
 
 impl<'a> VUsbMonitor<'a> {
     pub fn new(rcc: &'a rcc::RegisterBlock, pwr: &'a pwr::RegisterBlock) -> VUsbMonitor<'a> {
-        defmt::trace!("Create USB power monitor");
+        //defmt::trace!("Create USB power monitor");
         let was_pwr_disabled = rcc.apb1enr1.read().pwren().bit_is_clear();
 
         if was_pwr_disabled {
-            defmt::trace!("PWR register block was disabled, enabling...");
+            //defmt::trace!("PWR register block was disabled, enabling...");
             rcc.apb1enr1.modify(|_, w| w.pwren().set_bit());
         } else {
-            defmt::trace!("PWR register block was enabled");
+            //defmt::trace!("PWR register block was enabled");
         }
 
         // enable montoring 1.2v
@@ -34,13 +34,13 @@ impl<'a> VUsbMonitor<'a> {
 impl<'a> Drop for VUsbMonitor<'a> {
     // Деструктор
     fn drop(&mut self) {
-        defmt::trace!("Destroing USB power monitor");
+        //defmt::trace!("Destroing USB power monitor");
 
         //disable monitoring
         self.pwr.cr2.modify(|_, w| w.pvme1().clear_bit());
 
         if self.was_pwr_disabled {
-            defmt::trace!("PWR register block was disabled, restore..");
+            //defmt::trace!("PWR register block was disabled, restore..");
             self.rcc.apb1enr1.modify(|_, w| w.pwren().clear_bit());
         }
     }
@@ -60,7 +60,7 @@ impl<'a> UsbConnectionChecker for VUsbMonitor<'a> {
             trys -= 1;
         }
 
-        defmt::debug!("USB power monitor PVMO1: {}", present);
+        //defmt::debug!("USB power monitor PVMO1: {}", present);
 
         present
     }
