@@ -1,3 +1,5 @@
+# usage: https://github.com/sagiegurari/cargo-make
+
 [env]
 #executable={script=["cargo run --bin 2>&1 > /dev/null | tail -n2 | sed -e 's/^ *//;s/ *$//' -e '/^$/d'"]}
 path="target/thumbv7em-none-eabihf/debug"
