@@ -5,8 +5,14 @@ fn main() {
 
     // Path to FreeRTOS kernel or set ENV "FREERTOS_SRC" instead
     b.freertos( "../FreeRTOS-Kernel");
-    b.freertos_config("src/configDebug"); // Location of `FreeRTOSConfig.h`
     b.freertos_port(String::from("GCC/ARM_CM4F")); // Port dir relativ to 'FreeRTOS-Kernel/portable'
+
+    // Location of `FreeRTOSConfig.h`
+    if cfg!(debug_assertions) {
+        b.freertos_config("src/configDebug"); 
+    } else {
+        b.freertos_config("src/configRelease");
+    }
 
     // выбор не работает
     //b.heap(String::from("heap4.c")); // Set the heap_?.c allocator to use from

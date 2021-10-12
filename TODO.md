@@ -90,6 +90,9 @@
             Структура FreeRtosTaskStatusFfi Rust не соответствует структуре xTASK_STATUS С
             [x] Найти и переключиться на правильную версию FreeRTOS
             [v] Форкнута библиотека freertos-rust  пофикшено там, создан issue https://github.com/lobaro/FreeRTOS-rust/issues/15 
-    * [_] Лог и неспящий FreeRTOS только в режиме debug
-        * [_] Раздельные конфигурации
-        * [_] Раздельные FreeRTOSConfig.h
+    * [_] Отладить вычисление задержки на сон потока мониторинга
+        * [_] Спецфункция-врапер
+    * [v] Лог и неспящий FreeRTOS только в режиме debug
+        * [v] Раздельные конфигурации
+        * [v] Раздельные FreeRTOSConfig.h
+        * [v] vApplicationIdleHook только для отладочного режима

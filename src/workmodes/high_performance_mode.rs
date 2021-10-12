@@ -135,6 +135,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 .start(move |_| threads::usbd::usbd(usbperith))?;
         }
         // ---
+        #[cfg(debug_assertions)]
         {
             defmt::trace!("Creating monitor thread...");
             let monitoring_period =
