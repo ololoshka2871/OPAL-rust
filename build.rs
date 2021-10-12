@@ -4,7 +4,7 @@ fn main() {
     let mut b = freertos_cargo_build::Builder::new();
 
     // Path to FreeRTOS kernel or set ENV "FREERTOS_SRC" instead
-    b.freertos("../FreeRTOS-Kernel");
+    b.freertos("./FreeRTOS-Kernel");
     b.freertos_port(String::from("GCC/ARM_CM4F")); // Port dir relativ to 'FreeRTOS-Kernel/portable'
 
     // Location of `FreeRTOSConfig.h`

@@ -4,3 +4,6 @@
 [submodule "lib/heatshrink"]
 	path = lib/heatshrink
 	url = https://github.com/UnePierre/heatshrink.git
+[submodule "heatshrink-rust/heatshrink"]
+	path = heatshrink-rust/heatshrink
+	url = https://github.com/UnePierre/heatshrink.git
