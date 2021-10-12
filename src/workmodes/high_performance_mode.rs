@@ -1,13 +1,8 @@
-#![allow(unused_imports)]
-
 use freertos_rust::{Task, TaskPriority};
 use stm32l4xx_hal::rcc::{PllConfig, PllDivider};
 use stm32l4xx_hal::{prelude::*, stm32};
 
 use crate::threads;
-
-#[cfg(debug_assertions)]
-use crate::workmodes::common::HertzExt;
 
 use super::WorkMode;
 
@@ -137,16 +132,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 .start(move |_| threads::usbd::usbd(usbperith))?;
         }
         // ---
-        #[cfg(debug_assertions)]
-        {
-            defmt::trace!("Creating monitor thread...");
-            let monitoring_period = self.clocks.unwrap().sysclk().duration_ms(1000);
-            Task::new()
-                .name("Monitord")
-                .stack_size(1024)
-                .priority(TaskPriority(1))
-                .start(move |_| threads::monitor::monitord(monitoring_period))?;
-        }
+        crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk())?;
         Ok(())
     }
 

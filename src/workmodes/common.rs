@@ -1,7 +1,11 @@
-use freertos_rust::{Duration, DurationTicks};
+use freertos_rust::{Duration, DurationTicks, Task, TaskPriority};
+
 use stm32l4xx_hal::time::{Hertz, MegaHertz};
 
+use crate::threads;
+
 pub static HSE_FREQ: MegaHertz = MegaHertz(12);
+pub static MONITOR_MSG_PERIOD: u32 = 1000;
 
 pub trait HertzExt {
     fn duration_ms(self, ms: u32) -> Duration;
@@ -34,4 +38,20 @@ pub fn print_clock_config(clocks: &Option<stm32l4xx_hal::rcc::Clocks>, usb_state
     } else {
         defmt::error!("System clock not configures yet");
     }
+}
+
+pub fn create_monitor(sysclk: Hertz) -> Result<(), freertos_rust::FreeRtosError> {
+    static MONITOR_STACK_SIZE: u16 = 384;
+
+    #[cfg(debug_assertions)]
+    {
+        defmt::trace!("Creating monitor thread...");
+        let monitoring_period = sysclk.duration_ms(MONITOR_MSG_PERIOD);
+        Task::new()
+            .name("Monitord")
+            .stack_size(MONITOR_STACK_SIZE)
+            .priority(TaskPriority(1))
+            .start(move |_| threads::monitor::monitord(monitoring_period))?;
+    }
+    Ok(())
 }

@@ -8,11 +8,6 @@ use stm32l4xx_hal::{
 use heatshrink_rust::decoder::HeatshrinkDecoder;
 use heatshrink_rust::encoder::HeatshrinkEncoder;
 
-#[cfg(debug_assertions)]
-use crate::workmodes::common::HertzExt;
-
-use crate::threads;
-
 use super::WorkMode;
 
 pub struct PowerSaveMode {
@@ -97,16 +92,7 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
                 })?;
         }
         // ---
-        #[cfg(debug_assertions)]
-        {
-            defmt::trace!("Creating monitor thread...");
-            let monitoring_period = self.clocks.unwrap().sysclk().duration_ms(1000);
-            Task::new()
-                .name("Monitord")
-                .stack_size(1024)
-                .priority(TaskPriority(1))
-                .start(move |_| threads::monitor::monitord(monitoring_period))?;
-        }
+        crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk())?;
         Ok(())
     }
 
