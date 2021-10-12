@@ -3,6 +3,16 @@ use stm32l4xx_hal::time::{Hertz, MegaHertz};
 
 pub static HSE_FREQ: MegaHertz = MegaHertz(12);
 
+pub trait HertzExt {
+    fn duration_ms(self, ms: u32) -> Duration;
+}
+
+impl HertzExt for Hertz {
+    fn duration_ms(self, ms: u32) -> Duration {
+        calc_monitoring_period(Duration::ms(ms), self)
+    }
+}
+
 pub fn calc_monitoring_period<D: DurationTicks, F: Into<Hertz>>(period: D, sysclk: F) -> Duration {
     let in_freq_khz: Hertz = crate::workmodes::common::HSE_FREQ.into();
     let fcpu_khz: Hertz = sysclk.into();

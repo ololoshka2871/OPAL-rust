@@ -1,9 +1,9 @@
-use freertos_rust::{Duration, Task, TaskPriority};
+use freertos_rust::{Task, TaskPriority};
 use stm32l4xx_hal::rcc::{PllConfig, PllDivider};
 use stm32l4xx_hal::{prelude::*, stm32};
 
 use crate::threads;
-use crate::workmodes::common::{calc_monitoring_period, enable_dma_clocking};
+use crate::workmodes::common::{enable_dma_clocking, HertzExt};
 
 use super::WorkMode;
 
@@ -138,8 +138,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         #[cfg(debug_assertions)]
         {
             defmt::trace!("Creating monitor thread...");
-            let monitoring_period =
-                calc_monitoring_period(Duration::ms(1000), self.clocks.unwrap().sysclk());
+            let monitoring_period = self.clocks.unwrap().sysclk().duration_ms(1000);
             Task::new()
                 .name("Monitord")
                 .stack_size(1024)
