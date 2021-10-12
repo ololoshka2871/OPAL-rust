@@ -1,15 +1,15 @@
 use freertos_rust::{Duration, DurationTicks};
-use stm32l4xx_hal::time::{Hertz, KiloHertz, MegaHertz};
+use stm32l4xx_hal::time::{Hertz, MegaHertz};
 
 pub static HSE_FREQ: MegaHertz = MegaHertz(12);
 
 pub fn calc_monitoring_period<D: DurationTicks, F: Into<Hertz>>(period: D, sysclk: F) -> Duration {
-    let in_freq_khz: KiloHertz = crate::workmodes::common::HSE_FREQ.into();
-    let fcpu_khz = KiloHertz((sysclk.into() as Hertz).0 / 1_000);
+    let in_freq_khz: Hertz = crate::workmodes::common::HSE_FREQ.into();
+    let fcpu_khz: Hertz = sysclk.into();
 
-    let ticks = period.to_ticks() * fcpu_khz.0 / in_freq_khz.0 * 10;
+    let ticks = period.to_ticks() as u64 * fcpu_khz.0 as u64 / in_freq_khz.0 as u64;
 
-    Duration::ticks(ticks)
+    Duration::ticks(ticks as u32)
 }
 
 pub fn print_clock_config(clocks: &Option<stm32l4xx_hal::rcc::Clocks>, usb_state: &str) {
@@ -31,8 +31,7 @@ pub fn enable_dma_clocking() {
 
     // https://github.com/probe-rs/probe-rs/issues/350#issuecomment-740550519
     let rcc = unsafe { &*stm32::RCC::ptr() };
-    rcc.ahb1enr
-        .modify(|_, w| w.dma1en().set_bit());
+    rcc.ahb1enr.modify(|_, w| w.dma1en().set_bit());
 
     let etm = unsafe { &*stm32::DBGMCU::ptr() };
     etm.cr.modify(|_, w| {

@@ -1,5 +1,5 @@
-use defmt::Display2Format;
 use defmt::Debug2Format;
+use defmt::Display2Format;
 use freertos_rust::{CriticalRegion, DurationTicks, FreeRtosSchedulerState, FreeRtosUtils};
 
 /*
@@ -36,7 +36,8 @@ pub fn monitord<D: DurationTicks>(period: D) -> ! {
 
         defmt::info!("FreeRTOS threadinfo:");
         staticstics.tasks.iter().for_each(|task| {
-            defmt::info!("{}: {}, P:{}, Sf:{}",
+            defmt::info!(
+                "{}: {}, P:{}, Sf:{}",
                 Display2Format(&task.name),
                 Debug2Format(&task.task_state),
                 task.current_priority.0,

@@ -1,6 +1,5 @@
 #![no_std]
 #![no_main]
-
 // For allocator
 #![feature(lang_items)]
 #![feature(alloc_error_handler)]
@@ -47,9 +46,7 @@ fn main() -> ! {
     };
 
     start_res
-        .unwrap_or_else(|e| {
-            defmt::panic!("Failed to start thread: {}", FreeRtosErrorContainer(e))
-        });
+        .unwrap_or_else(|e| defmt::panic!("Failed to start thread: {}", FreeRtosErrorContainer(e)));
 
     freertos_rust::FreeRtosUtils::start_scheduler();
     //loop {}

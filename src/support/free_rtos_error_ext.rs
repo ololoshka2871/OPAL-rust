@@ -1,9 +1,9 @@
-use defmt::{Format, Formatter, write};
+use defmt::{write, Format, Formatter};
 use freertos_rust::FreeRtosError;
 
 pub struct FreeRtosErrorContainer(pub FreeRtosError);
 
-impl Format for FreeRtosErrorContainer{
+impl Format for FreeRtosErrorContainer {
     fn format(&self, fmt: Formatter) {
         static VARIANTS_STR: [&str; 10] = [
             "OutOfMemory",

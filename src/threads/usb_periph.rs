@@ -1,6 +1,6 @@
 use stm32_usbd::UsbPeripheral;
 use stm32l4xx_hal::device::RCC;
-use stm32l4xx_hal::gpio::{AF10, Alternate, Floating, Input, PA11, PA12};
+use stm32l4xx_hal::gpio::{Alternate, Floating, Input, AF10, PA11, PA12};
 use stm32l4xx_hal::stm32;
 
 pub struct UsbPeriph {

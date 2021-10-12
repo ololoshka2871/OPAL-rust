@@ -1,5 +1,5 @@
-pub mod usbd;
 pub mod monitor;
+pub mod usbd;
 
 pub mod usb_periph;
 

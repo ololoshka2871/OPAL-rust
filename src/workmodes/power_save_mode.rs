@@ -8,7 +8,10 @@ use stm32l4xx_hal::{
 use heatshrink_rust::decoder::HeatshrinkDecoder;
 use heatshrink_rust::encoder::HeatshrinkEncoder;
 
-use crate::{threads, workmodes::common::{calc_monitoring_period, enable_dma_clocking}};
+use crate::{
+    threads,
+    workmodes::common::{calc_monitoring_period, enable_dma_clocking},
+};
 
 use super::WorkMode;
 
@@ -57,7 +60,6 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
                     PllConfig::new(1, 8, PllDivider::Div8), // PLL config
                 )
                 .pll_source(stm32l4xx_hal::rcc::PllSource::HSE)
-
                 // FIXME: master counter - max speed, input counters - slow down
                 .pclk1(12.mhz())
                 .pclk2(12.mhz());
@@ -73,30 +75,31 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
             .freeze(&mut self.flash.acr, self.pwr.as_mut().unwrap());
 
         enable_dma_clocking();
-            
+
         self.clocks = Some(clocks);
     }
 
     fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
         {
-        Task::new()
-            .name("hs-test")
-            .stack_size(2548)
-            .priority(TaskPriority(3))
-            .start(move |_| {
-                let src = [1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+            Task::new()
+                .name("hs-test")
+                .stack_size(2548)
+                .priority(TaskPriority(3))
+                .start(move |_| {
+                    let src = [1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-                let mut it_src = src.iter().map(|a| *a);
+                    let mut it_src = src.iter().map(|a| *a);
 
-                let mut enc = HeatshrinkEncoder::from_source(&mut it_src);
-                let dec = HeatshrinkDecoder::from_source(&mut enc);
+                    let mut enc = HeatshrinkEncoder::from_source(&mut it_src);
+                    let dec = HeatshrinkDecoder::from_source(&mut enc);
 
-                for (i, b) in dec.enumerate() {
-                    defmt::debug!("decoded[{}] = {:X}", i, b);
-                }
-            })?;
+                    for (i, b) in dec.enumerate() {
+                        defmt::debug!("decoded[{}] = {:X}", i, b);
+                    }
+                })?;
         }
         // ---
+        #[cfg(debug_assertions)]
         {
             defmt::trace!("Creating monitor thread...");
             let monitoring_period =

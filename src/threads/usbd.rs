@@ -60,11 +60,13 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
         //.device_class(USB_CLASS_CDC)
         .device_class(usbd_mass_storage::USB_CLASS_MSC)
         .build();
- 
+
     loop {
         if !usb_dev.poll(&mut [&mut serial, &mut scsi]) {
             // block until usb interrupt
-            unsafe { cortex_m::peripheral::NVIC::unmask(Interrupt::USB); }
+            unsafe {
+                cortex_m::peripheral::NVIC::unmask(Interrupt::USB);
+            }
             core::mem::forget(
                 freertos_rust::Task::current()
                     .unwrap()
@@ -112,10 +114,10 @@ unsafe fn USB() {
             usbd.notify_from_isr(&interrupt_ctx, freertos_rust::TaskNotification::NoAction),
         );
     }
-    
+
     // Как только прерывание случилось, мы посылаем сигнал потоку
     // НО ивент вызвавший прерыывание пока не снялся, поэтому мы будем
-    // бесконечно в него заходить по кругу, нужно запретить пока что это 
+    // бесконечно в него заходить по кругу, нужно запретить пока что это
     // прерывание
     cortex_m::peripheral::NVIC::mask(Interrupt::USB);
     cortex_m::peripheral::NVIC::unpend(Interrupt::USB);

@@ -1,0 +1,18 @@
+[tasks.format]
+install_crate = "rustfmt"
+command = "cargo"
+args = ["fmt", "--", "--emit=files"]
+
+[tasks.build]
+command = "cargo"
+args = ["build"]
+dependencies = ["format"]
+
+[tasks.flash]
+command = "arm-none-eabi-gdb"
+args = ["-x", "flash.gdb"]
+dependencies = ["build"]
+
+[tasks.log]
+command = "./rtt_log.sh"
+dependencies = ["build"]

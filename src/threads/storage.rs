@@ -2,7 +2,6 @@ use core::convert::TryInto;
 
 use usbd_scsi::{BlockDevice, BlockDeviceError};
 
-
 pub struct Storage {}
 
 static mut DATA: [u8; 512] = [0_u8; 512];

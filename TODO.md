@@ -96,3 +96,11 @@
         * [v] Раздельные конфигурации
         * [v] Раздельные FreeRTOSConfig.h
         * [v] vApplicationIdleHook только для отладочного режима
+    * [_] Тест Релиз-сборки
+    * [_] Мониторинг в отдельный канал RTT, сериализовать FreeRtosSchedulerState
+    * [_] Настроить линкер так, чтобы _SEGGER_RTT не прыгала
+        Сложно. Будем вычислять на лету
+        * [_] Скрипт
+    * [v] cargo-make
+        * [v] Задачи - Makefile.toml
+        * [v] add to Readme
