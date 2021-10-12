@@ -9,7 +9,8 @@ version = "0.1.0"
 embedded-hal = "0.2.4"
 cortex-m = "0.7.3"
 cortex-m-rt = "0.6.11" # need by stm32l4 == 0.13.0
-freertos-rust = "0.1.2"
+#freertos-rust = "0.1.2"
+freertos-rust = {git = "file:///home/tolyan/src/rust/stm32/FreeRTOS-rust"}
 
 stm32l4xx-hal = { version= "0.6.0", features = ["stm32l4x2", "rt"] }
 
@@ -52,3 +53,11 @@ defmt-debug = []
 defmt-info = []
 defmt-warn = []
 defmt-error = []
+
+# uncomment this to switch from the crates.io version of defmt to its git version
+# check app-template's README for instructions
+[patch.crates-io]
+#defmt = { git = "https://github.com/knurling-rs/defmt" }
+#defmt-rtt = { git = "https://github.com/knurling-rs/defmt" }
+#defmt-test = { git = "https://github.com/knurling-rs/defmt" }
+#panic-probe = { git = "https://github.com/knurling-rs/defmt" }

@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+
 // For allocator
 #![feature(lang_items)]
 #![feature(alloc_error_handler)]
@@ -32,25 +33,26 @@ static GLOBAL: freertos_rust::FreeRtosAllocator = freertos_rust::FreeRtosAllocat
 
 #[entry]
 fn main() -> ! {
-    //defmt::trace!("++ Start up! ++");
+    defmt::trace!("++ Start up! ++");
 
     let p = cortex_m::Peripherals::take().unwrap();
     let dp = stm32::Peripherals::take().unwrap();
 
     let start_res = if is_usb_connected() {
-        //defmt::info!("USB connected, CPU max performance mode");
+        defmt::info!("USB connected, CPU max performance mode");
         start_at_mode::<HighPerformanceMode>(p, dp)
     } else {
-        //defmt::info!("USB not connected, self-writer mode");
+        defmt::info!("USB not connected, self-writer mode");
         start_at_mode::<PowerSaveMode>(p, dp)
     };
 
     start_res
         .unwrap_or_else(|e| {
-            //defmt::panic!("Failed to start thread: {}", FreeRtosErrorContainer(e))
+            defmt::panic!("Failed to start thread: {}", FreeRtosErrorContainer(e))
         });
 
     freertos_rust::FreeRtosUtils::start_scheduler();
+    //loop {}
 }
 
 fn start_at_mode<T>(

@@ -9,6 +9,7 @@ speed = 1500 # ref: openocd: target/stm32l4x.cfg
 chip = "STM32L442KCTx"
 
 [default.flashing]
+do_chip_erase = false
 enabled = false
 
 [default.rtt]
@@ -18,7 +19,7 @@ channels = [
     # How to enable Defmt formatting (https://github.com/knurling-rs/defmt)
     # (formats on host, not on microcontroller)?
     # microcontroller setup: https://github.com/knurling-rs/app-template
-    { up = 0, name = "defmt_log", format = "Defmt" },
+    { up = 0, name = "log", format = "Defmt" },
 ]
 
 [default.gdb]

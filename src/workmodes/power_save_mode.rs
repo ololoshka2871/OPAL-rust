@@ -8,7 +8,7 @@ use stm32l4xx_hal::{
 use heatshrink_rust::decoder::HeatshrinkDecoder;
 use heatshrink_rust::encoder::HeatshrinkEncoder;
 
-use crate::{threads, workmodes::common::{calc_monitoring_period, print_clock_config}};
+use crate::{threads, workmodes::common::{calc_monitoring_period, enable_dma_clocking}};
 
 use super::WorkMode;
 
@@ -71,6 +71,8 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
             .rcc
             .cfgr
             .freeze(&mut self.flash.acr, self.pwr.as_mut().unwrap());
+
+        enable_dma_clocking();
             
         self.clocks = Some(clocks);
     }
@@ -78,10 +80,10 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
     fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
         {
         Task::new()
-            .name("thread")
+            .name("hs-test")
             .stack_size(2548)
             .priority(TaskPriority(3))
-            .start(move || {
+            .start(move |_| {
                 let src = [1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
                 let mut it_src = src.iter().map(|a| *a);
@@ -90,19 +92,20 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
                 let dec = HeatshrinkDecoder::from_source(&mut enc);
 
                 for (i, b) in dec.enumerate() {
-                    //defmt::debug!("decoded[{}] = {:X}", i, b);
+                    defmt::debug!("decoded[{}] = {:X}", i, b);
                 }
             })?;
         }
         // ---
         {
-            //defmt::trace!("Creating monitor thread...");
+            defmt::trace!("Creating monitor thread...");
             let monitoring_period =
                 calc_monitoring_period(Duration::ms(1000), self.clocks.unwrap().sysclk());
             Task::new()
+                .name("Monitord")
                 .stack_size(1024)
                 .priority(TaskPriority(1))
-                .start(move || threads::monitor::monitord(monitoring_period))?;
+                .start(move |_| threads::monitor::monitord(monitoring_period))?;
         }
         Ok(())
     }

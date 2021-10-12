@@ -48,3 +48,9 @@ pub extern "C" fn rust_begin_unwind(
 ) -> ! {
     defmt::panic!("unwind() failed at {}:{}", file, line);
 }
+
+#[allow(unused_variables)]
+#[no_mangle]
+pub extern "C" fn vApplicationIdleHook() -> ! {
+    loop {}
+}

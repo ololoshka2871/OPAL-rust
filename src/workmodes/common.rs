@@ -5,23 +5,42 @@ pub static HSE_FREQ: MegaHertz = MegaHertz(12);
 
 pub fn calc_monitoring_period<D: DurationTicks, F: Into<Hertz>>(period: D, sysclk: F) -> Duration {
     let in_freq_khz: KiloHertz = crate::workmodes::common::HSE_FREQ.into();
-    let fcpu_khz  = KiloHertz((sysclk.into() as Hertz).0 / 1_000);
+    let fcpu_khz = KiloHertz((sysclk.into() as Hertz).0 / 1_000);
 
-    let ticks = period.to_ticks() * fcpu_khz.0 / in_freq_khz.0;
+    let ticks = period.to_ticks() * fcpu_khz.0 / in_freq_khz.0 * 10;
 
     Duration::ticks(ticks)
 }
 
 pub fn print_clock_config(clocks: &Option<stm32l4xx_hal::rcc::Clocks>, usb_state: &str) {
     if let Some(clocks) = clocks {
-        //defmt::info!(
-        //    "Clock config: CPU={}, pclk1={}, pclk2={}, USB: {}",
-        //    clocks.sysclk().0,
-        //    clocks.pclk1().0,
-        //    clocks.pclk2().0,
-        //    usb_state
-        //);
+        defmt::info!(
+            "Clock config: CPU={}, pclk1={}, pclk2={}, USB: {}",
+            clocks.sysclk().0,
+            clocks.pclk1().0,
+            clocks.pclk2().0,
+            usb_state
+        );
     } else {
-        //defmt::error!("System clock not configures yet");
+        defmt::error!("System clock not configures yet");
     }
+}
+
+pub fn enable_dma_clocking() {
+    use stm32l4xx_hal::stm32;
+
+    // https://github.com/probe-rs/probe-rs/issues/350#issuecomment-740550519
+    let rcc = unsafe { &*stm32::RCC::ptr() };
+    rcc.ahb1enr
+        .modify(|_, w| w.dma1en().set_bit());
+
+    let etm = unsafe { &*stm32::DBGMCU::ptr() };
+    etm.cr.modify(|_, w| {
+        w.dbg_sleep()
+            .set_bit()
+            .dbg_standby()
+            .set_bit()
+            .dbg_stop()
+            .set_bit()
+    });
 }

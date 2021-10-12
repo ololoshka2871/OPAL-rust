@@ -81,8 +81,15 @@
         надо, генерики и компайл-тайм полиморфизм!
 
 * [_] Поток мониторинга
-    * [_] Краш при попытке malloc() - проверить объем памяти проца
+    * [v] Краш при попытке malloc() - проверить объем памяти проца
         * [v] Defmt не влияет
         * [v] ломается цепочка блоков аллокатора
         * [v] Прерывание USB не при чем
         * [v] Запись идет в функции vTaskGetInfo() pxTaskStatus->uxBasePriority = 1; pxTaskStatus->ulRunTimeCounter = 0; pxTaskStatus указывает в неправильное место!
+        * [v] Проверить размеры структур
+            Структура FreeRtosTaskStatusFfi Rust не соответствует структуре xTASK_STATUS С
+            [x] Найти и переключиться на правильную версию FreeRTOS
+            [v] Форкнута библиотека freertos-rust  пофикшено там, создан issue https://github.com/lobaro/FreeRTOS-rust/issues/15 
+    * [_] Лог и неспящий FreeRTOS только в режиме debug
+        * [_] Раздельные конфигурации
+        * [_] Раздельные FreeRTOSConfig.h
