@@ -35,21 +35,3 @@ pub fn print_clock_config(clocks: &Option<stm32l4xx_hal::rcc::Clocks>, usb_state
         defmt::error!("System clock not configures yet");
     }
 }
-
-pub fn enable_dma_clocking() {
-    use stm32l4xx_hal::stm32;
-
-    // https://github.com/probe-rs/probe-rs/issues/350#issuecomment-740550519
-    let rcc = unsafe { &*stm32::RCC::ptr() };
-    rcc.ahb1enr.modify(|_, w| w.dma1en().set_bit());
-
-    let etm = unsafe { &*stm32::DBGMCU::ptr() };
-    etm.cr.modify(|_, w| {
-        w.dbg_sleep()
-            .set_bit()
-            .dbg_standby()
-            .set_bit()
-            .dbg_stop()
-            .set_bit()
-    });
-}

@@ -8,10 +8,10 @@ use stm32l4xx_hal::{
 use heatshrink_rust::decoder::HeatshrinkDecoder;
 use heatshrink_rust::encoder::HeatshrinkEncoder;
 
-use crate::{
-    threads,
-    workmodes::common::{enable_dma_clocking, HertzExt},
-};
+#[cfg(debug_assertions)]
+use crate::workmodes::common::HertzExt;
+
+use crate::threads;
 
 use super::WorkMode;
 
@@ -73,8 +73,6 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
             .rcc
             .cfgr
             .freeze(&mut self.flash.acr, self.pwr.as_mut().unwrap());
-
-        enable_dma_clocking();
 
         self.clocks = Some(clocks);
     }

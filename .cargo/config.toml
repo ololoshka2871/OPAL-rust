@@ -46,3 +46,7 @@ target = "thumbv7em-none-eabihf"     # Cortex-M4F and Cortex-M7F (with FPU)
 [alias]
 rb = "run --bin stm32-usb-self-writer"
 rrb = "run --release --bin stm32-usb-self-writer"
+
+# info bloat
+b = "bloat -n 5"
+br = "bloat -n 5 --release"

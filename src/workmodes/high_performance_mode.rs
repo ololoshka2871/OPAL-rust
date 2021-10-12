@@ -1,9 +1,13 @@
+#![allow(unused_imports)]
+
 use freertos_rust::{Task, TaskPriority};
 use stm32l4xx_hal::rcc::{PllConfig, PllDivider};
 use stm32l4xx_hal::{prelude::*, stm32};
 
 use crate::threads;
-use crate::workmodes::common::{enable_dma_clocking, HertzExt};
+
+#[cfg(debug_assertions)]
+use crate::workmodes::common::HertzExt;
 
 use super::WorkMode;
 
@@ -110,8 +114,6 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         let clocks = self.rcc.cfgr.freeze(&mut self.flash.acr, &mut self.pwr);
         configure_usb48();
-
-        enable_dma_clocking();
 
         self.clocks = Some(clocks);
     }
