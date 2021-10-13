@@ -5,6 +5,7 @@
 use core::alloc::Layout;
 
 use cortex_m_rt::{exception, ExceptionFrame};
+use defmt::Debug2Format;
 use freertos_rust::{FreeRtosCharPtr, FreeRtosTaskHandle};
 
 #[exception]
@@ -16,8 +17,9 @@ unsafe fn DefaultHandler(irqn: i16) {
 }
 
 #[exception]
-unsafe fn HardFault(_ef: &ExceptionFrame) -> ! {
+unsafe fn HardFault(ef: &ExceptionFrame) -> ! {
     loop {
+        defmt::panic!("HardFault:\n{}", Debug2Format(ef));
         //cortex_m::asm::bkpt();
     }
 }

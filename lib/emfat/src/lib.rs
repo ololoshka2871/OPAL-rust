@@ -39,8 +39,12 @@ impl EntryBuilder {
         }
     }
 
+    pub fn terminator_entry() -> emfat_entry {
+        unsafe { core::mem::MaybeUninit::zeroed().assume_init() }
+    }
+
     pub fn name(mut self, name: &'static str) -> Self {
-        self.entry.name = name.as_ptr();
+        self.entry.name = assert_null_terminated(name).as_ptr();
         self
     }
 
@@ -84,12 +88,13 @@ impl EntryBuilder {
         self
     }
 
-    pub fn writecb(
-        mut self,
-        cb: unsafe extern "C" fn(data: *const u8, size: i32, offset: u32, userdata: usize),
+    pub fn write_cb(
+        self,
+        _cb: unsafe extern "C" fn(data: *const u8, size: i32, offset: u32, userdata: usize),
     ) -> Self {
-        self.entry.writecb = Some(cb);
-        self
+        todo!("Not realised in library!");
+        //self.entry.writecb = Some(cb);
+        //self
     }
 
     //-------------
@@ -99,4 +104,19 @@ impl EntryBuilder {
         assert!(!(!self.entry.dir && self.entry.readcb == None && self.entry.writecb == None));
         self.entry
     }
+}
+
+fn assert_null_terminated(string: &str) -> &str {
+    assert_eq!(string.chars().rev().next().unwrap(), '\0');
+    string
+}
+
+pub fn emfat_rust_init(
+    emfat: &mut emfat_t,
+    disk_label: &str,
+    entries: *mut emfat_entry_t,
+) {
+    unsafe {
+        assert!(emfat_init(emfat, assert_null_terminated(disk_label).as_ptr(), entries));
+    };
 }

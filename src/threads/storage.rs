@@ -9,39 +9,19 @@ pub struct EMfatStorage {
     fstable: Vec<emfat_entry>,
 }
 
-/*
-const char *autorun_file =
-    "[autorun]\r\n"
-    "label=emfat test drive\r\n"
-    "ICON=icon.ico\r\n";
-
-const char *readme_file =
-    "This is readme file\r\n";
-*/
-
-/*
-    // name          dir    lvl offset  size             max_size        user  read               write
-    { "",            true,  0,  0,      0,               0,              0,    NULL,              NULL }, // root
-    { "autorun.inf", false, 1,  0,      AUTORUN_SIZE,    1*1024*1024*1024,   0,    autorun_read_proc, NULL }, // autorun.inf
-    { "icon.ico",    false, 1,  0,      ICON_SIZE,       1*1024*1024*1024,      0,    icon_read_proc,    NULL }, // icon.ico
-    { "drivers",     true,  1,  0,      0,               0,              0,    NULL,              NULL }, // drivers/
-    { "readme.txt",  false, 2,  0,      README_SIZE,     1*1024*1024*1024,    0,    readme_read_proc,  NULL }, // drivers/readme.txt
-    { "abc.txt",  false, 2,  0,      README_SIZE,     1*1024*1024*1024-32768+8192,    0,    readme_read_proc,  NULL }, // drivers/readme.txt
-    { NULL }
-*/
-
 struct StaticData {
     data: &'static str,
 }
 
-static AUTORUN: &str = r#"[autorun]
-label=emfat test drive
-ICON=icon.ico
-"#;
+// terminate strings with '\0' for strlen() compatible
 
-static AUTORUN_INFO: StaticData = StaticData { data: AUTORUN };
-
-static README: &str = "This is readme file\r\n";
+static README: &str = "# СКТБ \"ЭЛПА\": Автономный регистратор давления\n\
+\n\
+Этот виртуальный диск предоставляет доступ к содержимому внутреннего накопителя устройства.\n\
+\n\
+- Для расшифровки содержимого используйте программу %TODO%.\n\
+- Коэффициенты полиномов для рассчета находятся в файле %TODO%\n\
+- Для управление функционалом устройства используйте программу KalibratorGUI\n";
 
 static README_INFO: StaticData = StaticData { data: README };
 
@@ -56,28 +36,29 @@ unsafe extern "C" fn const_reader(dest: *mut u8, size: i32, offset: u32, userdat
         size as usize
     };
 
-    core::ptr::copy_nonoverlapping(dptr.data.as_ptr(), dest, to_read);
+    core::ptr::copy_nonoverlapping(dptr.data.as_ptr().add(offset as usize), dest, to_read);
 }
 
+unsafe extern "C" fn null_read(_dest: *mut u8, _size: i32, _offset: u32, _userdata: usize) {}
+
 impl EMfatStorage {
-    pub fn new(label: &str) -> EMfatStorage {
+    pub fn new(disk_label: &str) -> EMfatStorage {
         let mut res = EMfatStorage {
             ctx: unsafe { core::mem::MaybeUninit::zeroed().assume_init() },
             fstable: EMfatStorage::build_files_table(),
         };
-
-        unsafe { emfat_rust::emfat_init(&mut res.ctx, label.as_ptr(), res.fstable.as_mut_ptr()) };
-
+        emfat_rust::emfat_rust_init(&mut res.ctx, disk_label, res.fstable.as_mut_ptr());
         res
     }
 
     fn build_files_table() -> Vec<emfat_entry> {
+        // TODO incapsulate constructing files
         let mut res = Vec::<emfat_entry>::new();
 
         // /
         res.push(
             emfat_rust::EntryBuilder::new()
-                .name("")
+                .name("\0")
                 .dir(true)
                 .lvl(0)
                 .offset(0)
@@ -86,26 +67,11 @@ impl EMfatStorage {
                 .build(),
         );
 
-        // /autorun.inf
-        let ptr = &AUTORUN_INFO as *const StaticData;
-        res.push(
-            emfat_rust::EntryBuilder::new()
-                .name("autorun.inf")
-                .dir(false)
-                .lvl(1)
-                .offset(0)
-                .size(AUTORUN.len())
-                .max_size(AUTORUN.len())
-                .read_cb(const_reader)
-                .user_data(ptr as usize)
-                .build(),
-        );
-
         // /readme.inf
         let ptr = &README_INFO as *const StaticData;
         res.push(
             emfat_rust::EntryBuilder::new()
-                .name("readme.txt")
+                .name("Readme.txt\0")
                 .dir(false)
                 .lvl(1)
                 .offset(0)
@@ -115,6 +81,21 @@ impl EMfatStorage {
                 .user_data(ptr as usize)
                 .build(),
         );
+
+        // /null
+        res.push(
+            emfat_rust::EntryBuilder::new()
+                .name("Testfile.bin\0")
+                .dir(false)
+                .lvl(1)
+                .offset(0)
+                .size(1024 * 1024 * 10)
+                .max_size(1024 * 1024 * 20)
+                .read_cb(null_read)
+                .build(),
+        );
+
+        res.push(emfat_rust::EntryBuilder::terminator_entry());
 
         res
     }
@@ -133,11 +114,8 @@ impl BlockDevice for EMfatStorage {
         Ok(())
     }
 
-    fn write_block(&mut self, lba: u32, block: &[u8]) -> Result<(), BlockDeviceError> {
-        unsafe {
-            emfat_rust::emfat_write(&mut self.ctx, block.as_ptr(), lba, 1);
-        }
-        Ok(())
+    fn write_block(&mut self, _lba: u32, _block: &[u8]) -> Result<(), BlockDeviceError> {
+        Err(BlockDeviceError::WriteError)
     }
 
     fn max_lba(&self) -> u32 {
