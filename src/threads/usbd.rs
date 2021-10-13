@@ -9,7 +9,7 @@ use usb_device::prelude::*;
 use usbd_scsi::Scsi;
 use usbd_serial::SerialPort;
 
-use crate::threads::{storage::Storage, usb_periph::UsbPeriph};
+use crate::threads::{storage::EMfatStorage, usb_periph::UsbPeriph};
 
 static mut USBD_THREAD: Option<freertos_rust::Task> = None;
 
@@ -19,7 +19,7 @@ pub struct UsbdPeriph {
 }
 
 pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
-    //defmt::info!("Usb thread started!");
+    defmt::info!("Usb thread started!");
 
     unsafe {
         USBD_THREAD = Some(freertos_rust::Task::current().unwrap());
@@ -45,7 +45,7 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
     let mut scsi = Scsi::new(
         &usb_bus,
         64,
-        Storage {},
+        EMfatStorage::new("Emfat"),
         "SCTB", // <= 8 больших букв
         "SelfWriter",
         "L442",
@@ -75,30 +75,34 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
             continue;
         }
 
-        let mut buf = [0u8; 64];
+        process_serial(&mut serial);
+    }
+}
 
-        match serial.read(&mut buf) {
-            Ok(count) if count > 0 => {
-                defmt::info!("Serial> Ressived {} bytes", count);
-                // Echo back in upper case
-                for c in buf[0..count].iter_mut() {
-                    if 0x61 <= *c && *c <= 0x7a {
-                        *c &= !0x20;
-                    }
-                }
+fn process_serial<B: usb_device::bus::UsbBus>(serial: &mut SerialPort<B>) {
+    let mut buf = [0u8; 64];
 
-                let mut write_offset = 0;
-                while write_offset < count {
-                    match serial.write(&buf[write_offset..count]) {
-                        Ok(len) if len > 0 => {
-                            write_offset += len;
-                        }
-                        _ => {}
-                    }
+    match serial.read(&mut buf) {
+        Ok(count) if count > 0 => {
+            defmt::info!("Serial> Ressived {} bytes", count);
+            // Echo back in upper case
+            for c in buf[0..count].iter_mut() {
+                if 0x61 <= *c && *c <= 0x7a {
+                    *c &= !0x20;
                 }
             }
-            _ => {}
+
+            let mut write_offset = 0;
+            while write_offset < count {
+                match serial.write(&buf[write_offset..count]) {
+                    Ok(len) if len > 0 => {
+                        write_offset += len;
+                    }
+                    _ => {}
+                }
+            }
         }
+        _ => {}
     }
 }
 

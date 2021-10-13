@@ -25,7 +25,8 @@ defmt = "0.2"
 defmt-rtt = "0.2"
 panic-probe = { version = "0.2", features = ["print-defmt"] }
 
-heatshrink-rust = { path = "heatshrink-rust" }
+heatshrink-rust = { path = "lib/heatshrink-rust" }
+emfat-rust = { path = "lib/emfat" }
 
 [build-dependencies]
 freertos-cargo-build = "0.1.1"
