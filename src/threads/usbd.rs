@@ -38,8 +38,10 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
             .into_af10(&mut usbd_periph.gpioa.moder, &mut usbd_periph.gpioa.afrh),
     });
 
-    //defmt::info!("Allocating ACM device");
-    //let mut serial = SerialPort::new(&usb_bus);
+    /*
+    defmt::info!("Allocating ACM device");
+    let mut serial = SerialPort::new(&usb_bus);
+    */
 
     defmt::info!("Allocating SCSI device");
     let mut scsi = Scsi::new(
@@ -57,13 +59,14 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
         .manufacturer("SCTB ELPA")
         .product("Pressure self-registrator")
         .serial_number("0123456789")
-        //.device_class(USB_CLASS_CDC)
+        //.device_class(usbd_serial::USB_CLASS_CDC)
         .device_class(usbd_mass_storage::USB_CLASS_MSC)
         .build();
 
     loop {
         if !usb_dev.poll(&mut [/*&mut serial,*/ &mut scsi]) {
             // block until usb interrupt
+
             unsafe {
                 cortex_m::peripheral::NVIC::unmask(Interrupt::USB);
             }
