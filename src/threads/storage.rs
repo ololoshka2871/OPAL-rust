@@ -115,7 +115,8 @@ impl BlockDevice for EMfatStorage {
     }
 
     fn write_block(&mut self, _lba: u32, _block: &[u8]) -> Result<(), BlockDeviceError> {
-        Err(BlockDeviceError::WriteError)
+        //Err(BlockDeviceError::WriteError)
+        Ok(())
     }
 
     fn max_lba(&self) -> u32 {
