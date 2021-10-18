@@ -66,7 +66,7 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
     loop {
         if !usb_dev.poll(&mut [/*&mut serial,*/ &mut scsi]) {
             // block until usb interrupt
-
+            /*
             unsafe {
                 cortex_m::peripheral::NVIC::unmask(Interrupt::USB);
             }
@@ -75,6 +75,7 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
                     .unwrap()
                     .wait_for_notification(0, 0, Duration::ms(10)),
             );
+            */
             continue;
         }
 

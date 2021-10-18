@@ -123,3 +123,6 @@
         * [v] Команда 0x23 
             * [v] Исправлен парсинг
             * [v] Создан ответ
+        * [v] sdc: p1 size 82 extends beyond EOD, enabling native capacity
+            https://wi-cat.ru/forums/topic/133/#postid-1602
+            * [v] Поле disk_sectors структуры stm32_usb_self_writer::threads::storage.ctx не является размером диска, нужно добавлять значение stm32_usb_self_writer::threads::storage.ctx.priv_.boot_lba

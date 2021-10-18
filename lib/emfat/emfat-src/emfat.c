@@ -340,6 +340,7 @@ bool emfat_init(emfat_t *emfat, const char *label, emfat_entry_t *entries)
 	return true;
 }
 
+// https://knowitlikepro.com/understanding-master-boot-record-mbr/
 void read_mbr_sector(const emfat_t *emfat, uint8_t *sect)
 {
 	mbr_t *mbr;
