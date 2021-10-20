@@ -15,6 +15,23 @@ pub unsafe extern "C" fn strlen(cs: *const c_char) -> size_t {
     res
 }
 
+// emfat требует strncpy()
+#[no_mangle]
+pub unsafe extern "C" fn strncpy(
+    mut dest: *mut c_char,
+    mut src: *const c_char,
+    mut max: usize,
+) -> *mut c_char {
+    let res = dest;
+    while *src != 0 && max > 0 {
+        *dest = *src;
+        dest = dest.offset(1);
+        src = src.offset(1);
+        max -= 1;
+    }
+    res
+}
+
 pub struct EntryBuilder {
     entry: emfat_entry,
 }
@@ -111,12 +128,17 @@ fn assert_null_terminated(string: &str) -> &str {
     string
 }
 
-pub fn emfat_rust_init(
-    emfat: &mut emfat_t,
-    disk_label: &str,
-    entries: *mut emfat_entry_t,
-) {
+fn assert_null_terminated_upper(string: &str) -> &str {
+    assert_eq!(string.chars().filter(|&c| c.is_lowercase() && c != '\0').count(), 0);
+    assert_null_terminated(string)
+}
+
+pub fn emfat_rust_init(emfat: &mut emfat_t, disk_label: &str, entries: *mut emfat_entry_t) {
     unsafe {
-        assert!(emfat_init(emfat, assert_null_terminated(disk_label).as_ptr(), entries));
+        assert!(emfat_init(
+            emfat,
+            assert_null_terminated_upper(disk_label).as_ptr(),
+            entries
+        ));
     };
 }

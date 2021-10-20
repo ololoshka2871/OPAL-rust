@@ -47,7 +47,7 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
     let mut scsi = Scsi::new(
         &usb_bus,
         64,
-        EMfatStorage::new("Logger\0"),
+        EMfatStorage::new("LOGGER\0"),
         "SCTB", // <= 8 больших букв
         "SelfWriter",
         "L442",
