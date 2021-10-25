@@ -49,7 +49,6 @@ fn main() -> ! {
         .unwrap_or_else(|e| defmt::panic!("Failed to start thread: {}", FreeRtosErrorContainer(e)));
 
     freertos_rust::FreeRtosUtils::start_scheduler();
-    //loop {}
 }
 
 fn start_at_mode<T>(

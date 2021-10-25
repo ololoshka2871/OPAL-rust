@@ -399,7 +399,7 @@ void read_boot_sector(const emfat_t *emfat, uint8_t *sect)
 
 	//memcpy(bs->volume_label, "NO NAME     ", 12);
 	memcpy(bs->volume_label, "            ", 12);
-	strncpy(bs->volume_label, emfat->vol_label, 12);
+	strncpy((char*)bs->volume_label, emfat->vol_label, 12);
 
 	memcpy(bs->file_system_type, "FAT32   ", 8);
 	sect[SECT - 2] = 0x55;

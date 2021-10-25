@@ -22,6 +22,10 @@ unsafe impl UsbPeripheral for UsbPeriph {
 
     // 0x4000_6C00 - 0x4000_6FFF
     const EP_MEMORY_SIZE: usize = 1024;
+
+    // USB memory region stm32l433.pdf: 45.6.2
+    // The packet memory should be accessed only by byte (8-bit) or
+    // half-word (16-bit) accesses. Word (32-bit) accesses are not allowed.
     const EP_MEMORY_ACCESS_2X16: bool = true;
 
     fn enable() {
@@ -69,6 +73,17 @@ unsafe impl UsbPeripheral for UsbPeriph {
                 .modify(|r, w| unsafe { w.bits(r.bits() | (1u32 << 26)) });
             rcc.apb1rstr1
                 .modify(|r, w| unsafe { w.bits(r.bits() & !(1u32 << 26)) });
+
+            // Zero usb memory
+            #[cfg(debug_assertions)]
+            {
+                let ptr = Self::EP_MEMORY as *mut u8;
+                for i in 0..Self::EP_MEMORY_SIZE {
+                    unsafe {
+                        *ptr.add(i) = 0x00;
+                    }
+                }
+            }
         });
     }
 
