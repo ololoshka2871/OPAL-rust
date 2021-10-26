@@ -1,7 +1,7 @@
 use freertos_rust::{Duration, InterruptContext};
 use stm32_usbd::UsbBus;
 
-use stm32l4xx_hal::{device::SCB, interrupt};
+use stm32l4xx_hal::interrupt;
 
 use stm32l4xx_hal::stm32l4::stm32l4x2::Interrupt;
 
@@ -12,10 +12,6 @@ use usbd_serial::SerialPort;
 use crate::threads::{storage::EMfatStorage, usb_periph::UsbPeriph};
 
 static mut USBD_THREAD: Option<freertos_rust::Task> = None;
-
-static mut USBD_DEVICE: Option<UsbDevice<UsbBus<UsbPeriph>>> = None;
-static mut SCSI: Option<Scsi<UsbBus<UsbPeriph>, EMfatStorage>> = None;
-static mut USB_BUS: Option<usb_device::class_prelude::UsbBusAllocator<UsbBus<UsbPeriph>>> = None;
 
 static POOL_FORCED: u8 = 3;
 
@@ -43,7 +39,6 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
             .pa12
             .into_af10(&mut usbd_periph.gpioa.moder, &mut usbd_periph.gpioa.afrh),
     });
-    unsafe { USB_BUS = Some(usb_bus) };
 
     /*
     defmt::info!("Allocating ACM device");
@@ -51,46 +46,32 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
     */
 
     defmt::info!("Allocating SCSI device");
-    let scsi = Scsi::new(
-        unsafe { USB_BUS.as_ref().unwrap() }, //&usb_bus,
-        64, // для устройств full speed: max_packet_size 8, 16, 32 or 64
+    let mut scsi = Scsi::new(
+        &usb_bus, //&usb_bus,
+        64,       // для устройств full speed: max_packet_size 8, 16, 32 or 64
         EMfatStorage::new("LOGGER\0"),
         "SCTB", // <= max 8 больших букв
-        /*"SelfWriter"*/ "MSC Config",
+        "SelfWriter",
         "L442",
-        true,
     );
 
-    unsafe {
-        SCSI = Some(scsi);
-    }
-
-    let vid_pid = UsbVidPid(/*0x0483*/ 1155, /*0x5720*/ 22314);
+    let vid_pid = UsbVidPid(0x0483, 0x5720);
     defmt::info!("Building usb device: vid={} pid={}", &vid_pid.0, &vid_pid.1);
-    let usb_dev = UsbDeviceBuilder::new(
-        /*&usb_bus*/ unsafe { USB_BUS.as_ref().unwrap() },
-        vid_pid,
-    )
-    .manufacturer(/*"SCTB ELPA"*/ "STMicroelectronics")
-    .product(/*"Pressure self-registrator"*/ "STM32 Mass Storage")
-    .serial_number("0123456789")
-    //.device_class(usbd_serial::USB_CLASS_CDC)
-    //.device_class(usbd_mass_storage::USB_CLASS_MSC)
-    .device_class(0)
-    .build();
-
-    unsafe {
-        USBD_DEVICE = Some(usb_dev);
-    }
+    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, vid_pid)
+        .manufacturer("SCTB ELPA")
+        .product("Pressure self-registrator")
+        .serial_number("0123456789")
+        //.device_class(usbd_serial::USB_CLASS_CDC)
+        //.device_class(usbd_mass_storage::USB_CLASS_MSC)
+        .device_class(0)
+        .build();
 
     defmt::info!("USB ready");
     let mut pool_failed = 0u8;
     loop {
         // Важно! Список передаваемый сюда в том же порядке,
         // что были инициализированы интерфейсы
-        if !unsafe { USBD_DEVICE.as_mut() }.unwrap().poll(&mut [
-            /*&mut serial,*/ /*&mut scsi*/ unsafe { SCSI.as_mut() }.unwrap(),
-        ]) {
+        if !usb_dev.poll(&mut [/*&mut serial,*/ &mut scsi]) {
             pool_failed += 1;
             if pool_failed > POOL_FORCED {
                 // block until usb interrupt
@@ -150,11 +131,6 @@ unsafe fn USB() {
             usbd.notify_from_isr(&interrupt_ctx, freertos_rust::TaskNotification::NoAction),
         );
     }
-
-    USBD_DEVICE
-        .as_mut()
-        .unwrap()
-        .poll(&mut [SCSI.as_mut().unwrap()]);
 
     // Как только прерывание случилось, мы посылаем сигнал потоку
     // НО ивент вызвавший прерыывание пока не снялся, поэтому мы будем

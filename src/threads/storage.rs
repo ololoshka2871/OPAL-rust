@@ -15,13 +15,13 @@ struct StaticData {
 
 // terminate strings with '\0' for strlen() compatible
 
-static README: &str = "# СКТБ \"ЭЛПА\": Автономный регистратор давления\n\
-\n\
+static README: &str = "# СКТБ \"ЭЛПА\": Автономный регистратор давления\r\n\
+\r\n\
 Этот виртуальный диск предоставляет доступ к содержимому внутреннего накопителя устройства.\n\
-\n\
-- Для расшифровки содержимого используйте программу %TODO%.\n\
-- Коэффициенты полиномов для рассчета находятся в файле %TODO%\n\
-- Для управление функционалом устройства используйте программу KalibratorGUI\n";
+\r\n\
+- Для расшифровки содержимого используйте программу %TODO%.\r\n\
+- Коэффициенты полиномов для рассчета находятся в файле %TODO%\r\n\
+- Для управление функционалом устройства используйте программу KalibratorGUI\r\n";
 
 static README_INFO: StaticData = StaticData { data: README };
 
@@ -109,8 +109,8 @@ impl EMfatStorage {
                 .max_size(65600 * 8 * 512)
                 .read_cb(null_read)
                 .build(),
-        );
-        */
+        );*/
+
         res.push(emfat_rust::EntryBuilder::terminator_entry());
 
         res
@@ -120,38 +120,27 @@ impl EMfatStorage {
 impl BlockDevice for EMfatStorage {
     const BLOCK_BYTES: usize = 512;
 
-    fn read_block(&self, lba: u32, block: &mut [u8]) -> Result<(), BlockDeviceError> {
-        //defmt::trace!("SCSI: Read LBA block {}", lba);
-        //if lba == 0 {
-        /*
+    fn read_block(&mut self, lba: u32, block: &mut [u8]) -> Result<(), BlockDeviceError> {
+        defmt::trace!("SCSI: Read LBA block {}", lba);
         unsafe {
-            core::ptr::copy_nonoverlapping(BOOT_SECTOR.as_ptr(), block.as_mut_ptr(), 512);
+            emfat_rust::emfat_read(&mut self.ctx, block.as_mut_ptr(), lba, 1);
         }
-        */
-        unsafe {
-            // костыль, либа дает константную ссылку, принудительно конвернируем
-            // в неконстантный указатель
-            let ctx = &self.ctx as *const emfat_t as *mut emfat_t;
-            emfat_rust::emfat_read(ctx, block.as_mut_ptr(), lba, 1);
-        }
-        /*} else {
-            for i in &mut block[0..512] {
-                *i = 0
-            }
-        }*/
         Ok(())
     }
 
     fn write_block(&mut self, _lba: u32, _block: &[u8]) -> Result<(), BlockDeviceError> {
         //defmt::trace!("SCSI: Write LBA block {}", lba);
-        //unsafe { emfat_rust::emfat_write(&mut self.ctx, _block.as_ptr(), lba, 1) }
+        //unsafe { emfat_rust::emfat_write(&mut self.ctx, block.as_ptr(), lba, 1) }
         //Ok(())
         Err(BlockDeviceError::HardwareError)
     }
 
     fn max_lba(&self) -> u32 {
-        //defmt::trace!("SCSI: Get max LBA {}", self.ctx.disk_sectors);
-        //self.ctx.disk_sectors - 1 // Это не размер а максимальный номер блока по 512 байт
-        256 * 1024 * 1024 / 512
+        defmt::trace!("SCSI: Get max LBA {}", self.ctx.disk_sectors);
+        self.ctx.disk_sectors // Это не размер а максимальный номер блока по 512 байт
+    }
+
+    fn is_write_protected(&self) -> bool {
+        true
     }
 }
