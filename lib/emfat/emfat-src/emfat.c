@@ -321,10 +321,6 @@ bool emfat_init(emfat_t *emfat, const char *label, emfat_entry_t *entries)
 	}
 	clust -= 2;
 
-	// CLUST = 4KB
-	// clust last_used + 1
-	// last cluster exists, but unused
-
 	emfat->vol_label = label;
 	emfat->priv.num_entries = i;
 	emfat->priv.boot_lba = 62;
@@ -339,8 +335,8 @@ bool emfat_init(emfat_t *emfat, const char *label, emfat_entry_t *entries)
 	emfat->disk_sectors = clust * SECT_PER_CLUST + emfat->priv.root_lba;
 	emfat->vol_size = (uint64_t)emfat->disk_sectors * SECT;
 	/* calc cyl number */
-	//	i = ((emfat->disk_sectors + 63*255 - 1) / (63*255));
-	//	emfat->disk_sectors = i * 63*255;
+//	i = ((emfat->disk_sectors + 63*255 - 1) / (63*255));
+//	emfat->disk_sectors = i * 63*255;
 	return true;
 }
 
@@ -357,7 +353,7 @@ void read_mbr_sector(const emfat_t *emfat, uint8_t *sect)
 	mbr->PartTable[0].StartLBA = emfat->priv.boot_lba;
 	mbr->PartTable[0].SizeLBA = emfat->disk_sectors - emfat->priv.boot_lba;
 	lba_to_chs(mbr->PartTable[0].StartLBA, &mbr->PartTable[0].start_sector, &mbr->PartTable[0].start_cylinder, &mbr->PartTable[0].start_head);
-	lba_to_chs(emfat->disk_sectors, &mbr->PartTable[0].end_sector, &mbr->PartTable[0].end_cylinder, &mbr->PartTable[0].end_head);
+	lba_to_chs(emfat->disk_sectors - 1, &mbr->PartTable[0].end_sector, &mbr->PartTable[0].end_cylinder, &mbr->PartTable[0].end_head);
 	mbr->BootSignature[0] = 0x55;
 	mbr->BootSignature[1] = 0xAA;
 }
@@ -396,11 +392,7 @@ void read_boot_sector(const emfat_t *emfat, uint8_t *sect)
 	bs->volume_id[1] = 14;
 	bs->volume_id[2] = 13;
 	bs->volume_id[3] = 8;
-
-	//memcpy(bs->volume_label, "NO NAME     ", 12);
-	memcpy(bs->volume_label, "            ", 12);
-	strncpy((char*)bs->volume_label, emfat->vol_label, 12);
-
+	memcpy(bs->volume_label, "NO NAME     ", 12);
 	memcpy(bs->file_system_type, "FAT32   ", 8);
 	sect[SECT - 2] = 0x55;
 	sect[SECT - 1] = 0xAA;
@@ -435,7 +427,7 @@ void read_fsinfo_sector(const emfat_t *emfat, uint8_t *sect)
 	fsinfo_t *info = (fsinfo_t *)sect;
 	info->signature1 = 0x41615252L;
 	info->signature2 = 0x61417272L;
-	info->free_clusters = 2; //0
+	info->free_clusters = 0;
 	info->next_cluster = emfat->priv.num_clust + 2;
 	memset(info->reserved1, 0, sizeof(info->reserved1));
 	memset(info->reserved2, 0, sizeof(info->reserved2));
@@ -479,21 +471,17 @@ void read_fat_sector(emfat_t *emfat, uint8_t *sect, uint32_t index)
 		}
 		if (le->dir)
 		{
-			if (curr == le->priv.last_clust) {
-				*values = CLUST_EOF; 
-			} else {
+			if (curr == le->priv.last_clust)
+				*values = CLUST_EOF; else
 				*values = curr + 1;
-			}
 		}
 		else
 		{
-			if (curr == le->priv.last_clust) {
-				*values = CLUST_EOF; 
-			} else if (curr > le->priv.last_clust) {
-				*values = CLUST_FREE; 
-			} else {
+			if (curr == le->priv.last_clust)
+				*values = CLUST_EOF; else
+			if (curr > le->priv.last_clust)
+				*values = CLUST_FREE; else
 				*values = curr + 1;
-			}
 		}
 		values++;
 		count--;
