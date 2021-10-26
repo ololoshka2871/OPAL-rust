@@ -40,11 +40,6 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
             .into_af10(&mut usbd_periph.gpioa.moder, &mut usbd_periph.gpioa.afrh),
     });
 
-    /*
-    defmt::info!("Allocating ACM device");
-    let mut serial = SerialPort::new(&usb_bus);
-    */
-
     defmt::info!("Allocating SCSI device");
     let mut scsi = Scsi::new(
         &usb_bus, //&usb_bus,
@@ -55,15 +50,17 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
         "L442",
     );
 
+    defmt::info!("Allocating ACM device");
+    let mut serial = SerialPort::new(&usb_bus);
+
     let vid_pid = UsbVidPid(0x0483, 0x5720);
     defmt::info!("Building usb device: vid={} pid={}", &vid_pid.0, &vid_pid.1);
     let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, vid_pid)
         .manufacturer("SCTB ELPA")
         .product("Pressure self-registrator")
         .serial_number("0123456789")
-        //.device_class(usbd_serial::USB_CLASS_CDC)
-        //.device_class(usbd_mass_storage::USB_CLASS_MSC)
-        .device_class(0)
+        //.device_class(0) // Это не нужно для композита
+        .composite_with_iads()
         .build();
 
     defmt::info!("USB ready");
@@ -71,7 +68,7 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
     loop {
         // Важно! Список передаваемый сюда в том же порядке,
         // что были инициализированы интерфейсы
-        if !usb_dev.poll(&mut [/*&mut serial,*/ &mut scsi]) {
+        if !usb_dev.poll(&mut [&mut scsi, &mut serial]) {
             pool_failed += 1;
             if pool_failed > POOL_FORCED {
                 // block until usb interrupt
@@ -88,7 +85,7 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
             continue;
         }
 
-        //process_serial(&mut serial);
+        process_serial(&mut serial);
     }
 }
 

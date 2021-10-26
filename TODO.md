@@ -171,3 +171,54 @@
         * [v] Убрать лишние изменения из библиотеки stm32-usb.rs
         * [v] Убрать лишние изменения из библиотеки emfat
         * [v] Убрать отладочный код
+    
+* [v] Composite device: Mass Storage + VCP
+    * [v] Разобраться, что происходит, если не создавать композит вообще
+        LINUX: все работает
+        Windows: Mass Storage работает, VCP - нет
+        Если посмотреть на дискрипторы, то:
+        ```
+        # несущественные поля опущены
+        CONFIGURATION DESCRIPTOR # шапка
+            wTotalLength: 90 # общая длина в байтах
+            bNumInterfaces: 3 # 3 интрфейса
+        # это работает
+        INTERFACE DESCRIPTOR (0.0): class Mass Storage
+            bInterfaceNumber: 0 # номер интерфейса
+        # использует 2 конечные точки на вход и выход
+        ENDPOINT DESCRIPTOR
+            bEndpointAddress: 0x01  OUT  Endpoint:1
+        ENDPOINT DESCRIPTOR
+            bEndpointAddress: 0x81  IN  Endpoint:1
+        # тут не хватает Interface Association Descriptor
+        # -- Это не работает --
+        # Это интерфейс управления CDC Control
+        INTERFACE DESCRIPTOR (1.0): class Communications and CDC Control
+            bInterfaceNumber: 1 # номер интерфейса
+        COMMUNICATIONS DESCRIPTOR #???
+        COMMUNICATIONS DESCRIPTOR #???
+        COMMUNICATIONS DESCRIPTOR #???
+        COMMUNICATIONS DESCRIPTOR #???
+        # 1 конечная точка управления CDC, одна от девайса к хосту, хост 
+        # периодически читает её чтобы узнать состояние устройства, 
+        # и далее что-то передает или читает из CDC-Data
+        ENDPOINT DESCRIPTOR
+            bEndpointAddress: 0x82  IN  Endpoint:2
+        # Это интерфейс данных CDC-Data
+        INTERFACE DESCRIPTOR (2.0): class CDC-Data
+            bInterfaceNumber: 2 # номер интерфейса
+        # И его конечные точки
+        ENDPOINT DESCRIPTOR
+            bEndpointAddress: 0x83  IN  Endpoint:3
+        ENDPOINT DESCRIPTOR
+            bEndpointAddress: 0x03  OUT  Endpoint:3
+        ```
+        Винда ругается, мол "Указано несуществующее устройство", по видимому не хватает,
+        как раз Interface Association Descriptor перед class Communications and CDC Control
+    [v] Изучить процесс отправки дескрипторов
+        Оказывается, все в либе уже есть, нужно было лишь включить этоу возможность
+        `UsbDeviceBuilder::composite_with_iads()` и в `UsbDevice<T>::poll(&mut[...])` 
+        сувать список ранее созданных интерфейсов в порядке регистрации.
+        После этого появляется заполненый Interface Association Descriptor в нужном месте.
+
+[_] Modbus или protobuf?
