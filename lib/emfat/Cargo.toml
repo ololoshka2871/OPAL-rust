@@ -1,4 +1,5 @@
 [package]
+authors = ["ololoshka2871"]
 name = "emfat-rust"
 version = "0.1.0"
 edition = "2018"

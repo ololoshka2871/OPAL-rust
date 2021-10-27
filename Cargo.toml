@@ -28,9 +28,11 @@ panic-probe = { version = "0.2", features = ["print-defmt"] }
 
 heatshrink-rust = { path = "lib/heatshrink-rust" }
 emfat-rust = { path = "lib/emfat" }
+nanopb-rs = { path = "lib/nanopb.rs/nanopb-rs" }
 
 [build-dependencies]
 freertos-cargo-build = "0.1.1"
+nanopb-rs-generator = { path = "lib/nanopb.rs/nanopb-rs-generator" }
 
 [profile.dev]
 opt-level = 1
@@ -42,9 +44,8 @@ debug = true # symbols are nice and they don't increase the size on Flash
 lto = true # better optimizations
 
 [features]
- default = [
+default = [
    #"defmt-default", 
-   #"usbd_scsi/defmt-default"
  ]
 
  # do NOT modify these features

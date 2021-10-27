@@ -222,3 +222,4 @@
         После этого появляется заполненый Interface Association Descriptor в нужном месте.
 
 [_] Modbus или protobuf?
+    [v] Попытка поспользоваться nanopb

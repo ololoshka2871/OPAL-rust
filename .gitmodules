@@ -7,3 +7,6 @@
 [submodule "lib/stm32-usb.rs"]
 	path = lib/stm32-usb.rs
 	url = https://github.com/ololoshka2871/stm32-usb.rs.git
+[submodule "lib/nanopb.rs/nanopb-dist"]
+	path = lib/nanopb.rs/nanopb-dist
+	url = https://github.com/nanopb/nanopb.git
