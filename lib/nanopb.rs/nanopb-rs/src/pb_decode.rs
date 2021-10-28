@@ -2,6 +2,8 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_snake_case)]
 
+use crate::common::{pb_byte_t, pb_istream_t, pb_msgdesc_t, pb_wire_type_t, size_t};
+
 include!("bindings/pb_decode.rs");
 
 extern crate alloc;
@@ -9,17 +11,12 @@ use alloc::vec::Vec;
 
 use crate::pb::Error;
 
-pub struct IStream(pb_istream_s);
+pub struct IStream(pb_istream_t);
 
 impl IStream {
-    pub fn new() -> Self {
+    pub fn from_buffer(buf: &[u8]) -> Self {
         IStream {
-            0: pb_istream_s {
-                callback: todo!(),
-                state: todo!(),
-                bytes_left: todo!(),
-                errmsg: todo!(),
-            },
+            0: unsafe { pb_istream_from_buffer(buf.as_ptr(), buf.len()) },
         }
     }
 

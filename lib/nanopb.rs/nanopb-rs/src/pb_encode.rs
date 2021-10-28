@@ -2,44 +2,51 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_snake_case)]
 
+use crate::common::{
+    pb_byte_t, pb_field_iter_t, pb_msgdesc_t, pb_ostream_t, pb_wire_type_t, size_t,
+};
+
 include!("bindings/pb_encode.rs");
 
 use crate::pb::Error;
 
-pub struct OStream(pb_ostream_s);
+pub struct OStream(pb_ostream_t);
 
 impl OStream {
-    pub fn new() -> Self {
+    pub fn from_buffer(buf: &mut [u8]) -> Self {
         OStream {
-            0: pb_ostream_s {
-                callback: todo!(),
-                state: todo!(),
-                max_size: todo!(),
-                bytes_written: todo!(),
-                errmsg: todo!(),
-            }
+            0: unsafe { pb_ostream_from_buffer(buf.as_mut_ptr(), buf.len()) },
         }
     }
 
-    pub fn encode(
-        &mut self,
-        fields: &pb_msgdesc_t,
-        src_struct: &::core::ffi::c_void,
-    ) -> Result<(), Error> {
-        if unsafe { pb_encode(&mut self.0, fields, src_struct) } {
+    pub fn encode<T>(&mut self, fields: &pb_msgdesc_t, src_struct: &T) -> Result<(), Error> {
+        if unsafe {
+            pb_encode(
+                &mut self.0,
+                fields,
+                src_struct as *const T as *const ::core::ffi::c_void,
+            )
+        } {
             Ok(())
         } else {
             Err(self.get_error())
         }
     }
 
-    pub fn encode_ex(
+    pub fn encode_ex<T>(
         &mut self,
         fields: &pb_msgdesc_t,
-        src_struct: &::core::ffi::c_void,
+        src_struct: &T,
         flags: u32,
     ) -> Result<(), Error> {
-        if unsafe { pb_encode_ex(&mut self.0, fields, src_struct, flags) } {
+        if unsafe {
+            pb_encode_ex(
+                &mut self.0,
+                fields,
+                src_struct as *const T as *const ::core::ffi::c_void,
+                flags,
+            )
+        } {
             Ok(())
         } else {
             Err(self.get_error())
@@ -134,5 +141,9 @@ impl OStream {
 
     fn get_error(&self) -> Error {
         Error::new(self.0.errmsg)
+    }
+
+    pub fn bytes_writen(&self) -> usize {
+        self.0.bytes_written    
     }
 }

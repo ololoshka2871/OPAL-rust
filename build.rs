@@ -1,10 +1,11 @@
 fn build_protobuf(mut cc: cc::Build) {
     let protobuf_src = nanopb_rs_generator::Generator::new()
-            .add_proto_file("src/ProtobufDevice_0000E006.proto")
-            .generate();
+        .add_proto_file("src/protobuf/ProtobufDevice_0000E006.proto")
+        .generate();
 
     cc.file(protobuf_src).include("lib/nanopb.rs/nanopb-dist");
-    cc.try_compile("protobuf-proto").unwrap_or_else(|e| panic!("{}", e.to_string()));
+    cc.try_compile("protobuf-proto")
+        .unwrap_or_else(|e| panic!("{}", e.to_string()));
 }
 
 fn build_freertos(mut b: freertos_cargo_build::Builder) {
