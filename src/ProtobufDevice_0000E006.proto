@@ -1,0 +1,58 @@
+﻿syntax = "proto2";
+
+package ru.sktbelpa.pressure_self_writer;
+
+enum INFO {
+    // верися этого протокола
+    PROTOCOL_VERSION = 1;
+
+    // идентификатор стенда
+    PRESSURE_SELF_WRITER_ID = 0xE006;
+
+    // ИД, преднозначенный для поиска
+    ID_DISCOVER = 0xFFFF;
+
+	// магическое число для режима MDProtobuf
+    MAGICK = 0x09;
+}
+
+// код выполнения операции
+enum STATUS {
+    // успешное завершение
+    OK = 0;
+
+    // недопустимое значение поля
+    ERRORS_IN_SUBCOMMANDS = 1;
+
+    PROTOCOL_ERROR = 100;
+}
+
+// Общий запрос для поиска
+message Request {
+    // Идентификатор запроса. Служит для определения пары запрос/ответ
+    required uint32             id = 1;
+    // id устройства (идентификация)
+    required uint32             deviceID = 2;
+    // версия протокола запрашивающего
+    required uint32             protocolVersion = 3;
+
+    // Управление
+    // optional Control            control = 5;
+}
+
+// Общий ответ сервера
+message Response {
+    // Идентификатор запроса, которому соответствует этот ответ
+    required uint32             id = 1;
+    // id устройства
+    required uint32             deviceID = 2;
+    // версия протокола с которой работает устройство
+    required uint32             protocolVersion = 3;
+    // общий статус выполнения
+    required STATUS             Global_status = 4;
+    // таймштамп устройства, когда фактически был сгененрирован ответ
+    required fixed64            timestamp = 5;
+
+    // Текущее состояние стенда
+    // required Status             status = 10;
+}

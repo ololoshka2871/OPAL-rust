@@ -1,6 +1,15 @@
 use freertos_cargo_build;
+use nanopb_rs_generator;
+
+fn generate_protobuf_src() {
+    let _res = nanopb_rs_generator::Generator::new()
+        .add_proto_file("src/ProtobufDevice_0000E006.proto")
+        .generate();
+}
 
 fn main() {
+    generate_protobuf_src();
+
     let mut b = freertos_cargo_build::Builder::new();
 
     // Path to FreeRTOS kernel or set ENV "FREERTOS_SRC" instead

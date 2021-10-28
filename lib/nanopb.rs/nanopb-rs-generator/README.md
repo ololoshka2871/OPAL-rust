@@ -1,1 +1,1 @@
-# Rust binding to [nanopb](https://github.com/nanopb/nanopb) library
+# Support library for code generation
