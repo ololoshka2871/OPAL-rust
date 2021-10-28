@@ -12,5 +12,5 @@ fn main() {
         //.flag("-fno-aggressive-loop-optimizations")
         //.define("SOME_MACRO", Some("0"))
         ;
-    build.compile("emfat");
+    build.compile("nanopb-core");
 }

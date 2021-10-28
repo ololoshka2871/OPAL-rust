@@ -31,6 +31,7 @@ emfat-rust = { path = "lib/emfat" }
 nanopb-rs = { path = "lib/nanopb.rs/nanopb-rs" }
 
 [build-dependencies]
+cc = "1.0.52"
 freertos-cargo-build = "0.1.1"
 nanopb-rs-generator = { path = "lib/nanopb.rs/nanopb-rs-generator" }
 
