@@ -71,7 +71,7 @@ impl<T: rx_context> IStream<T> {
         res
     }
 
-    pub fn encode<U>(&mut self, fields: &pb_msgdesc_t) -> Result<U, Error> {
+    pub fn decode<U>(&mut self, fields: &pb_msgdesc_t) -> Result<U, Error> {
         let mut dest_struct: U = unsafe { core::mem::MaybeUninit::zeroed().assume_init() };
         if unsafe {
             pb_decode(
@@ -86,7 +86,7 @@ impl<T: rx_context> IStream<T> {
         }
     }
 
-    pub fn encode_ex<U>(&mut self, fields: &pb_msgdesc_t, flags: u32) -> Result<U, Error> {
+    pub fn decode_ex<U>(&mut self, fields: &pb_msgdesc_t, flags: u32) -> Result<U, Error> {
         let mut dest_struct: U = unsafe { core::mem::MaybeUninit::zeroed().assume_init() };
         if unsafe {
             pb_decode_ex(

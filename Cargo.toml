@@ -46,7 +46,7 @@ lto = true # better optimizations
 
 [features]
 default = [
-   #"defmt-default", 
+   "defmt-default",
  ]
 
  # do NOT modify these features

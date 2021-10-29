@@ -3,6 +3,7 @@
 mod messages;
 
 pub use messages::{
+    _ru_sktbelpa_pressure_self_writer_INFO_ru_sktbelpa_pressure_self_writer_INFO_MAGICK,
     ru_sktbelpa_pressure_self_writer_Request, ru_sktbelpa_pressure_self_writer_Response,
 };
 pub use nanopb_rs::pb_msgdesc_t;

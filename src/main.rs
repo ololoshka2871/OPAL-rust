@@ -97,7 +97,7 @@ fn test_nanopb() {
         let mut is = IStream::<u8>::from_buffer(&buf[..len]);
 
         let msg = is
-            .encode::<protobuf::ru_sktbelpa_pressure_self_writer_Request>(
+            .decode::<protobuf::ru_sktbelpa_pressure_self_writer_Request>(
                 protobuf::ru_sktbelpa_pressure_self_writer_Request::fields(),
             )
             .unwrap_or_else(|e| panic!("{}", e));
