@@ -1,17 +1,21 @@
-use freertos_rust::{Duration, InterruptContext};
+use core::ops::DerefMut;
+
+use alloc::sync::Arc;
+use freertos_rust::{CurrentTask, Duration, InterruptContext, Mutex, Task, TaskPriority};
 use stm32_usbd::UsbBus;
 
 use stm32l4xx_hal::interrupt;
 
 use stm32l4xx_hal::stm32l4::stm32l4x2::Interrupt;
 
-use usb_device::prelude::*;
+use usb_device::{class_prelude::UsbBusAllocator, prelude::*};
 use usbd_scsi::Scsi;
 use usbd_serial::SerialPort;
 
-use crate::threads::{storage::EMfatStorage, usb_periph::UsbPeriph};
+use crate::threads::{protobuf_server, storage::EMfatStorage, usb_periph::UsbPeriph};
 
 static mut USBD_THREAD: Option<freertos_rust::Task> = None;
+static mut USB_BUS: Option<UsbBusAllocator<UsbBus<UsbPeriph>>> = None;
 
 static POOL_FORCED: u8 = 3;
 
@@ -28,22 +32,25 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
     }
 
     defmt::info!("Creating usb low-level driver: PA11, PA12, AF10");
-    let usb_bus = UsbBus::new(UsbPeriph {
-        usb: usbd_periph.usb,
-        pin_dm: usbd_periph
-            .gpioa
-            .pa11
-            .into_af10(&mut usbd_periph.gpioa.moder, &mut usbd_periph.gpioa.afrh),
-        pin_dp: usbd_periph
-            .gpioa
-            .pa12
-            .into_af10(&mut usbd_periph.gpioa.moder, &mut usbd_periph.gpioa.afrh),
-    });
+    unsafe {
+        // Должен быть статик, так как заимствуется сущностью, которая будет статик.
+        USB_BUS = Some(UsbBus::new(UsbPeriph {
+            usb: usbd_periph.usb,
+            pin_dm: usbd_periph
+                .gpioa
+                .pa11
+                .into_af10(&mut usbd_periph.gpioa.moder, &mut usbd_periph.gpioa.afrh),
+            pin_dp: usbd_periph
+                .gpioa
+                .pa12
+                .into_af10(&mut usbd_periph.gpioa.moder, &mut usbd_periph.gpioa.afrh),
+        }))
+    }
 
     defmt::info!("Allocating SCSI device");
     let mut scsi = Scsi::new(
-        &usb_bus, //&usb_bus,
-        64,       // для устройств full speed: max_packet_size 8, 16, 32 or 64
+        unsafe { USB_BUS.as_ref().unwrap() }, //&usb_bus,
+        64, // для устройств full speed: max_packet_size 8, 16, 32 or 64
         EMfatStorage::new("LOGGER\0"),
         "SCTB", // <= max 8 больших букв
         "SelfWriter",
@@ -51,11 +58,14 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
     );
 
     defmt::info!("Allocating ACM device");
-    let mut serial = SerialPort::new(&usb_bus);
+    let serial = SerialPort::new(unsafe { USB_BUS.as_ref().unwrap() });
+
+    let serial_container =
+        Arc::new(Mutex::new(serial).expect("Failed to create serial guard mutex"));
 
     let vid_pid = UsbVidPid(0x0483, 0x5720);
     defmt::info!("Building usb device: vid={} pid={}", &vid_pid.0, &vid_pid.1);
-    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, vid_pid)
+    let mut usb_dev = UsbDeviceBuilder::new(unsafe { USB_BUS.as_ref().unwrap() }, vid_pid)
         .manufacturer("SCTB ELPA")
         .product("Pressure self-registrator")
         .serial_number("0123456789")
@@ -64,11 +74,31 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
         .build();
 
     defmt::info!("USB ready");
+
+    {
+        let sn = Arc::clone(&serial_container);
+        defmt::trace!("Creating protobuf server thread...");
+        Task::new()
+            .name("Protobuf")
+            .stack_size(1024)
+            .priority(TaskPriority(1))
+            .start(move |_| protobuf_server::protobuf_server(sn))
+            .expect("Failed to create protobuf server");
+    }
+
     let mut pool_failed = 0u8;
     loop {
         // Важно! Список передаваемый сюда в том же порядке,
         // что были инициализированы интерфейсы
-        if !usb_dev.poll(&mut [&mut scsi, &mut serial]) {
+        let res = match serial_container.lock(Duration::ms(1)) {
+            Ok(mut serial) => usb_dev.poll(&mut [&mut scsi, serial.deref_mut()]),
+            Err(_) => {
+                CurrentTask::delay(Duration::ms(1));
+                true
+            }
+        };
+
+        if !res {
             pool_failed += 1;
             if pool_failed > POOL_FORCED {
                 // block until usb interrupt
@@ -85,10 +115,11 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
             continue;
         }
 
-        process_serial(&mut serial);
+        //process_serial(&mut serial);
     }
 }
 
+/*
 fn process_serial<B: usb_device::bus::UsbBus>(serial: &mut SerialPort<B>) {
     let mut buf = [0u8; 64];
 
@@ -114,7 +145,7 @@ fn process_serial<B: usb_device::bus::UsbBus>(serial: &mut SerialPort<B>) {
         }
         _ => {}
     }
-}
+}*/
 
 // USB exception
 

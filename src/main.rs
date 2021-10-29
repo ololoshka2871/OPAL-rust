@@ -80,13 +80,13 @@ fn test_nanopb() {
     let mut buf = [0_u8; 256];
     let len: usize;
     {
-        let mut msg = protobuf::_ru_sktbelpa_pressure_self_writer_Request::default();
+        let mut msg = protobuf::ru_sktbelpa_pressure_self_writer_Request::default();
         msg.id = 42;
-        let mut os = OStream::from_buffer(&mut buf);
+        let mut os = OStream::<u8>::from_buffer(&mut buf);
 
         let _ = os
             .encode(
-                protobuf::_ru_sktbelpa_pressure_self_writer_Request::fields(),
+                protobuf::ru_sktbelpa_pressure_self_writer_Request::fields(),
                 &msg,
             )
             .map_err(|e| panic!("{}", e));
@@ -94,11 +94,11 @@ fn test_nanopb() {
         len = os.bytes_writen();
     }
     {
-        let mut is = IStream::from_buffer(&buf[..len]);
+        let mut is = IStream::<u8>::from_buffer(&buf[..len]);
 
         let msg = is
-            .encode::<protobuf::_ru_sktbelpa_pressure_self_writer_Request>(
-                protobuf::_ru_sktbelpa_pressure_self_writer_Request::fields(),
+            .encode::<protobuf::ru_sktbelpa_pressure_self_writer_Request>(
+                protobuf::ru_sktbelpa_pressure_self_writer_Request::fields(),
             )
             .unwrap_or_else(|e| panic!("{}", e));
         assert_eq!(msg.id, 42);
