@@ -13,6 +13,10 @@ from google.protobuf.internal.decoder import _DecodeVarint32
 from google.protobuf.internal.encoder import _VarintBytes
 
 
+def get_magick(msg):
+    return msg[1:], msg[0]
+
+
 class TimeoutError(RuntimeError):
     pass
 
@@ -118,7 +122,18 @@ class self_writer_io:
 
         response = protocol_pb2.Response()
 
-        #self.serial.read(4096)
+        msg = self.serial.read(4096)
+        msg, magick = get_magick(msg)
+        if magick != protocol_pb2.INFO.MAGICK:
+            raise RuntimeError("Invalid magick")
+
+        msg_len, new_pos = _DecodeVarint32(msg, 0)
+        if msg_len > 1500:
+            raise RuntimeError(f"message too long ({msg_len} bytes)")
+
+        response.ParseFromString(msg[new_pos:])
+
+        return response
 
         #while timeout_sec > 0:
         #    ready = select.select([self.udp_socket], [], [], self.base_timeout)
@@ -137,7 +152,7 @@ class self_writer_io:
 
         #if timeout_sec <= 0:
         #    raise TimeoutError('Timeout')
-        return response
+        #return response
 
     def async_listener(self, request, callback, timeout_sec):
         try:
