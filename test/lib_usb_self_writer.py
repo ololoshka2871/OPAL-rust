@@ -7,6 +7,11 @@ import random
 import time
 import serial
 
+from io import StringIO
+
+from google.protobuf.internal.decoder import _DecodeVarint32
+from google.protobuf.internal.encoder import _VarintBytes
+
 
 class TimeoutError(RuntimeError):
     pass
@@ -22,8 +27,8 @@ class self_writer_requestBuilder:
         """
         req = protocol_pb2.Request()
         req.id = random.randrange(0xffffffff)
-        req.protocolVersion = protocol_pb2.INFO.Value('PROTOCOL_VERSION')
-        req.deviceID = protocol_pb2.INFO.Value('ID_DISCOVER')
+        req.protocolVersion = protocol_pb2.INFO.PROTOCOL_VERSION
+        req.deviceID = protocol_pb2.INFO.ID_DISCOVER
         return req
 
     @staticmethod
@@ -106,7 +111,10 @@ class self_writer_io:
         return self.process_request_common(request, timeout_sec)
 
     def process_request_common(self, request, timeout_sec):
-        self.serial.write(request.SerializeToString())
+        magick = bytes([protocol_pb2.INFO.MAGICK])
+        size = _VarintBytes(request.ByteSize())
+        body = request.SerializeToString()
+        self.serial.write(magick + size + body)
 
         response = protocol_pb2.Response()
 

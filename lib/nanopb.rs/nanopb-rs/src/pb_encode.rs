@@ -175,23 +175,23 @@ impl<T: tx_context> OStream<T> {
         }
     }
 
-    pub fn get_encoded_size(
-        fields: &pb_msgdesc_t,
-        src_struct: *const ::core::ffi::c_void,
-    ) -> Result<usize, Error> {
-        let mut s = 0_usize;
-        if unsafe { pb_get_encoded_size(&mut s, fields, src_struct) } {
-            Ok(s)
-        } else {
-            Err(Error::from_str("Failed to calculule message size\0"))
-        }
-    }
-
     fn get_error(&self) -> Error {
         Error::new(self.ctx.errmsg)
     }
 
     pub fn bytes_writen(&self) -> usize {
         self.ctx.bytes_written
+    }
+}
+
+pub fn get_encoded_size(
+    fields: &pb_msgdesc_t,
+    src_struct: *const ::core::ffi::c_void,
+) -> Result<usize, Error> {
+    let mut s = 0_usize;
+    if unsafe { pb_get_encoded_size(&mut s, fields, src_struct) } {
+        Ok(s)
+    } else {
+        Err(Error::from_str("Failed to calculule message size\0"))
     }
 }

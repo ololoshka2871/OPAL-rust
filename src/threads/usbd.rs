@@ -73,7 +73,7 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
         .composite_with_iads()
         .build();
 
-    defmt::info!("USB ready");
+    defmt::info!("USB ready!");
 
     {
         let sn = Arc::clone(&serial_container);
@@ -102,13 +102,13 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
                 unsafe {
                     cortex_m::peripheral::NVIC::unmask(Interrupt::USB);
                 }
-                if let Ok(_) = freertos_rust::Task::current()
+                pool_failed = match freertos_rust::Task::current()
                     .unwrap()
                     .wait_for_notification(0, 0, Duration::ms(5))
                 {
-                    defmt::trace!("USB interrupt!");
-                }
-                pool_failed = 0;
+                    Ok(_) => 0,
+                    Err(_) => POOL_FORCED - 1,
+                };
             }
             continue;
         }

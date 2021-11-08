@@ -48,10 +48,7 @@ impl<T: rx_context> IStream<T> {
             let cb: *mut dyn rx_context =
                 transmute::<*mut ::core::ffi::c_void, *mut U>((*stream).state);
             match (*cb).read(&mut *slice_from_raw_parts_mut(buf, size)) {
-                Ok(read) => {
-                    (*stream).bytes_left -= read;
-                    (*stream).bytes_left == 0
-                }
+                Ok(read) => size == read,
                 Err(_) => false,
             }
         }

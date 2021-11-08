@@ -37,7 +37,7 @@ message Request {
     required uint32             protocolVersion = 3;
 
     // Управление
-    // optional Control            control = 5;
+    // optional Control         control = 5;
 }
 
 // Общий ответ сервера
@@ -54,5 +54,5 @@ message Response {
     required fixed64            timestamp = 5;
 
     // Текущее состояние стенда
-    // required Status             status = 10;
+    // required Status          status = 10;
 }

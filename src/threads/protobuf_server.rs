@@ -2,7 +2,7 @@ use core::borrow::BorrowMut;
 
 use alloc::sync::Arc;
 
-use freertos_rust::{CurrentTask, Duration, FreeRtosError, Mutex};
+use freertos_rust::{CurrentTask, Duration, FreeRtosError, FreeRtosUtils, Mutex};
 
 use nanopb_rs::{pb_decode::rx_context, pb_encode::tx_context, Error, IStream, OStream};
 
@@ -11,6 +11,8 @@ use usb_device::{class_prelude::UsbBus, UsbError};
 use usbd_serial::SerialPort;
 
 use crate::protobuf;
+
+use crate::protobuf::Sizable;
 
 static ERR_MSG: &str = "Failed to get serial port";
 
@@ -87,10 +89,17 @@ fn flush_input<B: UsbBus>(serial_container: &mut Arc<Mutex<SerialPort<B>>>) {
         Ok(mut s) => {
             let mut buf = [0_u8; 8];
             loop {
-                if let Err(UsbError::WouldBlock) = s.read(&mut buf) {
-                    break;
+                // s.flush() - это не то
+                match s.read(&mut buf) {
+                    Ok(len) => {
+                        if len < buf.len() {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
                 }
             }
+            defmt::trace!("Serial: input buffer flushed");
         }
         Err(e) => panic_lock(e),
     }
@@ -99,13 +108,13 @@ fn flush_input<B: UsbBus>(serial_container: &mut Arc<Mutex<SerialPort<B>>>) {
 fn decode_magick<B: UsbBus>(is: &mut IStream<Reader<B>>) -> Result<(), Error> {
     match is.decode_variant() {
         Ok(v) => {
-            if v != crate::protobuf::_ru_sktbelpa_pressure_self_writer_INFO_ru_sktbelpa_pressure_self_writer_INFO_MAGICK as u64 {
+            if v != crate::protobuf::ru_sktbelpa_pressure_self_writer_INFO_MAGICK as u64 {
                 Err(Error::from_str("Invalid message magick!\0"))
             } else {
                 Ok(())
             }
-        },
-        Err(e) => Err(e)
+        }
+        Err(e) => Err(e),
     }
 }
 
@@ -153,7 +162,7 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
             }
         };
 
-        let message = {
+        let request = {
             let mut is = IStream::from_callback(
                 Reader {
                     container: serial_container.clone(),
@@ -175,7 +184,14 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
             message
         };
 
-        {
+        defmt::info!("Nanopb: got request: {}", defmt::Debug2Format(&request));
+
+        let response = {
+            let id = request.id;
+            process_requiest(request, new_response(id))
+        };
+
+        loop {
             let mut os = OStream::from_callback(
                 Writer {
                     container: serial_container.clone(),
@@ -183,12 +199,48 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
                 None,
             );
 
-            if let Err(e) = os.encode::<protobuf::ru_sktbelpa_pressure_self_writer_Request>(
-                protobuf::ru_sktbelpa_pressure_self_writer_Request::fields(),
-                &message,
+            if let Err(_) = os.write(&[protobuf::ru_sktbelpa_pressure_self_writer_INFO_MAGICK]) {
+                print_error(nanopb_rs::Error::from_str("Failed to write magick\0"));
+                break;
+            }
+
+            if let Err(_) = os.encode_varint(
+                protobuf::ru_sktbelpa_pressure_self_writer_Response::get_size(&response) as u64,
+            ) {
+                print_error(nanopb_rs::Error::from_str("Failed to encode size\0"));
+                break;
+            }
+
+            defmt::info!(
+                "Nanopb: writing response: {}",
+                defmt::Debug2Format(&response)
+            );
+            if let Err(e) = os.encode::<protobuf::ru_sktbelpa_pressure_self_writer_Response>(
+                protobuf::ru_sktbelpa_pressure_self_writer_Response::fields(),
+                &response,
             ) {
                 print_error(e)
             }
+            break;
         }
     }
+}
+
+fn new_response(id: u32) -> protobuf::ru_sktbelpa_pressure_self_writer_Response {
+    let mut res = protobuf::ru_sktbelpa_pressure_self_writer_Response::default();
+
+    res.id = id;
+    res.deviceID = protobuf::ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID;
+    res.protocolVersion = protobuf::ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION;
+    res.Global_status = protobuf::ru_sktbelpa_pressure_self_writer_STATUS_OK;
+    res.timestamp = FreeRtosUtils::get_tick_count() as u64;
+
+    res
+}
+
+fn process_requiest(
+    _: protobuf::ru_sktbelpa_pressure_self_writer_Request,
+    resp: protobuf::ru_sktbelpa_pressure_self_writer_Response,
+) -> protobuf::ru_sktbelpa_pressure_self_writer_Response {
+    resp
 }
