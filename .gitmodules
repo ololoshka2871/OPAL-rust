@@ -10,3 +10,6 @@
 [submodule "lib/nanopb.rs/nanopb-dist"]
 	path = lib/nanopb.rs/nanopb-dist
 	url = https://github.com/nanopb/nanopb.git
+[submodule "lib/usbd-serial"]
+	path = lib/usbd-serial
+	url = https://github.com/ololoshka2871/usbd-serial.git

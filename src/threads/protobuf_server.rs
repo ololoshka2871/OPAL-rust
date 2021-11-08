@@ -30,17 +30,21 @@ impl<'a, B: UsbBus> rx_context for Reader<'a, B> {
 
         loop {
             match self.container.lock(Duration::infinite()) {
-                Ok(mut serial) => match serial.borrow_mut().read(buff) {
-                    Ok(count) => {
-                        if count > 0 {
-                            return Ok(count);
-                        } else {
-                            block_thread()
+                Ok(mut serial) => {
+                    let ser = serial.borrow_mut();
+                    match ser.read(buff) {
+                        Ok(count) => {
+                            if count > 0 {
+                                defmt::trace!("Serial: {} bytes ressived", count);
+                                return Ok(count);
+                            } else {
+                                block_thread()
+                            }
                         }
+                        Err(UsbError::WouldBlock) => block_thread(),
+                        Err(_) => return Err(()),
                     }
-                    Err(UsbError::WouldBlock) => block_thread(),
-                    Err(_) => return Err(()),
-                },
+                }
                 Err(e) => panic_lock(e),
             }
         }
@@ -60,6 +64,7 @@ impl<'a, B: UsbBus> tx_context for Writer<'a, B> {
                     while write_offset < src.len() {
                         match serial.write(&src[write_offset..]) {
                             Ok(len) if len > 0 => {
+                                defmt::trace!("Serial: {} bytes writen", len);
                                 write_offset += len;
                             }
                             _ => CurrentTask::delay(Duration::ms(1)),

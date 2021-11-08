@@ -1,7 +1,7 @@
 use core::ops::DerefMut;
 
 use alloc::sync::Arc;
-use freertos_rust::{CurrentTask, Duration, InterruptContext, Mutex, Task, TaskPriority};
+use freertos_rust::{Duration, InterruptContext, Mutex, Task, TaskPriority};
 use stm32_usbd::UsbBus;
 
 use stm32l4xx_hal::interrupt;
@@ -92,10 +92,7 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
         // что были инициализированы интерфейсы
         let res = match serial_container.lock(Duration::ms(1)) {
             Ok(mut serial) => usb_dev.poll(&mut [&mut scsi, serial.deref_mut()]),
-            Err(_) => {
-                CurrentTask::delay(Duration::ms(1));
-                true
-            }
+            Err(_) => true,
         };
 
         if !res {
@@ -105,47 +102,18 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
                 unsafe {
                     cortex_m::peripheral::NVIC::unmask(Interrupt::USB);
                 }
-                core::mem::forget(
-                    freertos_rust::Task::current()
-                        .unwrap()
-                        .wait_for_notification(0, 0, Duration::ms(5)),
-                );
+                if let Ok(_) = freertos_rust::Task::current()
+                    .unwrap()
+                    .wait_for_notification(0, 0, Duration::ms(5))
+                {
+                    defmt::trace!("USB interrupt!");
+                }
                 pool_failed = 0;
             }
             continue;
         }
-
-        //process_serial(&mut serial);
     }
 }
-
-/*
-fn process_serial<B: usb_device::bus::UsbBus>(serial: &mut SerialPort<B>) {
-    let mut buf = [0u8; 64];
-
-    match serial.read(&mut buf) {
-        Ok(count) if count > 0 => {
-            defmt::info!("Serial> Ressived {} bytes", count);
-            // Echo back in upper case
-            for c in buf[0..count].iter_mut() {
-                if 0x61 <= *c && *c <= 0x7a {
-                    *c &= !0x20;
-                }
-            }
-
-            let mut write_offset = 0;
-            while write_offset < count {
-                match serial.write(&buf[write_offset..count]) {
-                    Ok(len) if len > 0 => {
-                        write_offset += len;
-                    }
-                    _ => {}
-                }
-            }
-        }
-        _ => {}
-    }
-}*/
 
 // USB exception
 
