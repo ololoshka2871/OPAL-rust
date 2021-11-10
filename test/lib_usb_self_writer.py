@@ -135,15 +135,15 @@ class self_writer_io:
         response = protocol_pb2.Response()
 
         msg = self.serial.read(4096)
-        msg, magick = get_magick(msg)
+        msg_no_magick, magick = get_magick(msg)
         if magick != protocol_pb2.INFO.MAGICK:
             raise RuntimeError("Invalid magick")
 
-        msg_len, new_pos = _DecodeVarint32(msg, 0)
+        msg_len, new_pos = _DecodeVarint32(msg_no_magick, 0)
         if msg_len > 1500:
             raise RuntimeError(f"message too long ({msg_len} bytes)")
 
-        response.ParseFromString(msg[new_pos:])
+        response.ParseFromString(msg_no_magick[new_pos:])
 
         return response
 

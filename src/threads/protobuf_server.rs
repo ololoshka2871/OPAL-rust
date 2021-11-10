@@ -3,10 +3,11 @@ use core::borrow::BorrowMut;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 
+use alloc::vec;
 use freertos_rust::{CurrentTask, Duration, FreeRtosError, FreeRtosUtils, Mutex};
 
 use nanopb_rs::dyn_fields::TxRepeated;
-use nanopb_rs::{pb_decode::rx_context, pb_encode::tx_context, Error, IStream, OStream};
+use nanopb_rs::{pb_decode::rx_context, Error, IStream, OStream};
 
 use usb_device::{class_prelude::UsbBus, UsbError};
 
@@ -55,56 +56,8 @@ impl<'a, B: UsbBus> rx_context for Reader<'a, B> {
     }
 }
 
-struct Writer<'a, B: UsbBus> {
-    container: Arc<Mutex<SerialPort<'a, B>>>,
-}
-
-impl<'a, B: UsbBus> tx_context for Writer<'a, B> {
-    fn write(&mut self, src: &[u8]) -> Result<usize, ()> {
-        loop {
-            match self.container.lock(Duration::infinite()) {
-                Ok(mut serial) => {
-                    let mut write_offset = 0;
-                    while write_offset < src.len() {
-                        match serial.write(&src[write_offset..]) {
-                            Ok(len) if len > 0 => {
-                                defmt::trace!("Serial: {} bytes writen", len);
-                                write_offset += len;
-                            }
-                            _ => CurrentTask::delay(Duration::ms(1)),
-                        }
-                    }
-                    return Ok(src.len());
-                }
-                Err(e) => panic_lock(e),
-            }
-        }
-    }
-}
-
 fn print_error(e: Error) {
     defmt::error!("Protobuf decode error: {}", defmt::Display2Format(&e));
-}
-
-fn flush_input<B: UsbBus>(serial_container: &mut Arc<Mutex<SerialPort<B>>>) {
-    match serial_container.lock(Duration::infinite()) {
-        Ok(mut s) => {
-            let mut buf = [0_u8; 8];
-            loop {
-                // s.flush() - это не то
-                match s.read(&mut buf) {
-                    Ok(len) => {
-                        if len < buf.len() {
-                            break;
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
-            defmt::trace!("Serial: input buffer flushed");
-        }
-        Err(e) => panic_lock(e),
-    }
 }
 
 fn decode_magick<B: UsbBus>(is: &mut IStream<Reader<B>>) -> Result<(), Error> {
@@ -134,115 +87,144 @@ fn decode_msg_size<B: UsbBus>(is: &mut IStream<Reader<B>>) -> Result<usize, Erro
 }
 
 pub fn protobuf_server<B: usb_device::bus::UsbBus>(
-    mut serial_container: Arc<Mutex<SerialPort<B>>>,
+    serial_container: Arc<Mutex<SerialPort<B>>>,
 ) -> ! {
     loop {
-        let msg_size = {
-            let mut is = IStream::from_callback(
-                Reader {
-                    container: serial_container.clone(),
-                },
-                None,
-            );
-
-            match decode_magick(&mut is) {
-                Ok(_) => {}
-                Err(e) => {
-                    print_error(e);
-                    flush_input(&mut serial_container);
-                    continue;
-                }
-            }
-
-            match decode_msg_size(&mut is) {
-                Ok(s) => s,
-                Err(e) => {
-                    print_error(e);
-                    flush_input(&mut serial_container);
-                    continue;
-                }
-            }
-        };
-
-        let request = {
-            let mut is = IStream::from_callback(
-                Reader {
-                    container: serial_container.clone(),
-                },
-                Some(msg_size),
-            );
-
-            let message = match is.decode::<ru_sktbelpa_pressure_self_writer_Request>(
-                ru_sktbelpa_pressure_self_writer_Request::fields(),
-            ) {
-                Ok(msg) => {
-                    if !(msg.deviceID
-                        == ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID
-                        || msg.deviceID == ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER)
-                    {
-                        defmt::error!("Protobuf: unknown target device id: 0x{:X}", msg.deviceID);
-                        continue;
-                    }
-                    if msg.deviceID != ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER
-                        && msg.protocolVersion
-                            != ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION
-                    {
-                        defmt::error!(
-                            "Protobuf: unsupported protocol version {}",
-                            msg.protocolVersion
-                        );
-                        continue;
-                    }
-                    msg
-                }
-                Err(e) => {
-                    print_error(e);
-                    flush_input(&mut serial_container);
-                    continue;
-                }
-            };
-
-            message
-        };
-
-        defmt::info!("Nanopb: got request: {}", defmt::Debug2Format(&request));
-
-        {
-            let response = {
-                let id = request.id;
-                process_requiest(request, new_response(id))
-            };
-
-            let mut os = OStream::from_callback(
-                Writer {
-                    container: serial_container.clone(),
-                },
-                None,
-            );
-
-            if let Err(_) = os.write(&[ru_sktbelpa_pressure_self_writer_INFO_MAGICK]) {
-                print_error(nanopb_rs::Error::from_str("Failed to write magick\0"));
+        let msg_size = match recive_md_header(serial_container.clone()) {
+            Ok(size) => size,
+            Err(e) => {
+                print_error(e);
                 continue;
             }
+        };
 
-            if let Err(_) = os.encode_varint(ru_sktbelpa_pressure_self_writer_Response::get_size(
-                &response,
-            ) as u64)
+        let request = match recive_message_body(serial_container.clone(), msg_size) {
+            Ok(request) => request,
+            Err(_) => continue,
+        };
+
+        defmt::info!("Nanopb: Request:\n{}", defmt::Debug2Format(&request));
+
+        let response = {
+            let id = request.id;
+            process_requiest(request, new_response(id))
+        };
+
+        defmt::info!("Nanopb: Response:\n{}", defmt::Debug2Format(&response));
+
+        if let Err(e) = write_responce(serial_container.clone(), response) {
+            print_error(e);
+        }
+    }
+}
+
+fn write_responce<B: usb_device::bus::UsbBus>(
+    serial_container: Arc<Mutex<SerialPort<B>>>,
+    response: ru_sktbelpa_pressure_self_writer_Response,
+) -> Result<(), Error> {
+    let size = ru_sktbelpa_pressure_self_writer_Response::get_size(&response);
+    let mut buf = vec![0_u8; size + 1 + core::mem::size_of::<u64>()];
+    let buf = buf.as_mut_slice();
+    let mut os = OStream::from_buffer(buf);
+
+    if let Err(_) = os.write(&[ru_sktbelpa_pressure_self_writer_INFO_MAGICK]) {
+        return Err(Error::from_str("Failed to write magick\0"));
+    }
+
+    if let Err(_) = os.encode_varint(size as u64) {
+        return Err(Error::from_str("Failed to encode size\0"));
+    }
+
+    if let Err(e) = os.encode::<ru_sktbelpa_pressure_self_writer_Response>(
+        ru_sktbelpa_pressure_self_writer_Response::fields(),
+        &response,
+    ) {
+        return Err(e);
+    }
+
+    let mut buf = &buf[..os.stram_size()];
+    loop {
+        match serial_container.lock(Duration::infinite()) {
+            Ok(mut serial) => match serial.write(buf) {
+                Ok(len) if len > 0 => {
+                    defmt::trace!("Serial: {} bytes writen", len);
+                    if len == buf.len() {
+                        return Ok(());
+                    }
+                    buf = &buf[len..];
+                }
+                _ => {}
+            },
+            Err(e) => panic_lock(e),
+        }
+        CurrentTask::delay(Duration::ms(1));
+    }
+}
+
+fn recive_message_body<B: usb_device::bus::UsbBus>(
+    serial_container: Arc<Mutex<SerialPort<B>>>,
+    msg_size: usize,
+) -> Result<ru_sktbelpa_pressure_self_writer_Request, ()> {
+    let mut is = IStream::from_callback(
+        Reader {
+            container: serial_container,
+        },
+        Some(msg_size),
+    );
+
+    match is.decode::<ru_sktbelpa_pressure_self_writer_Request>(
+        ru_sktbelpa_pressure_self_writer_Request::fields(),
+    ) {
+        Ok(msg) => {
+            if !(msg.deviceID == ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID
+                || msg.deviceID == ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER)
             {
-                print_error(nanopb_rs::Error::from_str("Failed to encode size\0"));
-                continue;
+                defmt::error!("Protobuf: unknown target device id: 0x{:X}", msg.deviceID);
+                return Err(());
             }
 
-            defmt::info!(
-                "Nanopb: writing response: {}",
-                defmt::Debug2Format(&response)
-            );
-            if let Err(e) = os.encode::<ru_sktbelpa_pressure_self_writer_Response>(
-                ru_sktbelpa_pressure_self_writer_Response::fields(),
-                &response,
-            ) {
-                print_error(e)
+            if msg.deviceID != ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER
+                && msg.protocolVersion != ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION
+            {
+                defmt::error!(
+                    "Protobuf: unsupported protocol version {}",
+                    msg.protocolVersion
+                );
+                return Err(());
             }
+            Ok(msg)
+        }
+        Err(e) => {
+            print_error(e);
+            is.flush();
+            Err(())
+        }
+    }
+}
+
+fn recive_md_header<B: usb_device::bus::UsbBus>(
+    serial_container: Arc<Mutex<SerialPort<B>>>,
+) -> Result<usize, Error> {
+    let mut is = IStream::from_callback(
+        Reader {
+            container: serial_container,
+        },
+        None,
+    );
+
+    match decode_magick(&mut is) {
+        Ok(_) => {}
+        Err(e) => {
+            is.flush();
+            return Err(e);
+        }
+    }
+
+    match decode_msg_size(&mut is) {
+        Ok(s) => Ok(s),
+        Err(e) => {
+            is.flush();
+            Err(e)
         }
     }
 }
@@ -273,26 +255,39 @@ fn process_requiest(
 }
 
 fn fill_settings(settings_resp: &mut ru_sktbelpa_pressure_self_writer_SettingsResponse) {
-    struct FloatIterator(u32);
+    struct FloatIterator {
+        counter: u32,
+        initial: u32,
+    }
 
-    impl TxRepeated<f32> for FloatIterator {
-        fn next_item(&mut self) -> Option<f32> {
-            if self.0 != 0 {
-                self.0 -= 1;
-                Some(0.0)
+    impl FloatIterator {
+        fn new(count: u32) -> Self {
+            Self {
+                counter: count,
+                initial: count,
+            }
+        }
+    }
+
+    impl TxRepeated for FloatIterator {
+        fn reset(&mut self) {
+            self.counter = self.initial;
+        }
+
+        fn has_next(&mut self) -> bool {
+            if self.counter != 0 {
+                self.counter -= 1;
+                true
             } else {
-                None
+                false
             }
         }
 
-        fn encode_body(
-            &self,
-            out_stream: &mut nanopb_rs::pb_encode::pb_ostream_t,
-            data: f32,
-        ) -> bool {
+        fn encode_next(&self, out_stream: &mut nanopb_rs::pb_encode::pb_ostream_t) -> bool {
+            let data = 1.328e-9_f32;
             unsafe {
-                let t = *(&data as *const f32 as *const u32) as u64;
-                nanopb_rs::pb_encode::pb_encode_varint(out_stream, t)
+                // f32 кодируются как fixed32
+                nanopb_rs::pb_encode::pb_encode_fixed32(out_stream, &data as *const f32 as *const _)
             }
         }
 
@@ -314,12 +309,12 @@ fn fill_settings(settings_resp: &mut ru_sktbelpa_pressure_self_writer_SettingsRe
     settings_resp.PCoefficients = ru_sktbelpa_pressure_self_writer_PCoefficientsGet {
         Fp0: 0.0,
         Ft0: 0.0,
-        A: nanopb_rs::dyn_fields::new_tx_repeated_callback(Box::new(FloatIterator(16))),
+        A: nanopb_rs::dyn_fields::new_tx_repeated_callback(Box::new(FloatIterator::new(16))),
     };
 
     settings_resp.TCoefficients = ru_sktbelpa_pressure_self_writer_T5CoefficientsGet {
         T0: 0.0,
         F0: 0.0,
-        C: nanopb_rs::dyn_fields::new_tx_repeated_callback(Box::new(FloatIterator(6))),
+        C: nanopb_rs::dyn_fields::new_tx_repeated_callback(Box::new(FloatIterator::new(6))),
     };
 }

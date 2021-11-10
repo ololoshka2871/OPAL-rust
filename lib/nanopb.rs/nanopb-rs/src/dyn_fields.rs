@@ -28,32 +28,33 @@ pub fn new_tx_callback(
     }
 }
 
-pub trait TxRepeated<T> {
-    fn next_item(&mut self) -> Option<T>;
-    fn encode_body(&self, out_stream: &mut pb_ostream_t, data: T) -> bool;
+pub trait TxRepeated {
+    fn reset(&mut self);
+    fn has_next(&mut self) -> bool;
+    fn encode_next(&self, out_stream: &mut pb_ostream_t) -> bool;
     fn fields(&self) -> &'static pb_msgdesc_t;
 }
 
-pub fn new_tx_repeated_callback<T>(f: Box<dyn TxRepeated<T>>) -> pb_callback_t {
-    unsafe extern "C" fn wraper<U>(
+pub fn new_tx_repeated_callback(f: Box<dyn TxRepeated>) -> pb_callback_t {
+    unsafe extern "C" fn wraper(
         out_stream: *mut pb_ostream_t,
         field: *const pb_field_iter_t,
         arg: *const *mut ::core::ffi::c_void,
     ) -> bool {
-        let f = (*arg) as *mut Box<dyn TxRepeated<U>>;
+        let f = (*arg) as *mut Box<dyn TxRepeated>;
 
+        (*f).reset();
         loop {
-            match (*f).next_item() {
-                Some(item) => {
-                    if !pb_encode_tag_for_field(out_stream, field) {
-                        return false;
-                    }
-
-                    if !(*f).encode_body(&mut *out_stream, item) {
-                        return false;
-                    }
+            if (*f).has_next() {
+                if !pb_encode_tag_for_field(out_stream, field) {
+                    return false;
                 }
-                None => return true,
+
+                if !(*f).encode_next(&mut *out_stream) {
+                    return false;
+                }
+            } else {
+                return true;
             }
         }
     }
@@ -62,7 +63,7 @@ pub fn new_tx_repeated_callback<T>(f: Box<dyn TxRepeated<T>>) -> pb_callback_t {
 
     pb_callback_t {
         funcs: pb_callback_s__bindgen_ty_1 {
-            encode: Some(wraper::<T>),
+            encode: Some(wraper),
         },
         arg: Box::into_raw(arg) as *mut _,
     }

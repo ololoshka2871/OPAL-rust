@@ -7,6 +7,8 @@ use core::ptr::{null, slice_from_raw_parts};
 
 extern crate alloc;
 
+use alloc::boxed::Box;
+
 pub use crate::common::{
     pb_byte_t, pb_field_iter_t, pb_msgdesc_t, pb_ostream_s, pb_ostream_t, pb_wire_type_t, size_t,
 };
@@ -25,12 +27,12 @@ impl tx_context for u8 {
     }
 }
 
-pub struct OStream<T: tx_context> {
+pub struct OStream {
     ctx: pb_ostream_t,
-    writer: Option<T>,
+    writer: Option<Box<dyn tx_context>>,
 }
 
-impl<T: tx_context> OStream<T> {
+impl OStream {
     pub fn from_buffer(buf: &mut [u8]) -> Self {
         OStream {
             ctx: unsafe { pb_ostream_from_buffer(buf.as_mut_ptr(), buf.len()) },
@@ -38,7 +40,7 @@ impl<T: tx_context> OStream<T> {
         }
     }
 
-    pub fn from_callback(tx_ctx: T, max_size: Option<usize>) -> Self {
+    pub fn from_callback<T: tx_context + 'static>(tx_ctx: T, max_size: Option<usize>) -> Self {
         unsafe extern "C" fn write_wraper<U: tx_context>(
             stream: *mut pb_ostream_s,
             buf: *const u8,
@@ -59,12 +61,16 @@ impl<T: tx_context> OStream<T> {
                 bytes_written: 0,
                 errmsg: null(),
             },
-            writer: Some(tx_ctx),
+            writer: Some(Box::new(tx_ctx)),
         };
 
         res.ctx.state = res.writer.as_ref().unwrap() as *const _ as *mut _;
 
         res
+    }
+
+    pub fn stram_size(&self) -> usize {
+        self.ctx.bytes_written
     }
 
     pub fn encode<U>(&mut self, fields: &pb_msgdesc_t, src_struct: &U) -> Result<(), Error> {

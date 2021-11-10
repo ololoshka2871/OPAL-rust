@@ -68,6 +68,15 @@ impl<T: rx_context> IStream<T> {
         res
     }
 
+    pub fn flush(&mut self) {
+        loop {
+            let mut b = 0u8;
+            if !unsafe { pb_read(&mut self.ctx, &mut b, 1) } {
+                break;
+            }
+        }
+    }
+
     pub fn decode<U>(&mut self, fields: &pb_msgdesc_t) -> Result<U, Error> {
         let mut dest_struct: U = unsafe { core::mem::MaybeUninit::zeroed().assume_init() };
         if unsafe {
