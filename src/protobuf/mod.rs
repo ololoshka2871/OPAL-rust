@@ -3,12 +3,20 @@
 mod messages;
 
 pub use messages::{
+    ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER,
     ru_sktbelpa_pressure_self_writer_INFO_MAGICK,
     ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID,
     ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION,
-    ru_sktbelpa_pressure_self_writer_Request, ru_sktbelpa_pressure_self_writer_Response,
     ru_sktbelpa_pressure_self_writer_STATUS_OK,
 };
+
+pub use messages::{
+    ru_sktbelpa_pressure_self_writer_PCoefficientsGet, ru_sktbelpa_pressure_self_writer_Request,
+    ru_sktbelpa_pressure_self_writer_Response, ru_sktbelpa_pressure_self_writer_SettingsResponse,
+    ru_sktbelpa_pressure_self_writer_T5CoefficientsGet,
+};
+
+pub use messages::pb_callback_t;
 
 use nanopb_rs::pb_encode::get_encoded_size;
 pub use nanopb_rs::pb_msgdesc_t;
@@ -17,12 +25,6 @@ static SIZE_ERROR_MSG: &str = "Failed to calculete message size";
 
 pub trait Sizable<T> {
     fn get_size(data: &T) -> usize;
-}
-
-impl ru_sktbelpa_pressure_self_writer_Request {
-    pub fn fields() -> &'static pb_msgdesc_t {
-        unsafe { &messages::ru_sktbelpa_pressure_self_writer_Request_msg }
-    }
 }
 
 impl Sizable<ru_sktbelpa_pressure_self_writer_Request>
@@ -38,12 +40,6 @@ impl Sizable<ru_sktbelpa_pressure_self_writer_Request>
     }
 }
 
-impl ru_sktbelpa_pressure_self_writer_Response {
-    pub fn fields() -> &'static pb_msgdesc_t {
-        unsafe { &messages::ru_sktbelpa_pressure_self_writer_Response_msg }
-    }
-}
-
 impl Sizable<ru_sktbelpa_pressure_self_writer_Response>
     for ru_sktbelpa_pressure_self_writer_Response
 {
@@ -54,5 +50,29 @@ impl Sizable<ru_sktbelpa_pressure_self_writer_Response>
         )
         .map_err(|_| panic!("{}", SIZE_ERROR_MSG))
         .unwrap()
+    }
+}
+
+impl ru_sktbelpa_pressure_self_writer_Request {
+    pub fn fields() -> &'static pb_msgdesc_t {
+        unsafe { &messages::ru_sktbelpa_pressure_self_writer_Request_msg }
+    }
+}
+
+impl ru_sktbelpa_pressure_self_writer_Response {
+    pub fn fields() -> &'static pb_msgdesc_t {
+        unsafe { &messages::ru_sktbelpa_pressure_self_writer_Response_msg }
+    }
+}
+
+impl ru_sktbelpa_pressure_self_writer_PCoefficientsGet {
+    pub fn fields() -> &'static pb_msgdesc_t {
+        unsafe { &messages::ru_sktbelpa_pressure_self_writer_PCoefficientsGet_msg }
+    }
+}
+
+impl ru_sktbelpa_pressure_self_writer_T5CoefficientsGet {
+    pub fn fields() -> &'static pb_msgdesc_t {
+        unsafe { &messages::ru_sktbelpa_pressure_self_writer_T5CoefficientsGet_msg }
     }
 }

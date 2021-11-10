@@ -36,8 +36,8 @@ message Request {
     // версия протокола запрашивающего
     required uint32             protocolVersion = 3;
 
-    // Управление
-    // optional Control         control = 5;
+    // Запись Настройки
+    optional WriteSettingsReq   writeSettings = 10;
 }
 
 // Общий ответ сервера
@@ -53,6 +53,80 @@ message Response {
     // таймштамп устройства, когда фактически был сгененрирован ответ
     required fixed64            timestamp = 5;
 
-    // Текущее состояние стенда
-    // required Status          status = 10;
+    // Настройки
+    optional SettingsResponse   getSettings = 10;
 }
+
+//----------------------------------------------------------------------------
+
+// Запрос записи настроек
+message WriteSettingsReq {
+	// серийный номер
+	optional uint32 				Serial = 1;
+	// Время измерения по каналу давления
+	optional uint32 				PMesureTime_ms = 2;
+	// Время измерения по каналу температуры
+	optional uint32 				TMesureTime_ms = 3;
+	// Опорная частота
+	optional uint32 				Fref = 4;
+	
+	// enable
+	optional bool					PEnabled = 10;
+	optional bool					TEnabled = 11;
+	
+	// Коэффициенты
+	optional PCoefficientsSet		PCoefficients = 30;
+	optional T5CoefficientsSet		TCoefficients = 31;
+}
+
+// Настройки
+message SettingsResponse {
+	// серийный номер
+	required uint32 				Serial = 1;
+	// Время измерения по каналу давления
+	required uint32 				PMesureTime_ms = 2;
+	// Время измерения по каналу температуры
+	required uint32 				TMesureTime_ms = 3;
+	// Опорная частота
+	required uint32 				Fref = 4;
+	
+	// enable
+	required bool					PEnabled = 10;
+	required bool					TEnabled = 11;
+	
+	// Коэффициенты
+	required PCoefficientsGet		PCoefficients = 30;
+	required T5CoefficientsGet		TCoefficients = 31;
+}
+
+//----------------------------------------------------------------------------
+
+// Запрос записи коэфициентов давления
+message PCoefficientsSet {
+	optional float 					Fp0 = 1;
+	optional float					Ft0 = 2;
+    repeated float                  A = 10;
+}
+
+// Коэфициенты давления
+message PCoefficientsGet {
+	required float 					Fp0 = 1;
+	required float					Ft0 = 2;
+    repeated float                  A = 10;
+}
+
+// Запрос записи коэфициентов температуры
+message T5CoefficientsSet {
+	optional float 					T0 = 1;
+	optional float					F0 = 2;
+    repeated float					C = 10;
+}
+
+// Коэфициенты температуры
+message T5CoefficientsGet {
+	required float 					T0 = 1;
+	required float					F0 = 2;
+    repeated float					C = 10;
+}
+
+//----------------------------------------------------------------------------

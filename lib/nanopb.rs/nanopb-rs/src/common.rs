@@ -3,6 +3,8 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
+use core::{fmt::Debug};
+
 pub type size_t = usize;
 pub type pb_byte_t = u8;
 pub type pb_type_t = u8;
@@ -58,7 +60,6 @@ pub struct pb_msgdesc_s {
     pub largest_tag: pb_size_t,
 }
 
-
 pub type pb_field_iter_t = pb_field_iter_s;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -89,7 +90,7 @@ pub struct pb_bytes_array_s {
 pub type pb_bytes_array_t = pb_bytes_array_s;
 pub type pb_callback_t = pb_callback_s;
 #[repr(C)]
-#[derive(Copy, Clone)]
+
 pub struct pb_callback_s {
     pub funcs: pb_callback_s__bindgen_ty_1,
     pub arg: *mut ::core::ffi::c_void,
@@ -152,4 +153,34 @@ extern "C" {
         ostream: *mut pb_ostream_t,
         field: *const pb_field_t,
     ) -> bool;
+}
+
+impl Debug for pb_callback_t {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        struct Hex(usize);
+        impl core::fmt::Debug for Hex {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                write!(f, "0x{:08x}", self.0)
+            }
+        }
+
+        let addr = match unsafe { self.funcs.decode } {
+            Some(f) => f as *const ::core::ffi::c_void as usize,
+            None => 0
+        };
+
+        f.debug_struct("pb_callback_s")
+            .field("funcs", &Hex(addr))
+            .field("arg", &self.arg)
+            .finish()
+    }
+}
+
+impl Default for pb_callback_t {
+    fn default() -> Self {
+        Self {
+            funcs: pb_callback_s__bindgen_ty_1 { decode: None },
+            arg: ::core::ptr::null::<*const ::core::ffi::c_void>() as *mut _,
+        }
+    }
 }

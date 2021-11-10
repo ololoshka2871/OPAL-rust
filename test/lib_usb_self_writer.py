@@ -44,6 +44,18 @@ class self_writer_requestBuilder:
         """
         return self_writer_requestBuilder.build_request()
 
+    @staticmethod
+    def build_settings_request():
+        """
+        Создаёт запрос тения настроек
+
+        :return: объект типа protocol_pb2.Request
+        """
+        req = self_writer_requestBuilder.build_request()
+        settings = protocol_pb2.WriteSettingsReq()
+        req.writeSettings.CopyFrom(settings)
+        return req
+
 
 class self_writer_io:
     """Класс для простого доступа к usb самописцу с использованием google protocol buffers"""

@@ -1,16 +1,18 @@
 use core::borrow::BorrowMut;
 
+use alloc::boxed::Box;
 use alloc::sync::Arc;
 
 use freertos_rust::{CurrentTask, Duration, FreeRtosError, FreeRtosUtils, Mutex};
 
+use nanopb_rs::dyn_fields::TxRepeated;
 use nanopb_rs::{pb_decode::rx_context, pb_encode::tx_context, Error, IStream, OStream};
 
 use usb_device::{class_prelude::UsbBus, UsbError};
 
 use usbd_serial::SerialPort;
 
-use crate::protobuf;
+use crate::protobuf::*;
 
 use crate::protobuf::Sizable;
 
@@ -170,10 +172,29 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
                 Some(msg_size),
             );
 
-            let message = match is.decode::<protobuf::ru_sktbelpa_pressure_self_writer_Request>(
-                protobuf::ru_sktbelpa_pressure_self_writer_Request::fields(),
+            let message = match is.decode::<ru_sktbelpa_pressure_self_writer_Request>(
+                ru_sktbelpa_pressure_self_writer_Request::fields(),
             ) {
-                Ok(msg) => msg,
+                Ok(msg) => {
+                    if !(msg.deviceID
+                        == ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID
+                        || msg.deviceID == ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER)
+                    {
+                        defmt::error!("Protobuf: unknown target device id: 0x{:X}", msg.deviceID);
+                        continue;
+                    }
+                    if msg.deviceID != ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER
+                        && msg.protocolVersion
+                            != ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION
+                    {
+                        defmt::error!(
+                            "Protobuf: unsupported protocol version {}",
+                            msg.protocolVersion
+                        );
+                        continue;
+                    }
+                    msg
+                }
                 Err(e) => {
                     print_error(e);
                     flush_input(&mut serial_container);
@@ -186,12 +207,12 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
 
         defmt::info!("Nanopb: got request: {}", defmt::Debug2Format(&request));
 
-        let response = {
-            let id = request.id;
-            process_requiest(request, new_response(id))
-        };
+        {
+            let response = {
+                let id = request.id;
+                process_requiest(request, new_response(id))
+            };
 
-        loop {
             let mut os = OStream::from_callback(
                 Writer {
                     container: serial_container.clone(),
@@ -199,48 +220,106 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
                 None,
             );
 
-            if let Err(_) = os.write(&[protobuf::ru_sktbelpa_pressure_self_writer_INFO_MAGICK]) {
+            if let Err(_) = os.write(&[ru_sktbelpa_pressure_self_writer_INFO_MAGICK]) {
                 print_error(nanopb_rs::Error::from_str("Failed to write magick\0"));
-                break;
+                continue;
             }
 
-            if let Err(_) = os.encode_varint(
-                protobuf::ru_sktbelpa_pressure_self_writer_Response::get_size(&response) as u64,
-            ) {
+            if let Err(_) = os.encode_varint(ru_sktbelpa_pressure_self_writer_Response::get_size(
+                &response,
+            ) as u64)
+            {
                 print_error(nanopb_rs::Error::from_str("Failed to encode size\0"));
-                break;
+                continue;
             }
 
             defmt::info!(
                 "Nanopb: writing response: {}",
                 defmt::Debug2Format(&response)
             );
-            if let Err(e) = os.encode::<protobuf::ru_sktbelpa_pressure_self_writer_Response>(
-                protobuf::ru_sktbelpa_pressure_self_writer_Response::fields(),
+            if let Err(e) = os.encode::<ru_sktbelpa_pressure_self_writer_Response>(
+                ru_sktbelpa_pressure_self_writer_Response::fields(),
                 &response,
             ) {
                 print_error(e)
             }
-            break;
         }
     }
 }
 
-fn new_response(id: u32) -> protobuf::ru_sktbelpa_pressure_self_writer_Response {
-    let mut res = protobuf::ru_sktbelpa_pressure_self_writer_Response::default();
+fn new_response(id: u32) -> ru_sktbelpa_pressure_self_writer_Response {
+    let mut res = ru_sktbelpa_pressure_self_writer_Response::default();
 
     res.id = id;
-    res.deviceID = protobuf::ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID;
-    res.protocolVersion = protobuf::ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION;
-    res.Global_status = protobuf::ru_sktbelpa_pressure_self_writer_STATUS_OK;
+    res.deviceID = ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID;
+    res.protocolVersion = ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION;
+    res.Global_status = ru_sktbelpa_pressure_self_writer_STATUS_OK;
     res.timestamp = FreeRtosUtils::get_tick_count() as u64;
 
     res
 }
 
 fn process_requiest(
-    _: protobuf::ru_sktbelpa_pressure_self_writer_Request,
-    resp: protobuf::ru_sktbelpa_pressure_self_writer_Response,
-) -> protobuf::ru_sktbelpa_pressure_self_writer_Response {
+    req: ru_sktbelpa_pressure_self_writer_Request,
+    mut resp: ru_sktbelpa_pressure_self_writer_Response,
+) -> ru_sktbelpa_pressure_self_writer_Response {
+    if req.has_writeSettings {
+        resp.has_getSettings = true;
+
+        fill_settings(&mut resp.getSettings);
+    }
+
     resp
+}
+
+fn fill_settings(settings_resp: &mut ru_sktbelpa_pressure_self_writer_SettingsResponse) {
+    struct FloatIterator(u32);
+
+    impl TxRepeated<f32> for FloatIterator {
+        fn next_item(&mut self) -> Option<f32> {
+            if self.0 != 0 {
+                self.0 -= 1;
+                Some(0.0)
+            } else {
+                None
+            }
+        }
+
+        fn encode_body(
+            &self,
+            out_stream: &mut nanopb_rs::pb_encode::pb_ostream_t,
+            data: f32,
+        ) -> bool {
+            unsafe {
+                let t = *(&data as *const f32 as *const u32) as u64;
+                nanopb_rs::pb_encode::pb_encode_varint(out_stream, t)
+            }
+        }
+
+        fn fields(&self) -> &'static pb_msgdesc_t {
+            ru_sktbelpa_pressure_self_writer_PCoefficientsGet::fields()
+        }
+    }
+
+    settings_resp.Serial = 1;
+
+    settings_resp.PMesureTime_ms = 1000;
+    settings_resp.TMesureTime_ms = 1000;
+
+    settings_resp.Fref = 16000000;
+
+    settings_resp.PEnabled = true;
+    settings_resp.TEnabled = true;
+
+    settings_resp.PCoefficients = ru_sktbelpa_pressure_self_writer_PCoefficientsGet {
+        Fp0: 0.0,
+        Ft0: 0.0,
+        A: nanopb_rs::dyn_fields::new_tx_repeated_callback(Box::new(FloatIterator(16))),
+    };
+
+    settings_resp.TCoefficients = ru_sktbelpa_pressure_self_writer_T5CoefficientsGet {
+        T0: 0.0,
+        F0: 0.0,
+        C: nanopb_rs::dyn_fields::new_tx_repeated_callback(Box::new(FloatIterator(6))),
+    };
 }

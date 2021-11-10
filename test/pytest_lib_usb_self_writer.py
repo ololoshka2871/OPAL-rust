@@ -32,16 +32,22 @@ def device(request):
 
 @pytest.fixture
 def settime_req():
-    return lib.r4_24_2_requestBuilder.build_set_time_request()
+    return lib.self_writer_requestBuilder.build_set_time_request()
 
 
 @pytest.fixture
 def settings_req():
-    return lib.r4_24_2_requestBuilder.build_settings_request()
+    return lib.self_writer_requestBuilder.build_settings_request()
 
 
 def test_ping(device):
     req = lib.self_writer_requestBuilder.build_ping_request()
     resp = device.process_request_sync(req)
     assert resp
-    assert resp.Global_status == protocol_pb2.STATUS.Value('OK')
+    assert resp.Global_status == protocol_pb2.STATUS.OK
+
+def test_read_settings(device, settings_req):
+    resp = device.process_request_sync(settings_req)
+    assert resp
+    assert resp.getSettings
+    assert resp.Global_status == protocol_pb2.STATUS.OK

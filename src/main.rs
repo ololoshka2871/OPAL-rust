@@ -46,8 +46,6 @@ fn main() -> ! {
         start_at_mode::<PowerSaveMode>(p, dp)
     };
 
-    test_nanopb();
-
     start_res
         .unwrap_or_else(|e| defmt::panic!("Failed to start thread: {}", FreeRtosErrorContainer(e)));
 
@@ -72,35 +70,4 @@ fn is_usb_connected() -> bool {
     let pwr = unsafe { &*stm32::PWR::ptr() };
 
     VUsbMonitor::new(rcc, pwr).is_usb_connected()
-}
-
-fn test_nanopb() {
-    use nanopb_rs::{IStream, OStream};
-
-    let mut buf = [0_u8; 256];
-    let len: usize;
-    {
-        let mut msg = protobuf::ru_sktbelpa_pressure_self_writer_Request::default();
-        msg.id = 42;
-        let mut os = OStream::<u8>::from_buffer(&mut buf);
-
-        let _ = os
-            .encode(
-                protobuf::ru_sktbelpa_pressure_self_writer_Request::fields(),
-                &msg,
-            )
-            .map_err(|e| panic!("{}", e));
-
-        len = os.bytes_writen();
-    }
-    {
-        let mut is = IStream::<u8>::from_buffer(&buf[..len]);
-
-        let msg = is
-            .decode::<protobuf::ru_sktbelpa_pressure_self_writer_Request>(
-                protobuf::ru_sktbelpa_pressure_self_writer_Request::fields(),
-            )
-            .unwrap_or_else(|e| panic!("{}", e));
-        assert_eq!(msg.id, 42);
-    }
 }

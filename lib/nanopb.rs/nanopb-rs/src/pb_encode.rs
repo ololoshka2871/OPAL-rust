@@ -7,7 +7,7 @@ use core::ptr::{null, slice_from_raw_parts};
 
 extern crate alloc;
 
-use crate::common::{
+pub use crate::common::{
     pb_byte_t, pb_field_iter_t, pb_msgdesc_t, pb_ostream_s, pb_ostream_t, pb_wire_type_t, size_t,
 };
 
