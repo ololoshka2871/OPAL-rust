@@ -46,7 +46,10 @@ lto = true # better optimizations
 [features]
 default = [
    "defmt-default",
+   "monitor-heap",
  ]
+
+ monitor-heap = []
 
  # do NOT modify these features
 defmt-default = []

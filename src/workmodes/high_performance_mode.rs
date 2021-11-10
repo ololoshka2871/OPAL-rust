@@ -127,7 +127,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             };
             Task::new()
                 .name("Usbd")
-                .stack_size(2048)
+                .stack_size(1024)
                 .priority(TaskPriority(2))
                 .start(move |_| threads::usbd::usbd(usbperith))?;
         }
