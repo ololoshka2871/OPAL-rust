@@ -4,7 +4,6 @@ use alloc::boxed::Box;
 use crate::common::{
     pb_callback_s__bindgen_ty_1, pb_callback_t, pb_field_iter_t, pb_msgdesc_t, pb_ostream_t,
 };
-use crate::pb_encode::pb_encode_tag_for_field;
 
 pub fn new_tx_callback(
     f: Box<dyn Fn(&mut pb_ostream_t, &pb_field_iter_t) -> bool>,
@@ -31,7 +30,7 @@ pub fn new_tx_callback(
 pub trait TxRepeated {
     fn reset(&mut self);
     fn has_next(&mut self) -> bool;
-    fn encode_next(&self, out_stream: &mut pb_ostream_t) -> bool;
+    fn encode_next(&self, out_stream: &mut pb_ostream_t) -> Result<(), crate::Error>;
     fn fields(&self) -> &'static pb_msgdesc_t;
 }
 
@@ -46,11 +45,11 @@ pub fn new_tx_repeated_callback(f: Box<dyn TxRepeated>) -> pb_callback_t {
         (*f).reset();
         loop {
             if (*f).has_next() {
-                if !pb_encode_tag_for_field(out_stream, field) {
+                if (*out_stream).encode_tag_for_field(&*field).is_err() {
                     return false;
                 }
 
-                if !(*f).encode_next(&mut *out_stream) {
+                if (*f).encode_next(&mut *out_stream).is_err() {
                     return false;
                 }
             } else {

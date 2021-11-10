@@ -7,7 +7,7 @@ use core::{
     ptr::{null, slice_from_raw_parts_mut},
 };
 
-use crate::common::{pb_byte_t, pb_istream_s, pb_istream_t, pb_msgdesc_t, pb_wire_type_t, size_t};
+use crate::common::{pb_byte_t, pb_istream_t, pb_msgdesc_t, pb_wire_type_t, size_t};
 
 include!("bindings/pb_decode.rs");
 
@@ -41,7 +41,7 @@ impl<T: rx_context> IStream<T> {
 
     pub fn from_callback(rx_ctx: T, bytes_left: Option<usize>) -> Self {
         unsafe extern "C" fn read_wraper<U: rx_context>(
-            stream: *mut pb_istream_s,
+            stream: *mut pb_istream_t,
             buf: *mut u8,
             size: usize,
         ) -> bool {
@@ -54,7 +54,7 @@ impl<T: rx_context> IStream<T> {
         }
 
         let mut res = Self {
-            ctx: crate::common::pb_istream_s {
+            ctx: pb_istream_t {
                 callback: Some(read_wraper::<T>),
                 state: null::<::core::ffi::c_void>() as *mut _,
                 bytes_left: bytes_left.unwrap_or(usize::MAX),
@@ -68,10 +68,17 @@ impl<T: rx_context> IStream<T> {
         res
     }
 
+    pub fn stream(&mut self) -> &mut pb_istream_t {
+        &mut self.ctx
+    }
+
+}
+
+impl pb_istream_t {
     pub fn flush(&mut self) {
         loop {
             let mut b = 0u8;
-            if !unsafe { pb_read(&mut self.ctx, &mut b, 1) } {
+            if !unsafe { pb_read(self, &mut b, 1) } {
                 break;
             }
         }
@@ -81,9 +88,9 @@ impl<T: rx_context> IStream<T> {
         let mut dest_struct: U = unsafe { core::mem::MaybeUninit::zeroed().assume_init() };
         if unsafe {
             pb_decode(
-                &mut self.ctx,
+                self,
                 fields,
-                &mut dest_struct as *mut U as *mut ::core::ffi::c_void,
+                &mut dest_struct as *mut U as *mut _,
             )
         } {
             Ok(dest_struct)
@@ -96,9 +103,9 @@ impl<T: rx_context> IStream<T> {
         let mut dest_struct: U = unsafe { core::mem::MaybeUninit::zeroed().assume_init() };
         if unsafe {
             pb_decode_ex(
-                &mut self.ctx,
+                self,
                 fields,
-                &mut dest_struct as *mut U as *mut ::core::ffi::c_void,
+                &mut dest_struct as *mut U as *mut _,
                 flags,
             )
         } {
@@ -111,7 +118,7 @@ impl<T: rx_context> IStream<T> {
     pub fn read(&mut self, count: usize) -> Result<Vec<u8>, Error> {
         let mut buf: Vec<u8> = Vec::with_capacity(count);
         buf.resize(count, 0);
-        if unsafe { pb_read(&mut self.ctx, buf.as_mut_ptr(), count) } {
+        if unsafe { pb_read(self, buf.as_mut_ptr(), count) } {
             Ok(buf)
         } else {
             Err(self.get_error())
@@ -121,7 +128,7 @@ impl<T: rx_context> IStream<T> {
     pub fn decode_tag(&mut self, wire_type: &mut pb_wire_type_t) -> Result<u32, Error> {
         let mut tag = 0_u32;
         let mut eof = false;
-        if unsafe { pb_decode_tag(&mut self.ctx, wire_type, &mut tag, &mut eof) } {
+        if unsafe { pb_decode_tag(self, wire_type, &mut tag, &mut eof) } {
             if eof {
                 Err(Error::from_str("EOF\0")) // TODO
             } else {
@@ -133,7 +140,7 @@ impl<T: rx_context> IStream<T> {
     }
 
     pub fn skip_field(&mut self, wire_type: pb_wire_type_t) -> Result<(), Error> {
-        if unsafe { pb_skip_field(&mut self.ctx, wire_type) } {
+        if unsafe { pb_skip_field(self, wire_type) } {
             Ok(())
         } else {
             Err(self.get_error())
@@ -142,7 +149,7 @@ impl<T: rx_context> IStream<T> {
 
     pub fn decode_variant(&mut self) -> Result<u64, Error> {
         let mut res = 0_u64;
-        if unsafe { pb_decode_varint(&mut self.ctx, &mut res) } {
+        if unsafe { pb_decode_varint(self, &mut res) } {
             Ok(res)
         } else {
             Err(self.get_error())
@@ -151,7 +158,7 @@ impl<T: rx_context> IStream<T> {
 
     pub fn decode_variant32(&mut self) -> Result<u32, Error> {
         let mut res = 0_u32;
-        if unsafe { pb_decode_varint32(&mut self.ctx, &mut res) } {
+        if unsafe { pb_decode_varint32(self, &mut res) } {
             Ok(res)
         } else {
             Err(self.get_error())
@@ -160,7 +167,7 @@ impl<T: rx_context> IStream<T> {
 
     pub fn decode_bool(&mut self) -> Result<bool, Error> {
         let mut res = false;
-        if unsafe { pb_decode_bool(&mut self.ctx, &mut res) } {
+        if unsafe { pb_decode_bool(self, &mut res) } {
             Ok(res)
         } else {
             Err(self.get_error())
@@ -169,7 +176,7 @@ impl<T: rx_context> IStream<T> {
 
     pub fn decode_svariant(&mut self) -> Result<i64, Error> {
         let mut res = 0_i64;
-        if unsafe { pb_decode_svarint(&mut self.ctx, &mut res) } {
+        if unsafe { pb_decode_svarint(self, &mut res) } {
             Ok(res)
         } else {
             Err(self.get_error())
@@ -180,8 +187,8 @@ impl<T: rx_context> IStream<T> {
         let mut res = 0_u32;
         if unsafe {
             pb_decode_fixed32(
-                &mut self.ctx,
-                &mut res as *mut u32 as *mut ::core::ffi::c_void,
+                self,
+                &mut res as *mut u32 as *mut _,
             )
         } {
             Ok(res)
@@ -194,8 +201,8 @@ impl<T: rx_context> IStream<T> {
         let mut res = 0_u64;
         if unsafe {
             pb_decode_fixed64(
-                &mut self.ctx,
-                &mut res as *mut u64 as *mut ::core::ffi::c_void,
+                self,
+                &mut res as *mut u64 as *mut _,
             )
         } {
             Ok(res)
@@ -205,6 +212,6 @@ impl<T: rx_context> IStream<T> {
     }
 
     fn get_error(&self) -> Error {
-        Error::new(self.ctx.errmsg)
+        Error::new(self.errmsg)
     }
 }

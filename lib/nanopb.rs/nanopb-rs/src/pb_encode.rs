@@ -10,7 +10,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 
 pub use crate::common::{
-    pb_byte_t, pb_field_iter_t, pb_msgdesc_t, pb_ostream_s, pb_ostream_t, pb_wire_type_t, size_t,
+    pb_byte_t, pb_field_iter_t, pb_msgdesc_t, pb_ostream_t, pb_wire_type_t, size_t,
 };
 
 include!("bindings/pb_encode.rs");
@@ -42,7 +42,7 @@ impl OStream {
 
     pub fn from_callback<T: tx_context + 'static>(tx_ctx: T, max_size: Option<usize>) -> Self {
         unsafe extern "C" fn write_wraper<U: tx_context>(
-            stream: *mut pb_ostream_s,
+            stream: *mut pb_ostream_t,
             buf: *const u8,
             count: usize,
         ) -> bool {
@@ -73,10 +73,20 @@ impl OStream {
         self.ctx.bytes_written
     }
 
+    pub fn stream(&mut self) -> &mut pb_ostream_t {
+        &mut self.ctx
+    }
+
+    pub fn bytes_writen(&self) -> usize {
+        self.ctx.bytes_written
+    }
+}
+
+impl pb_ostream_t {
     pub fn encode<U>(&mut self, fields: &pb_msgdesc_t, src_struct: &U) -> Result<(), Error> {
         if unsafe {
             pb_encode(
-                &mut self.ctx,
+                self,
                 fields,
                 src_struct as *const U as *const ::core::ffi::c_void,
             )
@@ -95,7 +105,7 @@ impl OStream {
     ) -> Result<(), Error> {
         if unsafe {
             pb_encode_ex(
-                &mut self.ctx,
+                self,
                 fields,
                 src_struct as *const U as *const ::core::ffi::c_void,
                 flags,
@@ -108,15 +118,15 @@ impl OStream {
     }
 
     pub fn write(&mut self, buf: &[u8]) -> Result<(), Error> {
-        if unsafe { pb_write(&mut self.ctx, buf.as_ptr(), buf.len()) } {
+        if unsafe { pb_write(self, buf.as_ptr(), buf.len()) } {
             Ok(())
         } else {
             Err(self.get_error())
         }
     }
 
-    pub fn encode_tag_for_field(&mut self, field: *const pb_field_iter_t) -> Result<(), Error> {
-        if unsafe { pb_encode_tag_for_field(&mut self.ctx, field) } {
+    pub fn encode_tag_for_field(&mut self, field: &pb_field_iter_t) -> Result<(), Error> {
+        if unsafe { pb_encode_tag_for_field(self, field) } {
             Ok(())
         } else {
             Err(self.get_error())
@@ -124,7 +134,7 @@ impl OStream {
     }
 
     pub fn encode_tag(&mut self, wiretype: pb_wire_type_t, field_number: u32) -> Result<(), Error> {
-        if unsafe { pb_encode_tag(&mut self.ctx, wiretype, field_number) } {
+        if unsafe { pb_encode_tag(self, wiretype, field_number) } {
             Ok(())
         } else {
             Err(self.get_error())
@@ -132,7 +142,7 @@ impl OStream {
     }
 
     pub fn encode_varint(&mut self, value: u64) -> Result<(), Error> {
-        if unsafe { pb_encode_varint(&mut self.ctx, value) } {
+        if unsafe { pb_encode_varint(self, value) } {
             Ok(())
         } else {
             Err(self.get_error())
@@ -140,7 +150,7 @@ impl OStream {
     }
 
     pub fn encode_svarint(&mut self, value: i64) -> Result<(), Error> {
-        if unsafe { pb_encode_svarint(&mut self.ctx, value) } {
+        if unsafe { pb_encode_svarint(self, value) } {
             Ok(())
         } else {
             Err(self.get_error())
@@ -148,7 +158,7 @@ impl OStream {
     }
 
     pub fn encode_string(&mut self, s: &str) -> Result<(), Error> {
-        if unsafe { pb_encode_string(&mut self.ctx, s.as_ptr(), s.len()) } {
+        if unsafe { pb_encode_string(self, s.as_ptr(), s.len()) } {
             Ok(())
         } else {
             Err(self.get_error())
@@ -156,12 +166,7 @@ impl OStream {
     }
 
     pub fn encode_fixed32(&mut self, value: u32) -> Result<(), Error> {
-        if unsafe {
-            pb_encode_fixed32(
-                &mut self.ctx,
-                &value as *const u32 as *const ::core::ffi::c_void,
-            )
-        } {
+        if unsafe { pb_encode_fixed32(self, &value as *const u32 as *const _) } {
             Ok(())
         } else {
             Err(self.get_error())
@@ -169,24 +174,23 @@ impl OStream {
     }
 
     pub fn encode_fixed64(&mut self, value: u64) -> Result<(), Error> {
-        if unsafe {
-            pb_encode_fixed64(
-                &mut self.ctx,
-                &value as *const u64 as *const ::core::ffi::c_void,
-            )
-        } {
+        if unsafe { pb_encode_fixed64(self, &value as *const u64 as *const _) } {
             Ok(())
         } else {
             Err(self.get_error())
         }
     }
 
-    fn get_error(&self) -> Error {
-        Error::new(self.ctx.errmsg)
+    pub fn encode_f32(&mut self, value: f32) -> Result<(), Error> {
+        self.encode_fixed32(unsafe { *(&value as *const f32 as *const u32) })
     }
 
-    pub fn bytes_writen(&self) -> usize {
-        self.ctx.bytes_written
+    pub fn encode_f64(&mut self, value: f64) -> Result<(), Error> {
+        self.encode_fixed64(unsafe { *(&value as *const f64 as *const u64) })
+    }
+
+    fn get_error(&self) -> Error {
+        Error::new(self.errmsg)
     }
 }
 

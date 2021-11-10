@@ -1,21 +1,16 @@
 use core::borrow::BorrowMut;
 
-use alloc::boxed::Box;
-use alloc::sync::Arc;
+use alloc::{boxed::Box, sync::Arc, vec};
 
-use alloc::vec;
 use freertos_rust::{CurrentTask, Duration, FreeRtosError, FreeRtosUtils, Mutex};
 
-use nanopb_rs::dyn_fields::TxRepeated;
-use nanopb_rs::{pb_decode::rx_context, Error, IStream, OStream};
+use nanopb_rs::{Error, IStream, OStream, dyn_fields::TxRepeated, pb_decode::rx_context};
 
 use usb_device::{class_prelude::UsbBus, UsbError};
 
 use usbd_serial::SerialPort;
 
 use crate::protobuf::*;
-
-use crate::protobuf::Sizable;
 
 static ERR_MSG: &str = "Failed to get serial port";
 
@@ -61,7 +56,7 @@ fn print_error(e: Error) {
 }
 
 fn decode_magick<B: UsbBus>(is: &mut IStream<Reader<B>>) -> Result<(), Error> {
-    match is.decode_variant() {
+    match is.stream().decode_variant() {
         Ok(v) => {
             if v != crate::protobuf::ru_sktbelpa_pressure_self_writer_INFO_MAGICK as u64 {
                 Err(Error::from_str("Invalid message magick!\0"))
@@ -74,7 +69,7 @@ fn decode_magick<B: UsbBus>(is: &mut IStream<Reader<B>>) -> Result<(), Error> {
 }
 
 fn decode_msg_size<B: UsbBus>(is: &mut IStream<Reader<B>>) -> Result<usize, Error> {
-    match is.decode_variant() {
+    match is.stream().decode_variant() {
         Ok(v) => {
             if v == 0 || v > 1500 {
                 Err(Error::from_str("Invalid message length\0"))
@@ -127,18 +122,24 @@ fn write_responce<B: usb_device::bus::UsbBus>(
     let buf = buf.as_mut_slice();
     let mut os = OStream::from_buffer(buf);
 
-    if let Err(_) = os.write(&[ru_sktbelpa_pressure_self_writer_INFO_MAGICK]) {
+    if let Err(_) = os
+        .stream()
+        .write(&[ru_sktbelpa_pressure_self_writer_INFO_MAGICK])
+    {
         return Err(Error::from_str("Failed to write magick\0"));
     }
 
-    if let Err(_) = os.encode_varint(size as u64) {
+    if let Err(_) = os.stream().encode_varint(size as u64) {
         return Err(Error::from_str("Failed to encode size\0"));
     }
 
-    if let Err(e) = os.encode::<ru_sktbelpa_pressure_self_writer_Response>(
-        ru_sktbelpa_pressure_self_writer_Response::fields(),
-        &response,
-    ) {
+    if let Err(e) = os
+        .stream()
+        .encode::<ru_sktbelpa_pressure_self_writer_Response>(
+            ru_sktbelpa_pressure_self_writer_Response::fields(),
+            &response,
+        )
+    {
         return Err(e);
     }
 
@@ -172,9 +173,11 @@ fn recive_message_body<B: usb_device::bus::UsbBus>(
         Some(msg_size),
     );
 
-    match is.decode::<ru_sktbelpa_pressure_self_writer_Request>(
-        ru_sktbelpa_pressure_self_writer_Request::fields(),
-    ) {
+    match is
+        .stream()
+        .decode::<ru_sktbelpa_pressure_self_writer_Request>(
+            ru_sktbelpa_pressure_self_writer_Request::fields(),
+        ) {
         Ok(msg) => {
             if !(msg.deviceID == ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID
                 || msg.deviceID == ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER)
@@ -196,7 +199,7 @@ fn recive_message_body<B: usb_device::bus::UsbBus>(
         }
         Err(e) => {
             print_error(e);
-            is.flush();
+            is.stream().flush();
             Err(())
         }
     }
@@ -215,7 +218,7 @@ fn recive_md_header<B: usb_device::bus::UsbBus>(
     match decode_magick(&mut is) {
         Ok(_) => {}
         Err(e) => {
-            is.flush();
+            is.stream().flush();
             return Err(e);
         }
     }
@@ -223,7 +226,7 @@ fn recive_md_header<B: usb_device::bus::UsbBus>(
     match decode_msg_size(&mut is) {
         Ok(s) => Ok(s),
         Err(e) => {
-            is.flush();
+            is.stream().flush();
             Err(e)
         }
     }
@@ -283,12 +286,12 @@ fn fill_settings(settings_resp: &mut ru_sktbelpa_pressure_self_writer_SettingsRe
             }
         }
 
-        fn encode_next(&self, out_stream: &mut nanopb_rs::pb_encode::pb_ostream_t) -> bool {
+        fn encode_next(
+            &self,
+            out_stream: &mut nanopb_rs::pb_encode::pb_ostream_t,
+        ) -> Result<(), Error> {
             let data = 1.328e-9_f32;
-            unsafe {
-                // f32 кодируются как fixed32
-                nanopb_rs::pb_encode::pb_encode_fixed32(out_stream, &data as *const f32 as *const _)
-            }
+            out_stream.encode_f32(data)
         }
 
         fn fields(&self) -> &'static pb_msgdesc_t {
