@@ -11,4 +11,5 @@ pub trait WorkMode<T> {
     fn configure_clock(&mut self);
     fn start_threads(self) -> Result<(), FreeRtosError>;
     fn print_clock_config(&self);
+    fn flash(&mut self) -> &mut stm32l4xx_hal::flash::Parts;
 }

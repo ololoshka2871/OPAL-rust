@@ -32,6 +32,10 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
         res
     }
 
+    fn flash(&mut self) -> &mut stm32l4xx_hal::flash::Parts {
+        &mut self.flash
+    }
+
     // Работа от внешнего кварца HSE = 12 MHz
     // Установить частоту CPU = 12 MHz
     // USB не тактируется

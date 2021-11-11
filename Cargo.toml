@@ -28,15 +28,20 @@ panic-probe = { version = "0.2", features = ["print-defmt"] }
 heatshrink-rust = { path = "lib/heatshrink-rust" }
 emfat-rust = { path = "lib/emfat" }
 nanopb-rs = { path = "lib/nanopb.rs/nanopb-rs" }
+flash-settings-rs = { path = "lib/flash-settings.rs" }
 
 [build-dependencies]
 cc = "1.0.52"
 freertos-cargo-build = "0.1.1"
 nanopb-rs-generator = { path = "lib/nanopb.rs/nanopb-rs-generator" }
 
+[profile.dev.package."*"]
+opt-level = "z"
+
 [profile.dev]
-opt-level = 1
+opt-level = "z"
 lto = false
+panic = "abort"
 
 [profile.release]
 codegen-units = 1 # better optimizations
@@ -45,7 +50,7 @@ lto = true # better optimizations
 
 [features]
 default = [
-   "defmt-default",
+   "defmt-default", # отключить когда собираешь релиз
    "monitor-heap",
  ]
 

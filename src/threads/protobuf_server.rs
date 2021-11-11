@@ -4,7 +4,7 @@ use alloc::{boxed::Box, sync::Arc, vec};
 
 use freertos_rust::{CurrentTask, Duration, FreeRtosError, FreeRtosUtils, Mutex};
 
-use nanopb_rs::{Error, IStream, OStream, dyn_fields::TxRepeated, pb_decode::rx_context};
+use nanopb_rs::{dyn_fields::TxRepeated, pb_decode::rx_context, Error, IStream, OStream};
 
 use usb_device::{class_prelude::UsbBus, UsbError};
 

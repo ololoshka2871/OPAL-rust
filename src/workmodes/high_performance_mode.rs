@@ -51,6 +51,10 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         }
     }
 
+    fn flash(&mut self) -> &mut stm32l4xx_hal::flash::Parts {
+        &mut self.flash
+    }
+
     // Работа от внешнего кварца HSE = 12 MHz
     // Установить частоту CPU = 80 MHz (12 / 3 * 40 / 2 == 80)
     // USB работает от PLLSAI1Q = 48 MHz (12 / 3 * 24 / 2 == 48)
