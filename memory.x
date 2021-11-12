@@ -40,7 +40,7 @@ _stack_start = ORIGIN(RAM2) + LENGTH(RAM2);
 */
 
 SECTIONS {
-   .settings :
+   .settings (NOLOAD) : ALIGN(8)
    {
       __settings_pos = .;
       KEEP(*(.settings*));

@@ -1,4 +1,5 @@
-use freertos_rust::{Task, TaskPriority};
+use alloc::sync::Arc;
+use freertos_rust::{Duration, Mutex, Task, TaskPriority};
 use stm32l4xx_hal::rcc::{PllConfig, PllDivider};
 use stm32l4xx_hal::{prelude::*, stm32};
 
@@ -14,7 +15,7 @@ static USB_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 1;
 
 pub struct HighPerformanceMode {
     rcc: stm32l4xx_hal::rcc::Rcc,
-    flash: stm32l4xx_hal::flash::Parts,
+    flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>,
     pwr: stm32l4xx_hal::pwr::Pwr,
 
     clocks: Option<stm32l4xx_hal::rcc::Clocks>,
@@ -38,7 +39,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         let mut rcc = dp.RCC.constrain();
 
         HighPerformanceMode {
-            flash: dp.FLASH.constrain(),
+            flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
             usb: dp.USB,
 
             gpioa: dp.GPIOA.split(&mut rcc.ahb2),
@@ -51,8 +52,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         }
     }
 
-    fn flash(&mut self) -> &mut stm32l4xx_hal::flash::Parts {
-        &mut self.flash
+    fn flash(&mut self) -> Arc<Mutex<stm32l4xx_hal::flash::Parts>> {
+        self.flash.clone()
     }
 
     // Работа от внешнего кварца HSE = 12 MHz
@@ -111,7 +112,12 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         setut_cfgr(&mut self.rcc.cfgr);
 
-        let clocks = self.rcc.cfgr.freeze(&mut self.flash.acr, &mut self.pwr);
+        let clocks = if let Ok(mut flash) = self.flash.lock(Duration::infinite()) {
+            self.rcc.cfgr.freeze(&mut flash.acr, &mut self.pwr)
+        } else {
+            panic!()
+        };
+
         configure_usb48();
 
         self.clocks = Some(clocks);

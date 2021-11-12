@@ -6,6 +6,8 @@ name = "stm32-usb-self-writer"
 version = "0.1.0"
 
 [dependencies]
+static_assertions = "1.1.0"
+lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 embedded-hal = "0.2.4"
 cortex-m = "0.7.3"
 cortex-m-rt = "0.6.11" # need by stm32l4 == 0.13.0

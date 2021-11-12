@@ -1,4 +1,5 @@
-use freertos_rust::{Task, TaskPriority};
+use alloc::sync::Arc;
+use freertos_rust::{Duration, Mutex, Task, TaskPriority};
 use stm32l4xx_hal::{
     prelude::*,
     rcc::{PllConfig, PllDivider},
@@ -12,7 +13,7 @@ use super::WorkMode;
 
 pub struct PowerSaveMode {
     rcc: stm32l4xx_hal::rcc::Rcc,
-    flash: stm32l4xx_hal::flash::Parts,
+    flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>,
     pwr: Option<stm32l4xx_hal::pwr::Pwr>,
 
     clocks: Option<stm32l4xx_hal::rcc::Clocks>,
@@ -22,7 +23,7 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
     fn new(_p: cortex_m::Peripherals, dp: Peripherals) -> Self {
         let mut res = PowerSaveMode {
             rcc: dp.RCC.constrain(),
-            flash: dp.FLASH.constrain(),
+            flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
             pwr: None,
             clocks: None,
         };
@@ -32,8 +33,8 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
         res
     }
 
-    fn flash(&mut self) -> &mut stm32l4xx_hal::flash::Parts {
-        &mut self.flash
+    fn flash(&mut self) -> Arc<Mutex<stm32l4xx_hal::flash::Parts>> {
+        self.flash.clone()
     }
 
     // Работа от внешнего кварца HSE = 12 MHz
@@ -68,10 +69,13 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
 
         setut_cfgr(&mut self.rcc.cfgr);
 
-        let clocks = self
-            .rcc
-            .cfgr
-            .freeze(&mut self.flash.acr, self.pwr.as_mut().unwrap());
+        let clocks = if let Ok(mut flash) = self.flash.lock(Duration::infinite()) {
+            self.rcc
+                .cfgr
+                .freeze(&mut flash.acr, self.pwr.as_mut().unwrap())
+        } else {
+            panic!("Failed to take mutex")
+        };
 
         self.clocks = Some(clocks);
     }

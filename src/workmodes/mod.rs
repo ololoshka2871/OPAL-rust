@@ -1,4 +1,5 @@
-use freertos_rust::FreeRtosError;
+use alloc::sync::Arc;
+use freertos_rust::{FreeRtosError, Mutex};
 
 pub mod high_performance_mode;
 pub mod power_save_mode;
@@ -11,5 +12,5 @@ pub trait WorkMode<T> {
     fn configure_clock(&mut self);
     fn start_threads(self) -> Result<(), FreeRtosError>;
     fn print_clock_config(&self);
-    fn flash(&mut self) -> &mut stm32l4xx_hal::flash::Parts;
+    fn flash(&mut self) -> Arc<Mutex<stm32l4xx_hal::flash::Parts>>;
 }

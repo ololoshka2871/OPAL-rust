@@ -7,9 +7,9 @@
 extern crate alloc;
 
 mod protobuf;
+mod settings;
 mod support;
 mod workmodes;
-mod settings;
 
 use cortex_m_rt::entry;
 
@@ -61,6 +61,7 @@ where
     T: WorkMode<T>,
 {
     let mut mode = T::new(p, dp);
+
     settings::init(mode.flash());
 
     mode.configure_clock();
