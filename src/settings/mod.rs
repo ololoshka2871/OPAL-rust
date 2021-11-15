@@ -47,7 +47,10 @@ lazy_static! {
     static ref SETTINGS: Mutex<Option<SettingsManagerType>> = Mutex::new(None).unwrap();
 }
 
-pub(crate) fn init(flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>) {
+pub(crate) fn init(
+    flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>,
+    crc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>,
+) {
     defmt::trace!("Init settings");
     if let Ok(mut guard) = SETTINGS.lock(Duration::infinite()) {
         guard.replace(SettingsManager::<
@@ -56,16 +59,16 @@ pub(crate) fn init(flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>) {
             FlasRWPolcy,
         >::new(
             &DEFAULT_SETTINGS,
-            FlasRWPolcy::create(&SETTINGS_PLACEHOLDER, flash),
+            FlasRWPolcy::create(&SETTINGS_PLACEHOLDER, flash, crc),
         ));
     } else {
         panic!("Failed to init settings");
     }
 }
 
-pub(crate) fn settings_action<D, F>(duration: D, f: F) -> Result<(), FreeRtosError>
+pub(crate) fn settings_action<D, F>(duration: D, mut f: F) -> Result<(), FreeRtosError>
 where
-    F: Fn(&mut AppSettings),
+    F: FnMut(&mut AppSettings),
     D: DurationTicks,
 {
     let mut guard = SETTINGS.lock(duration)?;

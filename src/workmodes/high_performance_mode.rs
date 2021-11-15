@@ -24,6 +24,8 @@ pub struct HighPerformanceMode {
     gpioa: stm32l4xx_hal::gpio::gpioa::Parts,
 
     nvic: cortex_m::peripheral::NVIC,
+
+    crc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>,
 }
 
 impl HighPerformanceMode {
@@ -40,6 +42,10 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         HighPerformanceMode {
             flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
+            crc: Arc::new(
+                Mutex::new(super::configure_crc_module(dp.CRC.constrain(&mut rcc.ahb1))).unwrap(),
+            ),
+
             usb: dp.USB,
 
             gpioa: dp.GPIOA.split(&mut rcc.ahb2),
@@ -48,12 +54,20 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             nvic: p.NVIC,
 
-            rcc: rcc,
+            rcc,
         }
     }
 
     fn flash(&mut self) -> Arc<Mutex<stm32l4xx_hal::flash::Parts>> {
         self.flash.clone()
+    }
+
+    fn crc(&mut self) -> Arc<Mutex<stm32l4xx_hal::crc::Crc>> {
+        self.crc.clone()
+    }
+
+    fn ini_static(&mut self) {
+        crate::settings::init(self.flash(), self.crc());
     }
 
     // Работа от внешнего кварца HSE = 12 MHz

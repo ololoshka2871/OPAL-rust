@@ -10,7 +10,10 @@ use usb_device::{class_prelude::UsbBus, UsbError};
 
 use usbd_serial::SerialPort;
 
-use crate::protobuf::*;
+use crate::{
+    protobuf::{self, *},
+    settings::settings_action,
+};
 
 static ERR_MSG: &str = "Failed to get serial port";
 
@@ -102,7 +105,13 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
 
         let response = {
             let id = request.id;
-            process_requiest(request, new_response(id))
+            if let Ok(r) = process_requiest(request, new_response(id)) {
+                r
+            } else {
+                // FIXME
+                defmt::error!("Failed to build responce");
+                continue;
+            }
         };
 
         defmt::info!("Nanopb: Response:\n{}", defmt::Debug2Format(&response));
@@ -247,77 +256,86 @@ fn new_response(id: u32) -> ru_sktbelpa_pressure_self_writer_Response {
 fn process_requiest(
     req: ru_sktbelpa_pressure_self_writer_Request,
     mut resp: ru_sktbelpa_pressure_self_writer_Response,
-) -> ru_sktbelpa_pressure_self_writer_Response {
+) -> Result<ru_sktbelpa_pressure_self_writer_Response, ()> {
     if req.has_writeSettings {
         resp.has_getSettings = true;
 
-        fill_settings(&mut resp.getSettings);
+        fill_settings(&mut resp.getSettings)?;
     }
 
-    resp
+    Ok(resp)
 }
 
-fn fill_settings(settings_resp: &mut ru_sktbelpa_pressure_self_writer_SettingsResponse) {
-    struct FloatIterator {
-        counter: u32,
-        initial: u32,
+fn fill_settings(
+    settings_resp: &mut ru_sktbelpa_pressure_self_writer_SettingsResponse,
+) -> Result<(), ()> {
+    struct FloatSender {
+        container: Box<[f32]>,
+        iterator: usize,
+        fields: &'static pb_msgdesc_t,
     }
 
-    impl FloatIterator {
-        fn new(count: u32) -> Self {
+    impl FloatSender {
+        fn new(container: Box<[f32]>, fields: &'static pb_msgdesc_t) -> Self {
             Self {
-                counter: count,
-                initial: count,
+                container,
+                iterator: 0,
+                fields,
             }
         }
     }
 
-    impl TxRepeated for FloatIterator {
+    impl TxRepeated for FloatSender {
         fn reset(&mut self) {
-            self.counter = self.initial;
+            self.iterator = 0;
         }
 
-        fn has_next(&mut self) -> bool {
-            if self.counter != 0 {
-                self.counter -= 1;
-                true
-            } else {
-                false
-            }
+        fn has_next(&self) -> bool {
+            self.iterator < self.container.len()
         }
 
         fn encode_next(
-            &self,
+            &mut self,
             out_stream: &mut nanopb_rs::pb_encode::pb_ostream_t,
         ) -> Result<(), Error> {
-            let data = 1.328e-9_f32;
+            let data = self.container[self.iterator];
+            self.iterator += 1;
             out_stream.encode_f32(data)
         }
 
         fn fields(&self) -> &'static pb_msgdesc_t {
-            ru_sktbelpa_pressure_self_writer_PCoefficientsGet::fields()
+            self.fields
         }
     }
 
-    settings_resp.Serial = 1;
+    settings_action(Duration::ms(5), |settings| {
+        settings_resp.Serial = settings.serial;
 
-    settings_resp.PMesureTime_ms = 1000;
-    settings_resp.TMesureTime_ms = 1000;
+        settings_resp.PMesureTime_ms = settings.pmesure_time_ms;
+        settings_resp.TMesureTime_ms = settings.tmesure_time_ms;
 
-    settings_resp.Fref = 16000000;
+        settings_resp.Fref = settings.fref;
 
-    settings_resp.PEnabled = true;
-    settings_resp.TEnabled = true;
+        settings_resp.PEnabled = settings.p_enabled;
+        settings_resp.TEnabled = settings.t_enabled;
 
-    settings_resp.PCoefficients = ru_sktbelpa_pressure_self_writer_PCoefficientsGet {
-        Fp0: 0.0,
-        Ft0: 0.0,
-        A: nanopb_rs::dyn_fields::new_tx_repeated_callback(Box::new(FloatIterator::new(16))),
-    };
+        settings_resp.PCoefficients = ru_sktbelpa_pressure_self_writer_PCoefficientsGet {
+            Fp0: settings.pcoefficients.Fp0,
+            Ft0: settings.pcoefficients.Ft0,
+            A: nanopb_rs::dyn_fields::new_tx_repeated_callback(Box::new(FloatSender::new(
+                Box::from(settings.pcoefficients.A),
+                protobuf::ru_sktbelpa_pressure_self_writer_PCoefficientsGet::fields(),
+            ))),
+        };
 
-    settings_resp.TCoefficients = ru_sktbelpa_pressure_self_writer_T5CoefficientsGet {
-        T0: 0.0,
-        F0: 0.0,
-        C: nanopb_rs::dyn_fields::new_tx_repeated_callback(Box::new(FloatIterator::new(6))),
-    };
+        settings_resp.TCoefficients = ru_sktbelpa_pressure_self_writer_T5CoefficientsGet {
+            T0: settings.tcoefficients.T0,
+            F0: settings.tcoefficients.F0,
+            C: nanopb_rs::dyn_fields::new_tx_repeated_callback(Box::new(FloatSender::new(
+                Box::from(settings.tcoefficients.C),
+                protobuf::ru_sktbelpa_pressure_self_writer_T5CoefficientsGet::fields(),
+            ))),
+        };
+    })
+    .map_err(|_| ())
 }

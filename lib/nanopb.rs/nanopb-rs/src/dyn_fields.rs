@@ -29,8 +29,8 @@ pub fn new_tx_callback(
 
 pub trait TxRepeated {
     fn reset(&mut self);
-    fn has_next(&mut self) -> bool;
-    fn encode_next(&self, out_stream: &mut pb_ostream_t) -> Result<(), crate::Error>;
+    fn has_next(&self) -> bool;
+    fn encode_next(&mut self, out_stream: &mut pb_ostream_t) -> Result<(), crate::Error>;
     fn fields(&self) -> &'static pb_msgdesc_t;
 }
 

@@ -1,4 +1,5 @@
 #![allow(non_snake_case)]
+#![allow(dead_code)] // FIXME
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct P16Coeffs {

@@ -61,9 +61,7 @@ where
     T: WorkMode<T>,
 {
     let mut mode = T::new(p, dp);
-
-    settings::init(mode.flash());
-
+    mode.ini_static();
     mode.configure_clock();
     mode.print_clock_config();
     mode.start_threads()

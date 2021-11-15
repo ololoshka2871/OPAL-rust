@@ -17,15 +17,24 @@ pub struct PowerSaveMode {
     pwr: Option<stm32l4xx_hal::pwr::Pwr>,
 
     clocks: Option<stm32l4xx_hal::rcc::Clocks>,
+
+    crc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>,
 }
 
 impl WorkMode<PowerSaveMode> for PowerSaveMode {
     fn new(_p: cortex_m::Peripherals, dp: Peripherals) -> Self {
+        let mut rcc = dp.RCC.constrain();
+
         let mut res = PowerSaveMode {
-            rcc: dp.RCC.constrain(),
             flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
+            crc: Arc::new(
+                Mutex::new(super::configure_crc_module(dp.CRC.constrain(&mut rcc.ahb1))).unwrap(),
+            ),
+
             pwr: None,
             clocks: None,
+
+            rcc,
         };
 
         res.pwr = Some(dp.PWR.constrain(&mut res.rcc.apb1r1));
@@ -35,6 +44,14 @@ impl WorkMode<PowerSaveMode> for PowerSaveMode {
 
     fn flash(&mut self) -> Arc<Mutex<stm32l4xx_hal::flash::Parts>> {
         self.flash.clone()
+    }
+
+    fn crc(&mut self) -> Arc<Mutex<stm32l4xx_hal::crc::Crc>> {
+        self.crc.clone()
+    }
+
+    fn ini_static(&mut self) {
+        crate::settings::init(self.flash(), self.crc());
     }
 
     // Работа от внешнего кварца HSE = 12 MHz
