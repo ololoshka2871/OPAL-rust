@@ -71,7 +71,6 @@ impl<T: rx_context> IStream<T> {
     pub fn stream(&mut self) -> &mut pb_istream_t {
         &mut self.ctx
     }
-
 }
 
 impl pb_istream_t {
@@ -84,32 +83,22 @@ impl pb_istream_t {
         }
     }
 
-    pub fn decode<U>(&mut self, fields: &pb_msgdesc_t) -> Result<U, Error> {
-        let mut dest_struct: U = unsafe { core::mem::MaybeUninit::zeroed().assume_init() };
-        if unsafe {
-            pb_decode(
-                self,
-                fields,
-                &mut dest_struct as *mut U as *mut _,
-            )
-        } {
-            Ok(dest_struct)
+    pub fn decode<U>(&mut self, dest_struct: &mut U, fields: &pb_msgdesc_t) -> Result<(), Error> {
+        if unsafe { pb_decode(self, fields, dest_struct as *mut U as *mut _) } {
+            Ok(())
         } else {
             Err(self.get_error())
         }
     }
 
-    pub fn decode_ex<U>(&mut self, fields: &pb_msgdesc_t, flags: u32) -> Result<U, Error> {
-        let mut dest_struct: U = unsafe { core::mem::MaybeUninit::zeroed().assume_init() };
-        if unsafe {
-            pb_decode_ex(
-                self,
-                fields,
-                &mut dest_struct as *mut U as *mut _,
-                flags,
-            )
-        } {
-            Ok(dest_struct)
+    pub fn decode_ex<U>(
+        &mut self,
+        dest_struct: &mut U,
+        fields: &pb_msgdesc_t,
+        flags: u32,
+    ) -> Result<(), Error> {
+        if unsafe { pb_decode_ex(self, fields, dest_struct as *mut U as *mut _, flags) } {
+            Ok(())
         } else {
             Err(self.get_error())
         }
@@ -185,12 +174,7 @@ impl pb_istream_t {
 
     pub fn decode_fixed32(&mut self) -> Result<u32, Error> {
         let mut res = 0_u32;
-        if unsafe {
-            pb_decode_fixed32(
-                self,
-                &mut res as *mut u32 as *mut _,
-            )
-        } {
+        if unsafe { pb_decode_fixed32(self, &mut res as *mut u32 as *mut _) } {
             Ok(res)
         } else {
             Err(self.get_error())
@@ -199,12 +183,7 @@ impl pb_istream_t {
 
     pub fn decode_fixed64(&mut self) -> Result<u64, Error> {
         let mut res = 0_u64;
-        if unsafe {
-            pb_decode_fixed64(
-                self,
-                &mut res as *mut u64 as *mut _,
-            )
-        } {
+        if unsafe { pb_decode_fixed64(self, &mut res as *mut u64 as *mut _) } {
             Ok(res)
         } else {
             Err(self.get_error())

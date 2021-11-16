@@ -27,6 +27,7 @@ static PYTHON_PROTO_GOOGLE_PROTOBUF_DESCRIPTOR_PROTO: &[u8; 36277] =
 pub struct Generator {
     python: String,
     proto_file: Option<PathBuf>,
+    option_file: Option<PathBuf>,
     add_proto_include_paths: Vec<PathBuf>,
 }
 
@@ -38,6 +39,7 @@ impl Generator {
         Generator {
             python: "python3".to_string(),
             proto_file: None,
+            option_file: None,
             add_proto_include_paths: vec![],
         }
     }
@@ -49,6 +51,11 @@ impl Generator {
 
     pub fn add_proto_file<P: AsRef<Path>>(mut self, path: P) -> Self {
         self.proto_file = Some(path.as_ref().to_path_buf());
+        self
+    }
+
+    pub fn add_option_file<P: AsRef<Path>>(mut self, path: P) -> Self {
+        self.option_file = Some(path.as_ref().to_path_buf());
         self
     }
 
@@ -213,7 +220,13 @@ impl Generator {
 
         let mut args = vec![String::from(script.to_str().unwrap())];
         args.append(&mut self.generate_arguments());
+
+
         args.push(format!("--nanopb_out={}", env::var("OUT_DIR").unwrap()));
+
+        if let Some(options_file) = &self.option_file {
+            args.push(format!("--nanopb_opt=--options-file={}", options_file.to_str().unwrap()));
+        };
 
         self.run_generator(args);
 

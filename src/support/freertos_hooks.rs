@@ -55,6 +55,6 @@ pub extern "C" fn rust_begin_unwind(
 #[cfg(debug_assertions)]
 #[no_mangle]
 // debug mode: disable sleep (wfi)
-pub extern "C" fn vApplicationIdleHook() -> ! {
-    loop {}
+pub extern "C" fn vApplicationIdleHook() {
+    //loop {}
 }

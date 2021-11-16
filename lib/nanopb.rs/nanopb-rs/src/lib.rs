@@ -3,6 +3,7 @@
 mod common;
 pub use common::pb_msgdesc_t;
 pub use common::pb_callback_t;
+pub use common::pb_size_t;
 
 pub mod pb;
 pub use pb::Error;

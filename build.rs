@@ -1,6 +1,7 @@
 fn build_protobuf(mut cc: cc::Build) {
     let protobuf_src = nanopb_rs_generator::Generator::new()
         .add_proto_file("src/protobuf/ProtobufDevice_0000E006.proto")
+        .add_option_file("src/protobuf/ProtobufDevice_0000E006.option")
         .generate();
 
     cc.file(protobuf_src).include("lib/nanopb.rs/nanopb-dist");

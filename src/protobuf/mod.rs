@@ -7,13 +7,16 @@ pub use messages::{
     ru_sktbelpa_pressure_self_writer_INFO_MAGICK,
     ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID,
     ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION,
+    ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS,
     ru_sktbelpa_pressure_self_writer_STATUS_OK,
+    ru_sktbelpa_pressure_self_writer_STATUS_PROTOCOL_ERROR, P_COEFFS_COUNT, T_COEFFS_COUNT,
 };
 
 pub use messages::{
-    ru_sktbelpa_pressure_self_writer_PCoefficientsGet, ru_sktbelpa_pressure_self_writer_Request,
+    ru_sktbelpa_pressure_self_writer_PCoefficients, ru_sktbelpa_pressure_self_writer_Request,
     ru_sktbelpa_pressure_self_writer_Response, ru_sktbelpa_pressure_self_writer_SettingsResponse,
-    ru_sktbelpa_pressure_self_writer_T5CoefficientsGet,
+    ru_sktbelpa_pressure_self_writer_T5Coefficients,
+    ru_sktbelpa_pressure_self_writer_WriteSettingsReq,
 };
 
 pub use messages::pb_callback_t;
@@ -65,14 +68,14 @@ impl ru_sktbelpa_pressure_self_writer_Response {
     }
 }
 
-impl ru_sktbelpa_pressure_self_writer_PCoefficientsGet {
+impl ru_sktbelpa_pressure_self_writer_PCoefficients {
     pub fn fields() -> &'static pb_msgdesc_t {
-        unsafe { &messages::ru_sktbelpa_pressure_self_writer_PCoefficientsGet_msg }
+        unsafe { &messages::ru_sktbelpa_pressure_self_writer_PCoefficients_msg }
     }
 }
 
-impl ru_sktbelpa_pressure_self_writer_T5CoefficientsGet {
+impl ru_sktbelpa_pressure_self_writer_T5Coefficients {
     pub fn fields() -> &'static pb_msgdesc_t {
-        unsafe { &messages::ru_sktbelpa_pressure_self_writer_T5CoefficientsGet_msg }
+        unsafe { &messages::ru_sktbelpa_pressure_self_writer_T5Coefficients_msg }
     }
 }

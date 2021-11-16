@@ -150,7 +150,7 @@
             "request": "launch",
             "name": "Launch build.rs",
             // fixme!
-            "target": "./target/debug/build/stm32-usb-self-writer-357a2b7fa8fe1ce1/build-script-build",
+            "target": "./target/debug/build/stm32-usb-self-writer-0c8805cdf0f13d64/build-script-build",
             "env": {
                 "OUT_DIR": "./target/thumbv7em-none-eabihf/debug/build/stm32-usb-self-writer-031fac96a7ae2faf/out"
             },

@@ -27,12 +27,15 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
     pcoefficients: app_settings::P16Coeffs {
         Fp0: 0.0,
         Ft0: 0.0,
-        A: [0.0f32; 16],
+        A: [
+            0.0f32, 0.0f32, 1.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32,
+            0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32,
+        ],
     },
     tcoefficients: app_settings::T5Coeffs {
         F0: 0.0,
         T0: 0.0,
-        C: [0.0f32; 5],
+        C: [1.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32],
     },
 };
 
@@ -45,6 +48,12 @@ static SETTINGS_PLACEHOLDER: Placeholder<AppSettings> =
 
 lazy_static! {
     static ref SETTINGS: Mutex<Option<SettingsManagerType>> = Mutex::new(None).unwrap();
+}
+
+#[derive(Debug)]
+pub enum SettingActionError<T: core::fmt::Debug> {
+    AccessError(FreeRtosError),
+    ActionError(T),
 }
 
 pub(crate) fn init(
@@ -66,17 +75,19 @@ pub(crate) fn init(
     }
 }
 
-pub(crate) fn settings_action<D, F>(duration: D, mut f: F) -> Result<(), FreeRtosError>
+pub(crate) fn settings_action<D, F, T>(duration: D, mut f: F) -> Result<(), SettingActionError<T>>
 where
-    F: FnMut(&mut AppSettings),
+    F: FnMut(&mut AppSettings) -> Result<(), T>,
     D: DurationTicks,
+    T: core::fmt::Debug,
 {
-    let mut guard = SETTINGS.lock(duration)?;
+    let mut guard = SETTINGS
+        .lock(duration)
+        .map_err(|e| SettingActionError::AccessError(e))?;
     if let Some(manager) = guard.deref_mut() {
-        f(manager.ref_mut());
-        Ok(())
+        f(manager.ref_mut()).map_err(|e| SettingActionError::ActionError(e))
     } else {
-        Err(FreeRtosError::OutOfMemory)
+        Err(SettingActionError::AccessError(FreeRtosError::OutOfMemory))
     }
 }
 

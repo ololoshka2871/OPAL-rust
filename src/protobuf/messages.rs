@@ -5,6 +5,7 @@
 
 pub use nanopb_rs::pb_callback_t;
 use nanopb_rs::pb_msgdesc_t;
+pub use nanopb_rs::pb_size_t;
 
 pub const ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION:
     _ru_sktbelpa_pressure_self_writer_INFO = 1;
@@ -26,50 +27,72 @@ pub const ru_sktbelpa_pressure_self_writer_STATUS_PROTOCOL_ERROR:
 
 //----------------------------------------------------------------------------------------------------
 
-#[repr(C)]
-#[derive(Debug, Default)]
-pub struct _ru_sktbelpa_pressure_self_writer_PCoefficientsGet {
-    pub Fp0: f32,
-    pub Ft0: f32,
-    pub A: pb_callback_t,
-}
-pub type ru_sktbelpa_pressure_self_writer_PCoefficientsGet =
-    _ru_sktbelpa_pressure_self_writer_PCoefficientsGet;
+pub const P_COEFFS_COUNT: usize = 16;
+pub const T_COEFFS_COUNT: usize = 5;
 
 #[repr(C)]
 #[derive(Debug, Default)]
-pub struct _ru_sktbelpa_pressure_self_writer_PCoefficientsSet {
+pub struct _ru_sktbelpa_pressure_self_writer_PCoefficients {
     pub has_Fp0: bool,
     pub Fp0: f32,
     pub has_Ft0: bool,
     pub Ft0: f32,
-    pub A: pb_callback_t,
+    pub has_A0: bool,
+    pub A0: f32,
+    pub has_A1: bool,
+    pub A1: f32,
+    pub has_A2: bool,
+    pub A2: f32,
+    pub has_A3: bool,
+    pub A3: f32,
+    pub has_A4: bool,
+    pub A4: f32,
+    pub has_A5: bool,
+    pub A5: f32,
+    pub has_A6: bool,
+    pub A6: f32,
+    pub has_A7: bool,
+    pub A7: f32,
+    pub has_A8: bool,
+    pub A8: f32,
+    pub has_A9: bool,
+    pub A9: f32,
+    pub has_A10: bool,
+    pub A10: f32,
+    pub has_A11: bool,
+    pub A11: f32,
+    pub has_A12: bool,
+    pub A12: f32,
+    pub has_A13: bool,
+    pub A13: f32,
+    pub has_A14: bool,
+    pub A14: f32,
+    pub has_A15: bool,
+    pub A15: f32,
 }
-
-pub type ru_sktbelpa_pressure_self_writer_PCoefficientsSet =
-    _ru_sktbelpa_pressure_self_writer_PCoefficientsSet;
+pub type ru_sktbelpa_pressure_self_writer_PCoefficients =
+    _ru_sktbelpa_pressure_self_writer_PCoefficients;
 
 #[repr(C)]
 #[derive(Debug, Default)]
-pub struct _ru_sktbelpa_pressure_self_writer_T5CoefficientsGet {
-    pub T0: f32,
-    pub F0: f32,
-    pub C: pb_callback_t,
-}
-pub type ru_sktbelpa_pressure_self_writer_T5CoefficientsGet =
-    _ru_sktbelpa_pressure_self_writer_T5CoefficientsGet;
-
-#[repr(C)]
-#[derive(Debug, Default)]
-pub struct _ru_sktbelpa_pressure_self_writer_T5CoefficientsSet {
+pub struct _ru_sktbelpa_pressure_self_writer_T5Coefficients {
     pub has_T0: bool,
     pub T0: f32,
     pub has_F0: bool,
     pub F0: f32,
-    pub C: pb_callback_t,
+    pub has_C1: bool,
+    pub C1: f32,
+    pub has_C2: bool,
+    pub C2: f32,
+    pub has_C3: bool,
+    pub C3: f32,
+    pub has_C4: bool,
+    pub C4: f32,
+    pub has_C5: bool,
+    pub C5: f32,
 }
-pub type ru_sktbelpa_pressure_self_writer_T5CoefficientsSet =
-    _ru_sktbelpa_pressure_self_writer_T5CoefficientsSet;
+pub type ru_sktbelpa_pressure_self_writer_T5Coefficients =
+    _ru_sktbelpa_pressure_self_writer_T5Coefficients;
 
 #[repr(C)]
 #[derive(Debug, Default)]
@@ -80,8 +103,8 @@ pub struct _ru_sktbelpa_pressure_self_writer_SettingsResponse {
     pub Fref: u32,
     pub PEnabled: bool,
     pub TEnabled: bool,
-    pub PCoefficients: ru_sktbelpa_pressure_self_writer_PCoefficientsGet,
-    pub TCoefficients: ru_sktbelpa_pressure_self_writer_T5CoefficientsGet,
+    pub PCoefficients: ru_sktbelpa_pressure_self_writer_PCoefficients,
+    pub TCoefficients: ru_sktbelpa_pressure_self_writer_T5Coefficients,
 }
 pub type ru_sktbelpa_pressure_self_writer_SettingsResponse =
     _ru_sktbelpa_pressure_self_writer_SettingsResponse;
@@ -102,9 +125,9 @@ pub struct _ru_sktbelpa_pressure_self_writer_WriteSettingsReq {
     pub has_TEnabled: bool,
     pub TEnabled: bool,
     pub has_PCoefficients: bool,
-    pub PCoefficients: ru_sktbelpa_pressure_self_writer_PCoefficientsSet,
+    pub PCoefficients: ru_sktbelpa_pressure_self_writer_PCoefficients,
     pub has_TCoefficients: bool,
-    pub TCoefficients: ru_sktbelpa_pressure_self_writer_T5CoefficientsSet,
+    pub TCoefficients: ru_sktbelpa_pressure_self_writer_T5Coefficients,
 }
 pub type ru_sktbelpa_pressure_self_writer_WriteSettingsReq =
     _ru_sktbelpa_pressure_self_writer_WriteSettingsReq;
@@ -138,8 +161,6 @@ extern "C" {
     pub static ru_sktbelpa_pressure_self_writer_Response_msg: pb_msgdesc_t;
     pub static ru_sktbelpa_pressure_self_writer_WriteSettingsReq_msg: pb_msgdesc_t;
     pub static ru_sktbelpa_pressure_self_writer_SettingsResponse_msg: pb_msgdesc_t;
-    pub static ru_sktbelpa_pressure_self_writer_PCoefficientsSet_msg: pb_msgdesc_t;
-    pub static ru_sktbelpa_pressure_self_writer_PCoefficientsGet_msg: pb_msgdesc_t;
-    pub static ru_sktbelpa_pressure_self_writer_T5CoefficientsSet_msg: pb_msgdesc_t;
-    pub static ru_sktbelpa_pressure_self_writer_T5CoefficientsGet_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_PCoefficients_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_T5Coefficients_msg: pb_msgdesc_t;
 }
