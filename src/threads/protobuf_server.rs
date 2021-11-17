@@ -285,84 +285,81 @@ fn fill_settings(
     settings_resp: &mut ru_sktbelpa_pressure_self_writer_SettingsResponse,
 ) -> Result<(), ()> {
     crate::settings::settings_action(Duration::ms(1), |settings| {
-        settings_resp.Serial = settings.serial;
+        settings_resp.Serial = settings.Serial;
 
-        settings_resp.PMesureTime_ms = settings.pmesure_time_ms;
-        settings_resp.TMesureTime_ms = settings.tmesure_time_ms;
+        settings_resp.PMesureTime_ms = settings.PMesureTime_ms;
+        settings_resp.TMesureTime_ms = settings.TMesureTime_ms;
 
-        settings_resp.Fref = settings.fref;
+        settings_resp.Fref = settings.Fref;
 
-        settings_resp.PEnabled = settings.p_enabled;
-        settings_resp.TEnabled = settings.t_enabled;
+        settings_resp.PEnabled = settings.P_enabled;
+        settings_resp.TEnabled = settings.T_enabled;
 
         settings_resp.PCoefficients = ru_sktbelpa_pressure_self_writer_PCoefficients {
             has_Fp0: true,
-            Fp0: settings.pcoefficients.Fp0,
+            Fp0: settings.P_Coefficients.Fp0,
             has_Ft0: true,
-            Ft0: settings.pcoefficients.Ft0,
+            Ft0: settings.P_Coefficients.Ft0,
 
             has_A0: true,
-            A0: settings.pcoefficients.A[0],
+            A0: settings.P_Coefficients.A[0],
             has_A1: true,
-            A1: settings.pcoefficients.A[1],
+            A1: settings.P_Coefficients.A[1],
             has_A2: true,
-            A2: settings.pcoefficients.A[2],
+            A2: settings.P_Coefficients.A[2],
             has_A3: true,
-            A3: settings.pcoefficients.A[3],
+            A3: settings.P_Coefficients.A[3],
             has_A4: true,
-            A4: settings.pcoefficients.A[4],
+            A4: settings.P_Coefficients.A[4],
             has_A5: true,
-            A5: settings.pcoefficients.A[5],
+            A5: settings.P_Coefficients.A[5],
             has_A6: true,
-            A6: settings.pcoefficients.A[6],
+            A6: settings.P_Coefficients.A[6],
             has_A7: true,
-            A7: settings.pcoefficients.A[7],
+            A7: settings.P_Coefficients.A[7],
             has_A8: true,
-            A8: settings.pcoefficients.A[8],
+            A8: settings.P_Coefficients.A[8],
             has_A9: true,
-            A9: settings.pcoefficients.A[9],
+            A9: settings.P_Coefficients.A[9],
             has_A10: true,
-            A10: settings.pcoefficients.A[10],
+            A10: settings.P_Coefficients.A[10],
             has_A11: true,
-            A11: settings.pcoefficients.A[11],
+            A11: settings.P_Coefficients.A[11],
             has_A12: true,
-            A12: settings.pcoefficients.A[12],
+            A12: settings.P_Coefficients.A[12],
             has_A13: true,
-            A13: settings.pcoefficients.A[13],
+            A13: settings.P_Coefficients.A[13],
             has_A14: true,
-            A14: settings.pcoefficients.A[14],
+            A14: settings.P_Coefficients.A[14],
             has_A15: true,
-            A15: settings.pcoefficients.A[15],
+            A15: settings.P_Coefficients.A[15],
         };
 
         settings_resp.TCoefficients = ru_sktbelpa_pressure_self_writer_T5Coefficients {
             has_T0: true,
-            T0: settings.tcoefficients.T0,
+            T0: settings.T_Coefficients.T0,
             has_F0: true,
-            F0: settings.tcoefficients.F0,
+            F0: settings.T_Coefficients.F0,
 
             has_C1: true,
-            C1: settings.tcoefficients.C[0],
+            C1: settings.T_Coefficients.C[0],
             has_C2: true,
-            C2: settings.tcoefficients.C[1],
+            C2: settings.T_Coefficients.C[1],
             has_C3: true,
-            C3: settings.tcoefficients.C[2],
+            C3: settings.T_Coefficients.C[2],
             has_C4: true,
-            C4: settings.tcoefficients.C[3],
+            C4: settings.T_Coefficients.C[3],
             has_C5: true,
-            C5: settings.tcoefficients.C[4],
+            C5: settings.T_Coefficients.C[4],
         };
         Ok(())
     })
     .map_err(|_: crate::settings::SettingActionError<()>| ())
 }
 
-fn update_settings(
+fn verify_parameters(
     ws: &ru_sktbelpa_pressure_self_writer_WriteSettingsReq,
 ) -> Result<(), crate::settings::SettingActionError<String>> {
-    let mut need_write = false;
-
-    // verfy values
     if ws.has_PMesureTime_ms && (ws.PMesureTime_ms > MAX_MT || ws.PMesureTime_ms < MIN_MT) {
         return Err(crate::settings::SettingActionError::ActionError(format!(
             "Pressure measure time {} is out of range {} - {}",
@@ -384,162 +381,173 @@ fn update_settings(
         )));
     }
 
+    Ok(())
+}
+
+fn update_settings(
+    ws: &ru_sktbelpa_pressure_self_writer_WriteSettingsReq,
+) -> Result<(), crate::settings::SettingActionError<String>> {
+    let mut need_write = false;
+
+    verify_parameters(ws)?;
+
     crate::settings::settings_action(Duration::ms(1), |settings| {
         if ws.has_PMesureTime_ms {
-            settings.pmesure_time_ms = ws.PMesureTime_ms;
+            settings.PMesureTime_ms = ws.PMesureTime_ms;
             need_write = true;
         }
 
         if ws.has_TMesureTime_ms {
-            settings.tmesure_time_ms = ws.TMesureTime_ms;
+            settings.TMesureTime_ms = ws.TMesureTime_ms;
             need_write = true;
         }
 
         if ws.has_Fref {
-            settings.fref = ws.Fref;
+            settings.Fref = ws.Fref;
             need_write = true;
         }
 
         if ws.has_Serial {
-            settings.serial = ws.Serial;
+            settings.Serial = ws.Serial;
             need_write = true;
         }
 
         if ws.has_PEnabled {
-            settings.p_enabled = ws.PEnabled;
+            settings.P_enabled = ws.PEnabled;
             need_write = true;
         }
 
         if ws.has_TEnabled {
-            settings.t_enabled = ws.TEnabled;
+            settings.T_enabled = ws.TEnabled;
             need_write = true;
         }
 
+        // TODO: заменить макросом эту порнуху
         if ws.has_PCoefficients {
             if ws.PCoefficients.has_Fp0 {
-                settings.pcoefficients.Fp0 = ws.PCoefficients.Fp0;
+                settings.P_Coefficients.Fp0 = ws.PCoefficients.Fp0;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_Ft0 {
-                settings.pcoefficients.Ft0 = ws.PCoefficients.Ft0;
+                settings.P_Coefficients.Ft0 = ws.PCoefficients.Ft0;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A0 {
-                settings.pcoefficients.A[0] = ws.PCoefficients.A0;
+                settings.P_Coefficients.A[0] = ws.PCoefficients.A0;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A1 {
-                settings.pcoefficients.A[1] = ws.PCoefficients.A1;
+                settings.P_Coefficients.A[1] = ws.PCoefficients.A1;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A2 {
-                settings.pcoefficients.A[2] = ws.PCoefficients.A2;
+                settings.P_Coefficients.A[2] = ws.PCoefficients.A2;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A3 {
-                settings.pcoefficients.A[3] = ws.PCoefficients.A3;
+                settings.P_Coefficients.A[3] = ws.PCoefficients.A3;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A4 {
-                settings.pcoefficients.A[4] = ws.PCoefficients.A4;
+                settings.P_Coefficients.A[4] = ws.PCoefficients.A4;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A5 {
-                settings.pcoefficients.A[5] = ws.PCoefficients.A5;
+                settings.P_Coefficients.A[5] = ws.PCoefficients.A5;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A6 {
-                settings.pcoefficients.A[6] = ws.PCoefficients.A6;
+                settings.P_Coefficients.A[6] = ws.PCoefficients.A6;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A7 {
-                settings.pcoefficients.A[7] = ws.PCoefficients.A7;
+                settings.P_Coefficients.A[7] = ws.PCoefficients.A7;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A8 {
-                settings.pcoefficients.A[8] = ws.PCoefficients.A8;
+                settings.P_Coefficients.A[8] = ws.PCoefficients.A8;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A9 {
-                settings.pcoefficients.A[9] = ws.PCoefficients.A9;
+                settings.P_Coefficients.A[9] = ws.PCoefficients.A9;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A10 {
-                settings.pcoefficients.A[10] = ws.PCoefficients.A10;
+                settings.P_Coefficients.A[10] = ws.PCoefficients.A10;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A11 {
-                settings.pcoefficients.A[11] = ws.PCoefficients.A11;
+                settings.P_Coefficients.A[11] = ws.PCoefficients.A11;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A12 {
-                settings.pcoefficients.A[12] = ws.PCoefficients.A12;
+                settings.P_Coefficients.A[12] = ws.PCoefficients.A12;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A13 {
-                settings.pcoefficients.A[13] = ws.PCoefficients.A13;
+                settings.P_Coefficients.A[13] = ws.PCoefficients.A13;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A14 {
-                settings.pcoefficients.A[14] = ws.PCoefficients.A14;
+                settings.P_Coefficients.A[14] = ws.PCoefficients.A14;
                 need_write = true;
             }
 
             if ws.PCoefficients.has_A15 {
-                settings.pcoefficients.A[15] = ws.PCoefficients.A15;
+                settings.P_Coefficients.A[15] = ws.PCoefficients.A15;
                 need_write = true;
             }
         }
 
         if ws.has_TCoefficients {
             if ws.TCoefficients.has_F0 {
-                settings.tcoefficients.F0 = ws.TCoefficients.F0;
+                settings.T_Coefficients.F0 = ws.TCoefficients.F0;
                 need_write = true;
             }
 
             if ws.TCoefficients.has_T0 {
-                settings.tcoefficients.T0 = ws.TCoefficients.T0;
+                settings.T_Coefficients.T0 = ws.TCoefficients.T0;
                 need_write = true;
             }
 
             if ws.TCoefficients.has_C1 {
-                settings.tcoefficients.C[0] = ws.TCoefficients.C1;
+                settings.T_Coefficients.C[0] = ws.TCoefficients.C1;
                 need_write = true;
             }
 
             if ws.TCoefficients.has_C2 {
-                settings.tcoefficients.C[1] = ws.TCoefficients.C2;
+                settings.T_Coefficients.C[1] = ws.TCoefficients.C2;
                 need_write = true;
             }
 
             if ws.TCoefficients.has_C3 {
-                settings.tcoefficients.C[2] = ws.TCoefficients.C3;
+                settings.T_Coefficients.C[2] = ws.TCoefficients.C3;
                 need_write = true;
             }
 
             if ws.TCoefficients.has_C4 {
-                settings.tcoefficients.C[3] = ws.TCoefficients.C4;
+                settings.T_Coefficients.C[3] = ws.TCoefficients.C4;
                 need_write = true;
             }
 
             if ws.TCoefficients.has_C5 {
-                settings.tcoefficients.C[4] = ws.TCoefficients.C5;
+                settings.T_Coefficients.C[4] = ws.TCoefficients.C5;
                 need_write = true;
             }
         }

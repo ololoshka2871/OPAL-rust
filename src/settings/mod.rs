@@ -15,16 +15,16 @@ use freertos_rust::{Duration, DurationTicks, FreeRtosError, Mutex};
 use self::flash_rw_polcy::Placeholder;
 
 static DEFAULT_SETTINGS: AppSettings = AppSettings {
-    serial: 0,
-    pmesure_time_ms: 1000,
-    tmesure_time_ms: 1000,
+    Serial: 0,
+    PMesureTime_ms: 1000,
+    TMesureTime_ms: 1000,
 
-    fref: 16000000,
+    Fref: 16000000,
 
-    p_enabled: true,
-    t_enabled: true,
+    P_enabled: true,
+    T_enabled: true,
 
-    pcoefficients: app_settings::P16Coeffs {
+    P_Coefficients: app_settings::P16Coeffs {
         Fp0: 0.0,
         Ft0: 0.0,
         A: [
@@ -32,7 +32,7 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
             0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32,
         ],
     },
-    tcoefficients: app_settings::T5Coeffs {
+    T_Coefficients: app_settings::T5Coeffs {
         F0: 0.0,
         T0: 0.0,
         C: [1.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32],
@@ -75,9 +75,9 @@ pub(crate) fn init(
     }
 }
 
-pub(crate) fn settings_action<D, F, T>(duration: D, mut f: F) -> Result<(), SettingActionError<T>>
+pub(crate) fn settings_action<D, F, R, T>(duration: D, mut f: F) -> Result<R, SettingActionError<T>>
 where
-    F: FnMut(&mut AppSettings) -> Result<(), T>,
+    F: FnMut(&mut AppSettings) -> Result<R, T>,
     D: DurationTicks,
     T: core::fmt::Debug,
 {

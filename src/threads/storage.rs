@@ -1,7 +1,8 @@
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
 use emfat_rust::{emfat_entry, emfat_t};
 
+use freertos_rust::Duration;
 use usbd_scsi::{BlockDevice, BlockDeviceError};
 
 pub struct EMfatStorage {
@@ -20,7 +21,7 @@ static README: &str = "# СКТБ \"ЭЛПА\": Автономный регис�
 Этот виртуальный диск предоставляет доступ к содержимому внутреннего накопителя устройства.\n\
 \r\n\
 - Для расшифровки содержимого используйте программу %TODO%.\r\n\
-- Коэффициенты полиномов для рассчета находятся в файле %TODO%\r\n\
+- Коэффициенты полиномов для рассчета находятся в файле config.cfg (формат json)\r\n\
 - Для управление функционалом устройства используйте программу KalibratorGUI\r\n";
 
 static README_INFO: StaticData = StaticData { data: README };
@@ -40,6 +41,32 @@ unsafe extern "C" fn const_reader(dest: *mut u8, size: i32, offset: u32, userdat
 }
 
 unsafe extern "C" fn null_read(_dest: *mut u8, _size: i32, _offset: u32, _userdata: usize) {}
+
+unsafe extern "C" fn settings_read(dest: *mut u8, size: i32, _offset: u32, _userdata: usize) {
+    match crate::settings::settings_action(Duration::ms(2), |s| serde_json::to_string_pretty(&s)) {
+        Ok(s) => {
+            let src = s.as_bytes();
+            let offset = _offset as usize;
+            if src.len() > offset {
+                let src = &src[offset..];
+                let to_write = core::cmp::min(size as usize, src.len());
+                core::ptr::copy_nonoverlapping(src.as_ptr(), dest, to_write);
+
+                // забиваем буфер пробелами до конца, чтобы в блокноте он нормально выглядел
+                core::ptr::write_bytes(dest.add(src.len()), b' ', size as usize - to_write);
+            }
+        }
+        Err(crate::settings::SettingActionError::AccessError(e)) => {
+            defmt::error!("Failed to setialise settings: {}", defmt::Debug2Format(&e));
+        }
+        Err(crate::settings::SettingActionError::ActionError(e)) => {
+            defmt::error!(
+                "Failed to setialise settings: {}",
+                defmt::Display2Format(&e)
+            );
+        }
+    }
+}
 
 impl EMfatStorage {
     pub fn new(disk_label: &str) -> EMfatStorage {
@@ -94,6 +121,19 @@ impl EMfatStorage {
                 .size(1024 * 10)
                 .max_size(1024 * 20)
                 .read_cb(null_read)
+                .build(),
+        );
+
+        defmt::trace!("EmFat: .. /settings.json");
+        res.push(
+            emfat_rust::EntryBuilder::new()
+                .name("config.cfg\0")
+                .dir(false)
+                .lvl(1)
+                .offset(0)
+                .size(1024) // noauto, размер может меняться - это генерированный текст
+                .max_size(1024)
+                .read_cb(settings_read)
                 .build(),
         );
 
