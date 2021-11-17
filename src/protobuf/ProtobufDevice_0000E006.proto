@@ -38,6 +38,18 @@ message Request {
 
     // Запись Настройки
     optional WriteSettingsReq   writeSettings = 10;
+
+    // Запрос информации
+    optional NullValue          getInfo = 20;
+
+    // запрос выходных значений
+    optional OutputReq          getOutputValues = 30;
+
+    // Команды
+    optional FlasCommand        flashCommand = 40;
+
+    // Смена пароля
+    optional ChangePassword     changePassword = 50;
 }
 
 // Общий ответ сервера
@@ -55,6 +67,18 @@ message Response {
 
     // Настройки
     optional SettingsResponse   getSettings = 10;
+
+    // Информация (неизменяемые значений)
+    optional InfoResponse       Info = 20;
+
+    // Выходные значения
+    optional OutputResponse     Output = 30;
+
+    // Статус флеш-памяти
+    optional FlashStatus        flashStatus = 40;
+
+    // Статус смены пароля
+    optional ChangePasswordStatus changePasswordStatus = 50;
 }
 
 //----------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-use alloc::{string::String, vec::Vec};
+use alloc::vec::Vec;
 
 use emfat_rust::{emfat_entry, emfat_t};
 
@@ -40,7 +40,7 @@ unsafe extern "C" fn const_reader(dest: *mut u8, size: i32, offset: u32, userdat
     core::ptr::copy_nonoverlapping(dptr.data.as_ptr().add(offset as usize), dest, to_read);
 }
 
-unsafe extern "C" fn null_read(_dest: *mut u8, _size: i32, _offset: u32, _userdata: usize) {}
+//unsafe extern "C" fn null_read(_dest: *mut u8, _size: i32, _offset: u32, _userdata: usize) {}
 
 unsafe extern "C" fn settings_read(dest: *mut u8, size: i32, _offset: u32, _userdata: usize) {
     match crate::settings::settings_action(Duration::ms(2), |s| serde_json::to_string_pretty(&s)) {
@@ -111,19 +111,6 @@ impl EMfatStorage {
                 .build(),
         );
 
-        defmt::trace!("EmFat: .. /Testfile.bin");
-        res.push(
-            emfat_rust::EntryBuilder::new()
-                .name("Testfile.bin\0")
-                .dir(false)
-                .lvl(1)
-                .offset(0)
-                .size(1024 * 10)
-                .max_size(1024 * 20)
-                .read_cb(null_read)
-                .build(),
-        );
-
         defmt::trace!("EmFat: .. /settings.json");
         res.push(
             emfat_rust::EntryBuilder::new()
@@ -136,6 +123,21 @@ impl EMfatStorage {
                 .read_cb(settings_read)
                 .build(),
         );
+
+        /*
+        defmt::trace!("EmFat: .. /Testfile.bin");
+        res.push(
+            emfat_rust::EntryBuilder::new()
+                .name("Testfile.bin\0")
+                .dir(false)
+                .lvl(1)
+                .offset(0)
+                .size(1024 * 10)
+                .max_size(1024 * 20)
+                .read_cb(null_read)
+                .build(),
+        );
+        */
 
         /*
         defmt::trace!("EmFat: .. /fill.x");
