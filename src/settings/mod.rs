@@ -12,7 +12,7 @@ use flash_settings_rs::SettingsManager;
 use flash_rw_polcy::FlasRWPolcy;
 use freertos_rust::{Duration, DurationTicks, FreeRtosError, Mutex};
 
-use self::flash_rw_polcy::Placeholder;
+use self::{app_settings::NonStoreSettings, flash_rw_polcy::Placeholder};
 
 static DEFAULT_SETTINGS: AppSettings = AppSettings {
     Serial: 0,
@@ -40,7 +40,7 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
 };
 
 pub(crate) type SettingsManagerType =
-    SettingsManager<AppSettings, stm32l4xx_hal::traits::flash::Error, FlasRWPolcy>;
+    SettingsManager<AppSettings, NonStoreSettings, stm32l4xx_hal::traits::flash::Error, FlasRWPolcy>;
 
 #[link_section = ".settings.app"]
 static SETTINGS_PLACEHOLDER: Placeholder<AppSettings> =
@@ -64,11 +64,15 @@ pub(crate) fn init(
     if let Ok(mut guard) = SETTINGS.lock(Duration::infinite()) {
         guard.replace(SettingsManager::<
             AppSettings,
+            NonStoreSettings,
             stm32l4xx_hal::traits::flash::Error,
             FlasRWPolcy,
         >::new(
             &DEFAULT_SETTINGS,
             FlasRWPolcy::create(&SETTINGS_PLACEHOLDER, flash, crc),
+            NonStoreSettings{
+                current_password: [0u8; 10]
+            },
         ));
     } else {
         panic!("Failed to init settings");
@@ -77,7 +81,7 @@ pub(crate) fn init(
 
 pub(crate) fn settings_action<D, F, R, T>(duration: D, mut f: F) -> Result<R, SettingActionError<T>>
 where
-    F: FnMut(&mut AppSettings) -> Result<R, T>,
+    F: FnMut((&mut AppSettings, &mut NonStoreSettings)) -> Result<R, T>,
     D: DurationTicks,
     T: core::fmt::Debug,
 {

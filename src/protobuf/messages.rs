@@ -27,8 +27,17 @@ pub const ru_sktbelpa_pressure_self_writer_STATUS_PROTOCOL_ERROR:
 
 //----------------------------------------------------------------------------------------------------
 
+pub const _ru_sktbelpa_pressure_self_writer_FlashStatus_Status_ru_sktbelpa_pressure_self_writer_FlashStatus_Status_OK : _ru_sktbelpa_pressure_self_writer_FlashStatus_Status = 0 ;
+pub const _ru_sktbelpa_pressure_self_writer_FlashStatus_Status_ru_sktbelpa_pressure_self_writer_FlashStatus_Status_Ereasing : _ru_sktbelpa_pressure_self_writer_FlashStatus_Status = 1 ;
+pub const _ru_sktbelpa_pressure_self_writer_FlashStatus_Status_ru_sktbelpa_pressure_self_writer_FlashStatus_Status_ResetMonitoringFailed : _ru_sktbelpa_pressure_self_writer_FlashStatus_Status = 2 ;
+pub type _ru_sktbelpa_pressure_self_writer_FlashStatus_Status = u32;
+pub use self::_ru_sktbelpa_pressure_self_writer_FlashStatus_Status as ru_sktbelpa_pressure_self_writer_FlashStatus_Status;
+
+//----------------------------------------------------------------------------------------------------
+
 pub const P_COEFFS_COUNT: usize = 16;
 pub const T_COEFFS_COUNT: usize = 5;
+pub const PASSWORD_SIZE: usize = 10;
 
 #[repr(C)]
 #[derive(Debug, Default)]
@@ -103,8 +112,20 @@ pub struct _ru_sktbelpa_pressure_self_writer_SettingsResponse {
     pub Fref: u32,
     pub PEnabled: bool,
     pub TEnabled: bool,
+    pub TCPUEnabled: bool,
+    pub VBatEnable: bool,
     pub PCoefficients: ru_sktbelpa_pressure_self_writer_PCoefficients,
     pub TCoefficients: ru_sktbelpa_pressure_self_writer_T5Coefficients,
+    pub PWorkRange: ru_sktbelpa_pressure_self_writer_WorkRange,
+    pub TWorkRange: ru_sktbelpa_pressure_self_writer_WorkRange,
+    pub TCPUWorkRange: ru_sktbelpa_pressure_self_writer_WorkRange,
+    pub BatWorkRange: ru_sktbelpa_pressure_self_writer_WorkRange,
+    pub CalibrationDate: ru_sktbelpa_pressure_self_writer_CalibrationDate,
+    pub PZeroCorrection: f32,
+    pub TZeroCorrection: f32,
+    pub writeConfig: ru_sktbelpa_pressure_self_writer_WriteConfig,
+    pub startDelay: u32,
+    pub password: [u8; PASSWORD_SIZE + 1],
 }
 pub type ru_sktbelpa_pressure_self_writer_SettingsResponse =
     _ru_sktbelpa_pressure_self_writer_SettingsResponse;
@@ -112,22 +133,45 @@ pub type ru_sktbelpa_pressure_self_writer_SettingsResponse =
 #[repr(C)]
 #[derive(Debug)]
 pub struct _ru_sktbelpa_pressure_self_writer_WriteSettingsReq {
-    pub has_Serial: bool,
-    pub Serial: u32,
-    pub has_PMesureTime_ms: bool,
-    pub PMesureTime_ms: u32,
-    pub has_TMesureTime_ms: bool,
-    pub TMesureTime_ms: u32,
-    pub has_Fref: bool,
-    pub Fref: u32,
-    pub has_PEnabled: bool,
-    pub PEnabled: bool,
-    pub has_TEnabled: bool,
-    pub TEnabled: bool,
-    pub has_PCoefficients: bool,
-    pub PCoefficients: ru_sktbelpa_pressure_self_writer_PCoefficients,
-    pub has_TCoefficients: bool,
-    pub TCoefficients: ru_sktbelpa_pressure_self_writer_T5Coefficients,
+    pub has_setSerial: bool,
+    pub setSerial: u32,
+    pub has_setPMesureTime_ms: bool,
+    pub setPMesureTime_ms: u32,
+    pub has_setTMesureTime_ms: bool,
+    pub setTMesureTime_ms: u32,
+    pub has_setFref: bool,
+    pub setFref: u32,
+    pub has_setPEnabled: bool,
+    pub setPEnabled: bool,
+    pub has_setTEnabled: bool,
+    pub setTEnabled: bool,
+    pub has_setTCPUEnabled: bool,
+    pub setTCPUEnabled: bool,
+    pub has_setVBatEnable: bool,
+    pub setVBatEnable: bool,
+    pub has_setPCoefficients: bool,
+    pub setPCoefficients: ru_sktbelpa_pressure_self_writer_PCoefficients,
+    pub has_setTCoefficients: bool,
+    pub setTCoefficients: ru_sktbelpa_pressure_self_writer_T5Coefficients,
+    pub has_setPWorkRange: bool,
+    pub setPWorkRange: ru_sktbelpa_pressure_self_writer_WorkRange,
+    pub has_setTWorkRange: bool,
+    pub setTWorkRange: ru_sktbelpa_pressure_self_writer_WorkRange,
+    pub has_setTCPUWorkRange: bool,
+    pub setTCPUWorkRange: ru_sktbelpa_pressure_self_writer_WorkRange,
+    pub has_setBatWorkRange: bool,
+    pub setBatWorkRange: ru_sktbelpa_pressure_self_writer_WorkRange,
+    pub has_setCalibrationDate: bool,
+    pub setCalibrationDate: ru_sktbelpa_pressure_self_writer_CalibrationDate,
+    pub has_setPZeroCorrection: bool,
+    pub setPZeroCorrection: f32,
+    pub has_setTZeroCorrection: bool,
+    pub setTZeroCorrection: f32,
+    pub has_setWriteConfig: bool,
+    pub setWriteConfig: ru_sktbelpa_pressure_self_writer_WriteConfig,
+    pub setStartDelay: u32,
+    pub has_setPassword: bool,
+    pub setPassword: [u8; PASSWORD_SIZE + 1],
 }
 pub type ru_sktbelpa_pressure_self_writer_WriteSettingsReq =
     _ru_sktbelpa_pressure_self_writer_WriteSettingsReq;
@@ -140,6 +184,14 @@ pub struct _ru_sktbelpa_pressure_self_writer_Request {
     pub protocolVersion: u32,
     pub has_writeSettings: bool,
     pub writeSettings: ru_sktbelpa_pressure_self_writer_WriteSettingsReq,
+    pub has_getInfo: bool,
+    pub getInfo: ru_sktbelpa_pressure_self_writer_Empty,
+    pub has_getOutputValues: bool,
+    pub getOutputValues: ru_sktbelpa_pressure_self_writer_OutputReq,
+    pub has_flashCommand: bool,
+    pub flashCommand: ru_sktbelpa_pressure_self_writer_FlasCommand,
+    pub has_changePassword: bool,
+    pub changePassword: ru_sktbelpa_pressure_self_writer_ChangePassword,
 }
 pub type ru_sktbelpa_pressure_self_writer_Request = _ru_sktbelpa_pressure_self_writer_Request;
 
@@ -153,14 +205,179 @@ pub struct _ru_sktbelpa_pressure_self_writer_Response {
     pub timestamp: u64,
     pub has_getSettings: bool,
     pub getSettings: ru_sktbelpa_pressure_self_writer_SettingsResponse,
+    pub has_info: bool,
+    pub info: ru_sktbelpa_pressure_self_writer_InfoResponse,
+    pub has_output: bool,
+    pub output: ru_sktbelpa_pressure_self_writer_OutputResponse,
+    pub has_flashStatus: bool,
+    pub flashStatus: ru_sktbelpa_pressure_self_writer_FlashStatus,
+    pub has_changePasswordStatus: bool,
+    pub changePasswordStatus: ru_sktbelpa_pressure_self_writer_ChangePasswordStatus,
 }
 pub type ru_sktbelpa_pressure_self_writer_Response = _ru_sktbelpa_pressure_self_writer_Response;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _ru_sktbelpa_pressure_self_writer_Empty {
+    pub dummy_field: u8,
+}
+pub type ru_sktbelpa_pressure_self_writer_Empty = _ru_sktbelpa_pressure_self_writer_Empty;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _ru_sktbelpa_pressure_self_writer_OutputReq {
+    pub has_getMainValues: bool,
+    pub getMainValues: ru_sktbelpa_pressure_self_writer_Empty,
+    pub has_getF: bool,
+    pub getF: ru_sktbelpa_pressure_self_writer_Empty,
+    pub has_getRAW: bool,
+    pub getRAW: ru_sktbelpa_pressure_self_writer_Empty,
+}
+pub type ru_sktbelpa_pressure_self_writer_OutputReq = _ru_sktbelpa_pressure_self_writer_OutputReq;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _ru_sktbelpa_pressure_self_writer_FlasCommand {
+    pub has_ResetMonitoring: bool,
+    pub ResetMonitoring: ru_sktbelpa_pressure_self_writer_Empty,
+    pub has_ClearMemory: bool,
+    pub ClearMemory: bool,
+}
+pub type ru_sktbelpa_pressure_self_writer_FlasCommand =
+    _ru_sktbelpa_pressure_self_writer_FlasCommand;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _ru_sktbelpa_pressure_self_writer_ChangePassword {
+    pub newPassword: [u8; PASSWORD_SIZE + 1],
+}
+pub type ru_sktbelpa_pressure_self_writer_ChangePassword =
+    _ru_sktbelpa_pressure_self_writer_ChangePassword;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct _ru_sktbelpa_pressure_self_writer_InfoResponse {
+    pub HW_Version: u32,
+    pub SW_Version: u64,
+    pub PressureChannelFailed: bool,
+    pub TemperatureChannelFailed: bool,
+    pub OverpressDetected: bool,
+    pub OverheatDetected: bool,
+    pub OverheatCPUDetected: bool,
+}
+pub type ru_sktbelpa_pressure_self_writer_InfoResponse =
+    _ru_sktbelpa_pressure_self_writer_InfoResponse;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct _ru_sktbelpa_pressure_self_writer_OutputResponse {
+    pub has_pressure: bool,
+    pub pressure: f32,
+    pub has_temperature: bool,
+    pub temperature: f32,
+    pub has_TCPU: bool,
+    pub TCPU: f32,
+    pub has_Vbat: bool,
+    pub Vbat: f32,
+    pub has_FP: bool,
+    pub FP: f32,
+    pub has_FT: bool,
+    pub FT: f32,
+    pub has_P_result: bool,
+    pub P_result: ru_sktbelpa_pressure_self_writer_FreqmeterResult,
+    pub has_T_result: bool,
+    pub T_result: ru_sktbelpa_pressure_self_writer_FreqmeterResult,
+    pub has_ADC_TCPU: bool,
+    pub ADC_TCPU: f32,
+    pub has_ADC_Vbat: bool,
+    pub ADC_Vbat: f32,
+}
+pub type ru_sktbelpa_pressure_self_writer_OutputResponse =
+    _ru_sktbelpa_pressure_self_writer_OutputResponse;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct _ru_sktbelpa_pressure_self_writer_FlashStatus {
+    pub FlashPageSize: u32,
+    pub FlashPages: u32,
+    pub FlashUsedPages: u32,
+    pub status: ru_sktbelpa_pressure_self_writer_FlashStatus_Status,
+}
+pub type ru_sktbelpa_pressure_self_writer_FlashStatus =
+    _ru_sktbelpa_pressure_self_writer_FlashStatus;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct _ru_sktbelpa_pressure_self_writer_ChangePasswordStatus {
+    pub passwordChanged: bool,
+}
+pub type ru_sktbelpa_pressure_self_writer_ChangePasswordStatus =
+    _ru_sktbelpa_pressure_self_writer_ChangePasswordStatus;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct _ru_sktbelpa_pressure_self_writer_FreqmeterResult {
+    pub Target: u32,
+    pub Result: u32,
+}
+pub type ru_sktbelpa_pressure_self_writer_FreqmeterResult =
+    _ru_sktbelpa_pressure_self_writer_FreqmeterResult;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct _ru_sktbelpa_pressure_self_writer_WorkRange {
+    pub has_minimum: bool,
+    pub minimum: f32,
+    pub has_maximum: bool,
+    pub maximum: f32,
+    pub has_absolute_maximum: bool,
+    pub absolute_maximum: f32,
+}
+pub type ru_sktbelpa_pressure_self_writer_WorkRange = _ru_sktbelpa_pressure_self_writer_WorkRange;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct _ru_sktbelpa_pressure_self_writer_CalibrationDate {
+    pub has_Day: bool,
+    pub Day: u32,
+    pub has_Month: bool,
+    pub Month: u32,
+    pub has_Year: bool,
+    pub Year: u32,
+}
+pub type ru_sktbelpa_pressure_self_writer_CalibrationDate =
+    _ru_sktbelpa_pressure_self_writer_CalibrationDate;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct _ru_sktbelpa_pressure_self_writer_WriteConfig {
+    pub has_BaseInterval_ms: bool,
+    pub BaseInterval_ms: u32,
+    pub has_PWriteDevider: bool,
+    pub PWriteDevider: u32,
+    pub has_TWriteDevider: bool,
+    pub TWriteDevider: u32,
+}
+pub type ru_sktbelpa_pressure_self_writer_WriteConfig =
+    _ru_sktbelpa_pressure_self_writer_WriteConfig;
 
 extern "C" {
     pub static ru_sktbelpa_pressure_self_writer_Request_msg: pb_msgdesc_t;
     pub static ru_sktbelpa_pressure_self_writer_Response_msg: pb_msgdesc_t;
     pub static ru_sktbelpa_pressure_self_writer_WriteSettingsReq_msg: pb_msgdesc_t;
     pub static ru_sktbelpa_pressure_self_writer_SettingsResponse_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_WorkRange_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_CalibrationDate_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_WriteConfig_msg: pb_msgdesc_t;
     pub static ru_sktbelpa_pressure_self_writer_PCoefficients_msg: pb_msgdesc_t;
     pub static ru_sktbelpa_pressure_self_writer_T5Coefficients_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_InfoResponse_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_OutputReq_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_OutputResponse_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_FreqmeterResult_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_FlasCommand_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_FlashStatus_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_ChangePassword_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_ChangePasswordStatus_msg: pb_msgdesc_t;
+    pub static ru_sktbelpa_pressure_self_writer_Empty_msg: pb_msgdesc_t;
 }

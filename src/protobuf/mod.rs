@@ -1,81 +1,23 @@
 #![allow(dead_code)]
 
+mod encode_md_message;
+mod fields;
+mod md;
+mod message_body;
 mod messages;
+mod new_response;
+mod process_requiest;
+mod process_settings;
+mod reader;
+mod sizable;
 
 pub use messages::{
-    ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER,
-    ru_sktbelpa_pressure_self_writer_INFO_MAGICK,
-    ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID,
-    ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION,
-    ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS,
-    ru_sktbelpa_pressure_self_writer_STATUS_OK,
-    ru_sktbelpa_pressure_self_writer_STATUS_PROTOCOL_ERROR, P_COEFFS_COUNT, T_COEFFS_COUNT,
+    ru_sktbelpa_pressure_self_writer_Request, ru_sktbelpa_pressure_self_writer_Response,
 };
 
-pub use messages::{
-    ru_sktbelpa_pressure_self_writer_PCoefficients, ru_sktbelpa_pressure_self_writer_Request,
-    ru_sktbelpa_pressure_self_writer_Response, ru_sktbelpa_pressure_self_writer_SettingsResponse,
-    ru_sktbelpa_pressure_self_writer_T5Coefficients,
-    ru_sktbelpa_pressure_self_writer_WriteSettingsReq,
-};
-
-pub use messages::pb_callback_t;
-
-use nanopb_rs::pb_encode::get_encoded_size;
-pub use nanopb_rs::pb_msgdesc_t;
-
-static SIZE_ERROR_MSG: &str = "Failed to calculete message size";
-
-pub trait Sizable<T> {
-    fn get_size(data: &T) -> usize;
-}
-
-impl Sizable<ru_sktbelpa_pressure_self_writer_Request>
-    for ru_sktbelpa_pressure_self_writer_Request
-{
-    fn get_size(data: &ru_sktbelpa_pressure_self_writer_Request) -> usize {
-        get_encoded_size(
-            Self::fields(),
-            data as *const ru_sktbelpa_pressure_self_writer_Request as *const ::core::ffi::c_void,
-        )
-        .map_err(|_| panic!("{}", SIZE_ERROR_MSG))
-        .unwrap()
-    }
-}
-
-impl Sizable<ru_sktbelpa_pressure_self_writer_Response>
-    for ru_sktbelpa_pressure_self_writer_Response
-{
-    fn get_size(data: &ru_sktbelpa_pressure_self_writer_Response) -> usize {
-        get_encoded_size(
-            Self::fields(),
-            data as *const ru_sktbelpa_pressure_self_writer_Response as *const ::core::ffi::c_void,
-        )
-        .map_err(|_| panic!("{}", SIZE_ERROR_MSG))
-        .unwrap()
-    }
-}
-
-impl ru_sktbelpa_pressure_self_writer_Request {
-    pub fn fields() -> &'static pb_msgdesc_t {
-        unsafe { &messages::ru_sktbelpa_pressure_self_writer_Request_msg }
-    }
-}
-
-impl ru_sktbelpa_pressure_self_writer_Response {
-    pub fn fields() -> &'static pb_msgdesc_t {
-        unsafe { &messages::ru_sktbelpa_pressure_self_writer_Response_msg }
-    }
-}
-
-impl ru_sktbelpa_pressure_self_writer_PCoefficients {
-    pub fn fields() -> &'static pb_msgdesc_t {
-        unsafe { &messages::ru_sktbelpa_pressure_self_writer_PCoefficients_msg }
-    }
-}
-
-impl ru_sktbelpa_pressure_self_writer_T5Coefficients {
-    pub fn fields() -> &'static pb_msgdesc_t {
-        unsafe { &messages::ru_sktbelpa_pressure_self_writer_T5Coefficients_msg }
-    }
-}
+pub use encode_md_message::encode_md_message;
+pub use md::{decode_magick, decode_msg_size, recive_md_header};
+pub use message_body::recive_message_body;
+pub use new_response::new_response;
+pub use process_requiest::process_requiest;
+pub use reader::Reader;

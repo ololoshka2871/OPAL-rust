@@ -26,9 +26,19 @@ impl rx_context for u8 {
     }
 }
 
+pub trait TIStream {
+    fn stream(&mut self) -> &mut pb_istream_t;
+}
+
 pub struct IStream<T: rx_context> {
     ctx: pb_istream_t,
     reader: Option<T>,
+}
+
+impl<T: rx_context> TIStream for IStream<T> {
+    fn stream(&mut self) -> &mut pb_istream_t {
+        &mut self.ctx
+    }
 }
 
 impl<T: rx_context> IStream<T> {
@@ -66,10 +76,6 @@ impl<T: rx_context> IStream<T> {
         res.ctx.state = res.reader.as_ref().unwrap() as *const _ as *mut _;
 
         res
-    }
-
-    pub fn stream(&mut self) -> &mut pb_istream_t {
-        &mut self.ctx
     }
 }
 

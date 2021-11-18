@@ -12,14 +12,15 @@ pub trait StoragePolicy<T> {
     unsafe fn load(&mut self, data: &mut [u8]) -> Result<(), LoadError<T>>;
 }
 
-pub struct SettingsManager<T: 'static, Terr, Tpolicy: StoragePolicy<Terr>> {
+pub struct SettingsManager<T: 'static, U, Terr, Tpolicy: StoragePolicy<Terr>> {
     polcy: Tpolicy,
     work_copy: T,
+    non_store_values: U,
     default: &'static T,
     _phantomdata2: PhantomData<Terr>,
 }
 
-impl<T, Terr, Tpolicy> SettingsManager<T, Terr, Tpolicy>
+impl<T, U, Terr, Tpolicy> SettingsManager<T, U, Terr, Tpolicy>
 where
     T: Copy + Sized,
     Tpolicy: StoragePolicy<Terr>,
@@ -42,14 +43,15 @@ where
         }
     }
 
-    pub fn ref_mut(&mut self) -> &mut T {
-        &mut self.work_copy
+    pub fn ref_mut(&mut self) -> (&mut T, &mut U) {
+        (&mut self.work_copy, &mut self.non_store_values)
     }
 
-    pub fn new(default: &'static T, polcy: Tpolicy) -> Self {
+    pub fn new(default: &'static T, polcy: Tpolicy, non_store_values_init: U) -> Self {
         let mut res = Self {
             polcy,
             work_copy: unsafe { core::mem::MaybeUninit::uninit().assume_init() },
+            non_store_values: non_store_values_init,
             default,
             _phantomdata2: PhantomData,
         };

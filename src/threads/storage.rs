@@ -43,7 +43,9 @@ unsafe extern "C" fn const_reader(dest: *mut u8, size: i32, offset: u32, userdat
 //unsafe extern "C" fn null_read(_dest: *mut u8, _size: i32, _offset: u32, _userdata: usize) {}
 
 unsafe extern "C" fn settings_read(dest: *mut u8, size: i32, _offset: u32, _userdata: usize) {
-    match crate::settings::settings_action(Duration::ms(2), |s| serde_json::to_string_pretty(&s)) {
+    match crate::settings::settings_action(Duration::ms(2), |(ws, _)| {
+        serde_json::to_string_pretty(&ws)
+    }) {
         Ok(s) => {
             let src = s.as_bytes();
             let offset = _offset as usize;

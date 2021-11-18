@@ -34,6 +34,7 @@ heatshrink-rust = { path = "lib/heatshrink-rust" }
 emfat-rust = { path = "lib/emfat" }
 nanopb-rs = { path = "lib/nanopb.rs/nanopb-rs" }
 flash-settings-rs = { path = "lib/flash-settings.rs" }
+my-proc-macro = { path = "lib/my-proc-macro" }
 
 [build-dependencies]
 cc = "1.0.52"
