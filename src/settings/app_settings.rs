@@ -37,6 +37,15 @@ pub(crate) struct WriteConfig {
     pub TWriteDevider: u32,
 }
 
+#[repr(packed(1))]
+#[derive(Debug, Copy, Clone, Serialize, Default)]
+pub(crate) struct Monitoring {
+    pub Ovarpress: bool,
+    pub Ovarheat: bool,
+    pub CPUOvarheat: bool,
+    pub OverPower: bool,
+}
+
 #[derive(Debug, Copy, Clone, Serialize)]
 pub(crate) struct AppSettings {
     pub Serial: u32,
@@ -68,9 +77,17 @@ pub(crate) struct AppSettings {
     pub startDelay: u32,
 
     pub password: [u8; crate::protobuf::PASSWORD_SIZE],
+
+    pub monitoring: Monitoring,
 }
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct NonStoreSettings {
     pub current_password: [u8; 10],
+}
+
+impl Monitoring {
+    pub fn is_set(&self) -> bool {
+        self.Ovarpress | self.Ovarheat | self.CPUOvarheat | self.OverPower
+    }
 }

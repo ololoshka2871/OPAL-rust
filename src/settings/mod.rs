@@ -82,6 +82,13 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
     startDelay: 0,
 
     password: *b"_PASSWORD_",
+
+    monitoring: app_settings::Monitoring {
+        Ovarpress: false,
+        Ovarheat: false,
+        CPUOvarheat: false,
+        OverPower: false,
+    }
 };
 
 pub(crate) type SettingsManagerType = SettingsManager<

@@ -6,6 +6,7 @@
 
 extern crate alloc;
 
+mod main_data_storage;
 mod protobuf;
 mod settings;
 mod support;

@@ -2,7 +2,7 @@ use alloc::{
     format,
     string::{String, ToString},
 };
-use freertos_rust::{Duration, FreeRtosError};
+use freertos_rust::Duration;
 use my_proc_macro::store_coeff;
 
 use crate::{protobuf::PASSWORD_SIZE, settings::SettingActionError};
@@ -162,10 +162,10 @@ fn verify_parameters(
 
 pub fn update_settings(
     w: &ru_sktbelpa_pressure_self_writer_WriteSettingsReq,
-) -> Result<(), SettingActionError<String>> {
+) -> Result<bool, SettingActionError<String>> {
     verify_parameters(w)?;
 
-    let need_write = crate::settings::settings_action(Duration::ms(1), |(ws, ts)| {
+    crate::settings::settings_action(Duration::ms(1), |(ws, ts)| {
         let mut need_write = false;
 
         store_coeff!(ws.Serial <= w; setSerial; need_write);
@@ -261,29 +261,5 @@ pub fn update_settings(
         }
 
         Ok(need_write)
-    })?;
-
-    if need_write {
-        start_writing_settings().map_err(|e| SettingActionError::AccessError(e))
-    } else {
-        Ok(())
-    }
-}
-
-fn start_writing_settings() -> Result<(), FreeRtosError> {
-    use freertos_rust::{Task, TaskPriority};
-    defmt::warn!("Save settings rquested...");
-
-    Task::new()
-        .name("SS")
-        .stack_size(384)
-        .priority(TaskPriority(1))
-        .start(move |_| {
-            if let Err(e) = crate::settings::settings_save(Duration::infinite()) {
-                defmt::error!("Failed to store settings: {}", defmt::Debug2Format(&e));
-            }
-        })
-        .map(|_| ())?;
-
-    Ok(())
+    })
 }

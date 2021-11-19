@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use nanopb_rs::pb_msgdesc_t;
 
 use super::messages;

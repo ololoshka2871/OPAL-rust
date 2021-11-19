@@ -82,3 +82,11 @@ pub fn build_day(_: TokenStream) -> TokenStream {
     }
     .into()
 }
+
+#[proc_macro]
+pub fn git_version(_: TokenStream) -> TokenStream {
+    use git_version::git_version;
+
+    static V: &str = git_version!(args = ["--always", "--abbrev=16"]);
+    format!("0x{}_u64", V).parse().unwrap()
+}
