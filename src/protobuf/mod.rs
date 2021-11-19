@@ -1,17 +1,17 @@
+mod change_password;
+mod device_info;
 mod encode_md_message;
 mod fields;
 mod md;
 mod message_body;
 mod messages;
+mod monitoring_over_conditions;
 mod new_response;
+mod output;
 mod process_requiest;
 mod process_settings;
 mod reader;
 mod sizable;
-mod device_info;
-mod change_password;
-mod monitoring_over_conditions;
-mod output;
 
 use freertos_rust::{Duration, FreeRtosError};
 
@@ -32,7 +32,7 @@ pub fn start_writing_settings(realy_write: bool) -> Result<(), FreeRtosError> {
     use freertos_rust::{Task, TaskPriority};
     if !realy_write {
         defmt::info!("Save settings skipped...");
-        return Ok(())
+        return Ok(());
     }
 
     defmt::warn!("Save settings rquested...");

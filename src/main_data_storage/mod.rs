@@ -1,4 +1,3 @@
-
 pub fn flash_erease() -> Result<(), ()> {
     Err(())
 }

@@ -76,6 +76,7 @@ pub(crate) struct AppSettings {
 
     pub startDelay: u32,
 
+    #[serde(skip_serializing)]
     pub password: [u8; crate::protobuf::PASSWORD_SIZE],
 
     pub monitoring: Monitoring,

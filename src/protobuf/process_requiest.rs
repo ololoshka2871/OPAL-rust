@@ -1,27 +1,22 @@
-use defmt::Debug2Format;
 use freertos_rust::FreeRtosError;
 
 use super::{
-    change_password::change_password,
-    device_info::fill_info,
     messages::ru_sktbelpa_pressure_self_writer_FlashStatus,
-    process_settings::{fill_settings, update_settings},
     ru_sktbelpa_pressure_self_writer_Request, ru_sktbelpa_pressure_self_writer_Response,
-    start_writing_settings,
-};
-
-use super::messages::{
-    ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER,
-    ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID,
-    ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION,
-    ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS,
-    ru_sktbelpa_pressure_self_writer_STATUS_PROTOCOL_ERROR,
 };
 
 pub fn process_requiest(
     req: ru_sktbelpa_pressure_self_writer_Request,
     mut resp: ru_sktbelpa_pressure_self_writer_Response,
 ) -> Result<ru_sktbelpa_pressure_self_writer_Response, ()> {
+    use super::messages::{
+        ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER,
+        ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID,
+        ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION,
+        ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS,
+        ru_sktbelpa_pressure_self_writer_STATUS_PROTOCOL_ERROR,
+    };
+
     if !(req.deviceID == ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID
         || req.deviceID == ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER)
     {
@@ -43,9 +38,9 @@ pub fn process_requiest(
 
     if req.has_writeSettings {
         resp.has_getSettings = true;
-        match update_settings(&req.writeSettings) {
+        match super::process_settings::update_settings(&req.writeSettings) {
             Ok(need_to_write) => {
-                if let Err(e) = start_writing_settings(need_to_write) {
+                if let Err(e) = super::start_writing_settings(need_to_write) {
                     free_rtos_error(e);
                     resp.Global_status =
                         ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS;
@@ -56,33 +51,35 @@ pub fn process_requiest(
                 resp.Global_status = ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS;
             }
         }
-        fill_settings(&mut resp.getSettings)?;
+        super::process_settings::fill_settings(&mut resp.getSettings)?;
     }
 
     if req.has_getInfo {
         resp.has_info = true;
-        fill_info(&mut resp.info)?;
+        super::device_info::fill_info(&mut resp.info)?;
     }
 
     if req.has_changePassword {
         resp.has_changePasswordStatus = true;
-        resp.changePasswordStatus.passwordChanged = match change_password(&req.changePassword) {
-            Err(e) => {
-                defmt::error!("Failed to change password: {}", defmt::Debug2Format(&e));
-                resp.Global_status = ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS;
-                false
-            }
-            Ok(need_save) => {
-                if let Err(e) = start_writing_settings(need_save) {
-                    free_rtos_error(e);
+        resp.changePasswordStatus.passwordChanged =
+            match super::change_password::change_password(&req.changePassword) {
+                Err(e) => {
+                    defmt::error!("Failed to change password: {}", defmt::Debug2Format(&e));
                     resp.Global_status =
                         ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS;
                     false
-                } else {
-                    true
                 }
-            }
-        };
+                Ok(need_save) => {
+                    if let Err(e) = super::start_writing_settings(need_save) {
+                        free_rtos_error(e);
+                        resp.Global_status =
+                            ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS;
+                        false
+                    } else {
+                        true
+                    }
+                }
+            };
     }
 
     if req.has_flashCommand {
@@ -140,5 +137,5 @@ fn fill_flash_state(
 }
 
 fn free_rtos_error(e: FreeRtosError) {
-    defmt::error!("Failed to store settings: {}", Debug2Format(&e));
+    defmt::error!("Failed to store settings: {}", defmt::Debug2Format(&e));
 }

@@ -88,7 +88,7 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
         Ovarheat: false,
         CPUOvarheat: false,
         OverPower: false,
-    }
+    },
 };
 
 pub(crate) type SettingsManagerType = SettingsManager<

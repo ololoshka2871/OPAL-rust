@@ -43,7 +43,7 @@ unsafe extern "C" fn const_reader(dest: *mut u8, size: i32, offset: u32, userdat
 //unsafe extern "C" fn null_read(_dest: *mut u8, _size: i32, _offset: u32, _userdata: usize) {}
 
 unsafe extern "C" fn settings_read(dest: *mut u8, size: i32, _offset: u32, _userdata: usize) {
-    match crate::settings::settings_action(Duration::ms(2), |(ws, _)| {
+    match crate::settings::settings_action(Duration::ms(5), |(ws, _)| {
         serde_json::to_string_pretty(&ws)
     }) {
         Ok(s) => {
@@ -56,6 +56,9 @@ unsafe extern "C" fn settings_read(dest: *mut u8, size: i32, _offset: u32, _user
 
                 // забиваем буфер пробелами до конца, чтобы в блокноте он нормально выглядел
                 core::ptr::write_bytes(dest.add(src.len()), b' ', size as usize - to_write);
+            } else {
+                // все пробелами забить
+                core::ptr::write_bytes(dest, b' ', size as usize);
             }
         }
         Err(crate::settings::SettingActionError::AccessError(e)) => {
@@ -120,8 +123,8 @@ impl EMfatStorage {
                 .dir(false)
                 .lvl(1)
                 .offset(0)
-                .size(1024) // noauto, размер может меняться - это генерированный текст
-                .max_size(1024)
+                .size(2048) // noauto, размер может меняться - это генерированный текст
+                .max_size(2048)
                 .read_cb(settings_read)
                 .build(),
         );
