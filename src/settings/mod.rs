@@ -1,4 +1,4 @@
-mod app_settings;
+pub(crate) mod app_settings;
 mod flash_rw_polcy;
 
 use core::ops::DerefMut;
@@ -11,6 +11,7 @@ use flash_settings_rs::SettingsManager;
 
 use flash_rw_polcy::FlasRWPolcy;
 use freertos_rust::{Duration, DurationTicks, FreeRtosError, Mutex};
+use my_proc_macro::{build_day, build_month, build_year};
 
 use self::{app_settings::NonStoreSettings, flash_rw_polcy::Placeholder};
 
@@ -23,24 +24,72 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
 
     P_enabled: true,
     T_enabled: true,
+    TCPUEnabled: true,
+    VBatEnable: true,
 
     P_Coefficients: app_settings::P16Coeffs {
         Fp0: 0.0,
         Ft0: 0.0,
         A: [
-            0.0f32, 0.0f32, 1.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32,
-            0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32,
+            0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         ],
     },
     T_Coefficients: app_settings::T5Coeffs {
         F0: 0.0,
         T0: 0.0,
-        C: [1.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32],
+        C: [1.0, 0.0, 0.0, 0.0, 0.0],
     },
+
+    PWorkRange: app_settings::WorkRange {
+        minimum: 0.0,
+        maximum: 100.0,
+        absolute_maximum: 120.0,
+    },
+
+    TWorkRange: app_settings::WorkRange {
+        minimum: -50.0,
+        maximum: 120.0,
+        absolute_maximum: 125.0,
+    },
+
+    TCPUWorkRange: app_settings::WorkRange {
+        minimum: -50.0,
+        maximum: 120.0,
+        absolute_maximum: 127.0,
+    },
+
+    VbatWorkRange: app_settings::WorkRange {
+        minimum: 1.5,
+        maximum: 10.0,
+        absolute_maximum: 12.0,
+    },
+
+    calibration_date: app_settings::CalibrationDate {
+        Day: build_day!(),
+        Month: build_month!(),
+        Year: build_year!(),
+    },
+
+    PZeroCorrection: 0.0,
+    TZeroCorrection: 0.0,
+
+    writeConfig: app_settings::WriteConfig {
+        BaseInterval_ms: 1000,
+        PWriteDevider: 1,
+        TWriteDevider: 1,
+    },
+
+    startDelay: 0,
+
+    password: *b"_PASSWORD_",
 };
 
-pub(crate) type SettingsManagerType =
-    SettingsManager<AppSettings, NonStoreSettings, stm32l4xx_hal::traits::flash::Error, FlasRWPolcy>;
+pub(crate) type SettingsManagerType = SettingsManager<
+    AppSettings,
+    NonStoreSettings,
+    stm32l4xx_hal::traits::flash::Error,
+    FlasRWPolcy,
+>;
 
 #[link_section = ".settings.app"]
 static SETTINGS_PLACEHOLDER: Placeholder<AppSettings> =
@@ -70,8 +119,8 @@ pub(crate) fn init(
         >::new(
             &DEFAULT_SETTINGS,
             FlasRWPolcy::create(&SETTINGS_PLACEHOLDER, flash, crc),
-            NonStoreSettings{
-                current_password: [0u8; 10]
+            NonStoreSettings {
+                current_password: [0u8; 10],
             },
         ));
     } else {

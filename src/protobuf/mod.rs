@@ -21,3 +21,5 @@ pub use message_body::recive_message_body;
 pub use new_response::new_response;
 pub use process_requiest::process_requiest;
 pub use reader::Reader;
+
+pub use messages::{PASSWORD_SIZE, P_COEFFS_COUNT, T_COEFFS_COUNT};

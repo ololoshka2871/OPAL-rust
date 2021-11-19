@@ -129,7 +129,7 @@ message WriteSettingsReq {
     optional WriteConfig        setWriteConfig = 70;
 
     // Установить задержку старта записи в секундах
-    required uint32             setStartDelay = 80;
+    optional uint32             setStartDelay = 80;
 
     // Установить пароль доступа
     optional string             setPassword = 100;

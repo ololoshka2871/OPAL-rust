@@ -1,4 +1,6 @@
+use chrono::{DateTime, Datelike, Local};
 use proc_macro::TokenStream;
+use quote::quote;
 use quote::ToTokens;
 use syn::{parse::Parse, Expr, ExprBinary, Token};
 
@@ -46,4 +48,37 @@ pub fn store_coeff(cfg: TokenStream) -> TokenStream {
     )
     .parse()
     .unwrap()
+}
+
+#[proc_macro]
+pub fn build_year(_: TokenStream) -> TokenStream {
+    let local: DateTime<Local> = Local::now();
+    let y = local.year() as u32;
+
+    quote! {
+        #y
+    }
+    .into()
+}
+
+#[proc_macro]
+pub fn build_month(_: TokenStream) -> TokenStream {
+    let local: DateTime<Local> = Local::now();
+    let m = local.month();
+
+    quote! {
+        #m
+    }
+    .into()
+}
+
+#[proc_macro]
+pub fn build_day(_: TokenStream) -> TokenStream {
+    let local: DateTime<Local> = Local::now();
+    let d = local.day();
+
+    quote! {
+        #d
+    }
+    .into()
 }

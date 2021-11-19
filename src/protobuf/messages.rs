@@ -169,6 +169,7 @@ pub struct _ru_sktbelpa_pressure_self_writer_WriteSettingsReq {
     pub setTZeroCorrection: f32,
     pub has_setWriteConfig: bool,
     pub setWriteConfig: ru_sktbelpa_pressure_self_writer_WriteConfig,
+    pub has_setStartDelay: bool,
     pub setStartDelay: u32,
     pub has_setPassword: bool,
     pub setPassword: [u8; PASSWORD_SIZE + 1],
@@ -380,4 +381,167 @@ extern "C" {
     pub static ru_sktbelpa_pressure_self_writer_ChangePassword_msg: pb_msgdesc_t;
     pub static ru_sktbelpa_pressure_self_writer_ChangePasswordStatus_msg: pb_msgdesc_t;
     pub static ru_sktbelpa_pressure_self_writer_Empty_msg: pb_msgdesc_t;
+}
+
+impl ru_sktbelpa_pressure_self_writer_PCoefficients {
+    pub(crate) fn from(p_coeffs: &crate::settings::app_settings::P16Coeffs) -> Self {
+        Self {
+            has_Fp0: true,
+            Fp0: p_coeffs.Fp0,
+            has_Ft0: true,
+            Ft0: p_coeffs.Ft0,
+
+            has_A0: true,
+            A0: p_coeffs.A[0],
+            has_A1: true,
+            A1: p_coeffs.A[1],
+            has_A2: true,
+            A2: p_coeffs.A[2],
+            has_A3: true,
+            A3: p_coeffs.A[3],
+            has_A4: true,
+            A4: p_coeffs.A[4],
+            has_A5: true,
+            A5: p_coeffs.A[5],
+            has_A6: true,
+            A6: p_coeffs.A[6],
+            has_A7: true,
+            A7: p_coeffs.A[7],
+            has_A8: true,
+            A8: p_coeffs.A[8],
+            has_A9: true,
+            A9: p_coeffs.A[9],
+            has_A10: true,
+            A10: p_coeffs.A[10],
+            has_A11: true,
+            A11: p_coeffs.A[11],
+            has_A12: true,
+            A12: p_coeffs.A[12],
+            has_A13: true,
+            A13: p_coeffs.A[13],
+            has_A14: true,
+            A14: p_coeffs.A[14],
+            has_A15: true,
+            A15: p_coeffs.A[15],
+        }
+    }
+}
+
+impl ru_sktbelpa_pressure_self_writer_T5Coefficients {
+    pub(crate) fn from(t_coeffs: &crate::settings::app_settings::T5Coeffs) -> Self {
+        Self {
+            has_T0: true,
+            T0: t_coeffs.T0,
+            has_F0: true,
+            F0: t_coeffs.F0,
+
+            has_C1: true,
+            C1: t_coeffs.C[0],
+            has_C2: true,
+            C2: t_coeffs.C[1],
+            has_C3: true,
+            C3: t_coeffs.C[2],
+            has_C4: true,
+            C4: t_coeffs.C[3],
+            has_C5: true,
+            C5: t_coeffs.C[4],
+        }
+    }
+}
+
+impl ru_sktbelpa_pressure_self_writer_WorkRange {
+    pub(crate) fn from(wr: &crate::settings::app_settings::WorkRange) -> Self {
+        Self {
+            has_minimum: true,
+            minimum: wr.minimum,
+            has_maximum: true,
+            maximum: wr.maximum,
+            has_absolute_maximum: true,
+            absolute_maximum: wr.absolute_maximum,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum DateField {
+    Day,
+    Month,
+    Past,
+}
+
+impl ru_sktbelpa_pressure_self_writer_CalibrationDate {
+    pub(crate) fn from(cd: &crate::settings::app_settings::CalibrationDate) -> Self {
+        Self {
+            has_Day: true,
+            Day: cd.Day,
+            has_Month: true,
+            Month: cd.Month,
+            has_Year: true,
+            Year: cd.Year,
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), DateField> {
+        use my_proc_macro::{build_day, build_month, build_year};
+
+        if self.has_Day && self.Day > 31 {
+            return Err(DateField::Day);
+        }
+        if self.has_Month && (self.Month > 12 || self.Month < 1) {
+            return Err(DateField::Month);
+        }
+        if self.has_Year {
+            if self.Year < build_year!() {
+                return Err(DateField::Past);
+            }
+            if self.has_Day && self.has_Month {
+                if self.Month < build_month!() {
+                    return Err(DateField::Past);
+                } else if self.Month == build_month!() && self.Day < build_day!() {
+                    return Err(DateField::Past);
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub enum WorkRangeError {
+    MinimumAboveMaximum,
+    MinimumAboveAbsoluteMaximum,
+    MaximumAboveAbasoluteMaximum,
+}
+
+impl ru_sktbelpa_pressure_self_writer_WorkRange {
+    pub fn validate(&self) -> Result<(), WorkRangeError> {
+        if self.has_absolute_maximum {
+            if self.has_maximum && self.absolute_maximum < self.maximum {
+                return Err(WorkRangeError::MaximumAboveAbasoluteMaximum);
+            }
+            if self.has_minimum && self.absolute_maximum < self.minimum {
+                return Err(WorkRangeError::MinimumAboveMaximum);
+            }
+        }
+
+        if self.has_maximum && self.has_minimum && self.maximum < self.minimum {
+            return Err(WorkRangeError::MinimumAboveMaximum);
+        }
+
+        Ok(())
+    }
+}
+
+impl ru_sktbelpa_pressure_self_writer_WriteConfig {
+    pub(crate) fn from(wc: &crate::settings::app_settings::WriteConfig) -> Self {
+        Self {
+            has_BaseInterval_ms: true,
+            BaseInterval_ms: wc.BaseInterval_ms,
+            has_PWriteDevider: true,
+            PWriteDevider: wc.PWriteDevider,
+            has_TWriteDevider: true,
+            TWriteDevider: wc.TWriteDevider,
+        }
+    }
 }
