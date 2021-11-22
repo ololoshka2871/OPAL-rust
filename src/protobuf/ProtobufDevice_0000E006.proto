@@ -300,9 +300,9 @@ message OutputResponse {
     // Результат работы канала температуры
     optional FreqmeterResult    T_result = 21;
     // код АЦП температуры микроконтроллера
-    optional float              ADC_TCPU = 25;
+    optional uint32             ADC_TCPU = 25;
     // код АЦП напряжения на батарее
-    optional float              ADC_Vbat = 26;
+    optional uint32             ADC_Vbat = 26;
 }
 
 // Результат работы частотомера

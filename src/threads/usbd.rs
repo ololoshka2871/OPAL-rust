@@ -80,7 +80,7 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
         defmt::trace!("Creating protobuf server thread...");
         Task::new()
             .name("Protobuf")
-            .stack_size(1024)
+            .stack_size(2048)
             .priority(TaskPriority(1))
             .start(move |_| protobuf_server::protobuf_server(sn))
             .expect("Failed to create protobuf server");

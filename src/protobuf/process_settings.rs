@@ -61,7 +61,7 @@ pub fn fill_settings(
 
         settings_resp.startDelay = ws.startDelay;
 
-        settings_resp.password.copy_from_slice(&ts.current_password);
+        settings_resp.password[..PASSWORD_SIZE].copy_from_slice(&ts.current_password);
 
         Ok(())
     })

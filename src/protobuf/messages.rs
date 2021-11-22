@@ -289,9 +289,9 @@ pub struct _ru_sktbelpa_pressure_self_writer_OutputResponse {
     pub has_T_result: bool,
     pub T_result: ru_sktbelpa_pressure_self_writer_FreqmeterResult,
     pub has_ADC_TCPU: bool,
-    pub ADC_TCPU: f32,
+    pub ADC_TCPU: u32,
     pub has_ADC_Vbat: bool,
-    pub ADC_Vbat: f32,
+    pub ADC_Vbat: u32,
 }
 pub type ru_sktbelpa_pressure_self_writer_OutputResponse =
     _ru_sktbelpa_pressure_self_writer_OutputResponse;
