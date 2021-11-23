@@ -4,7 +4,7 @@ use freertos_rust::{FreeRtosError, Mutex};
 pub mod high_performance_mode;
 pub mod power_save_mode;
 
-mod common;
+pub(crate) mod common;
 //mod my_clock_freeze;
 
 const CRC_POLY: u32 = 0xffff_ffff;

@@ -1,7 +1,4 @@
-use alloc::{
-    format,
-    string::{String, ToString},
-};
+use alloc::{format, string::String};
 use freertos_rust::Duration;
 use my_proc_macro::store_coeff;
 
@@ -77,18 +74,19 @@ fn verify_parameters(
         Ok(ws.password != ts.current_password)
     })?;
 
-    let deny_if_password_invalid = || {
+    let deny_if_password_invalid = |parameter: &str| {
         if password_invalid {
-            Err(SettingActionError::ActionError(
-                "Rejected, invalid password".to_string(),
-            ))
+            Err(SettingActionError::ActionError(format!(
+                "Change {}, invalid password",
+                parameter
+            )))
         } else {
             Ok(())
         }
     };
 
     if ws.has_setSerial {
-        deny_if_password_invalid()?;
+        deny_if_password_invalid("Serial")?;
     }
 
     if ws.has_setPMesureTime_ms && (ws.setPMesureTime_ms > MAX_MT || ws.setPMesureTime_ms < MIN_MT)
@@ -110,35 +108,84 @@ fn verify_parameters(
     if ws.has_setFref
         && (ws.setFref > F_REF_BASE + F_REF_DELTA || ws.setFref < F_REF_BASE - F_REF_DELTA)
     {
+        deny_if_password_invalid("Fref")?;
         return Err(SettingActionError::ActionError(format!(
             "Reference frequency {} is too different from base {} +/- {}",
             ws.setFref, F_REF_BASE, F_REF_DELTA
         )));
     }
 
-    if ws.has_setPWorkRange {
-        deny_if_password_invalid()?;
+    if ws.has_setPCoefficients {
+        let s = &ws.setPCoefficients;
+        if s.has_A0
+            || s.has_A1
+            || s.has_A2
+            || s.has_A3
+            || s.has_A4
+            || s.has_A5
+            || s.has_A6
+            || s.has_A7
+            || s.has_A8
+            || s.has_A9
+            || s.has_A10
+            || s.has_A11
+            || s.has_A12
+            || s.has_A13
+            || s.has_A14
+            || s.has_A15
+            || s.has_Fp0
+            || s.has_Ft0
+        {
+            deny_if_password_invalid("PCoefficients")?;
+        }
+    }
+
+    if ws.has_setTCoefficients {
+        let s = &ws.setTCoefficients;
+        if s.has_T0 || s.has_C1 || s.has_C2 || s.has_C3 || s.has_C4 || s.has_C5 || s.has_F0 {
+            deny_if_password_invalid("TCoefficients")?;
+        }
+    }
+
+    if ws.has_setPWorkRange
+        && (ws.setPWorkRange.has_minimum
+            || ws.setPWorkRange.has_maximum
+            || ws.setPWorkRange.has_absolute_maximum)
+    {
+        deny_if_password_invalid("PWorkRange")?;
         ws.setPWorkRange
             .validate()
             .map_err(|e| SettingActionError::ActionError(format!("PWorkRange invalid: {:?}", e)))?;
     }
 
-    if ws.has_setTWorkRange {
-        deny_if_password_invalid()?;
+    if ws.has_setTWorkRange
+        && (ws.setTWorkRange.has_minimum
+            || ws.setTWorkRange.has_maximum
+            || ws.setTWorkRange.has_absolute_maximum)
+    {
+        deny_if_password_invalid("TWorkRange")?;
         ws.setTWorkRange
             .validate()
             .map_err(|e| SettingActionError::ActionError(format!("TWorkRange invalid: {:?}", e)))?;
     }
 
-    if ws.has_setTCPUWorkRange {
-        deny_if_password_invalid()?;
+    if ws.has_setTCPUWorkRange
+        && (ws.setTCPUWorkRange.has_minimum
+            || ws.setTCPUWorkRange.has_maximum
+            || ws.setTCPUWorkRange.has_absolute_maximum)
+    {
+        deny_if_password_invalid("TCPUWorkRange")?;
         ws.setTCPUWorkRange.validate().map_err(|e| {
             SettingActionError::ActionError(format!("TCPUWorkRange invalid: {:?}", e))
         })?;
     }
 
-    if ws.has_setBatWorkRange {
-        deny_if_password_invalid()?;
+    if ws.has_setBatWorkRange
+        && (ws.setBatWorkRange.has_minimum
+            || ws.setBatWorkRange.has_maximum
+            || ws.setBatWorkRange.has_absolute_maximum)
+    {
+        deny_if_password_invalid("BatWorkRange")?;
         ws.setBatWorkRange.validate().map_err(|e| {
             SettingActionError::ActionError(format!("BatWorkRange invalid: {:?}", e))
         })?;
@@ -151,7 +198,7 @@ fn verify_parameters(
     }
 
     if ws.has_setWriteConfig {
-        if ws.setWriteConfig.BaseInterval_ms < MIN_MT {
+        if ws.setWriteConfig.has_BaseInterval_ms && ws.setWriteConfig.BaseInterval_ms < MIN_MT {
             return Err(SettingActionError::ActionError(format!(
                 "Write base period {} too small, min= {}",
                 ws.setWriteConfig.BaseInterval_ms, MIN_MT

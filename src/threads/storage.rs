@@ -168,7 +168,7 @@ impl BlockDevice for EMfatStorage {
     const BLOCK_BYTES: usize = 512;
 
     fn read_block(&mut self, lba: u32, block: &mut [u8]) -> Result<(), BlockDeviceError> {
-        defmt::trace!("SCSI: Read LBA block {}", lba);
+        //defmt::trace!("SCSI: Read LBA block {}", lba);
         unsafe {
             emfat_rust::emfat_read(&mut self.ctx, block.as_mut_ptr(), lba, 1);
         }

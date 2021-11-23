@@ -31,7 +31,7 @@ pub use messages::{PASSWORD_SIZE, P_COEFFS_COUNT, T_COEFFS_COUNT};
 pub fn start_writing_settings(realy_write: bool) -> Result<(), FreeRtosError> {
     use freertos_rust::{Task, TaskPriority};
     if !realy_write {
-        defmt::info!("Save settings skipped...");
+        defmt::warn!("Save settings skipped...");
         return Ok(());
     }
 

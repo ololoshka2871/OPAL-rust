@@ -153,6 +153,7 @@ where
     }
 }
 
+/*
 pub(crate) fn settings_restore<D>(duration: D) -> Result<(), FreeRtosError>
 where
     D: DurationTicks,
@@ -165,6 +166,7 @@ where
     }
     Ok(())
 }
+*/
 
 pub(crate) fn settings_save<D>(duration: D) -> Result<(), FreeRtosError>
 where
