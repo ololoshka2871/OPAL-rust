@@ -2,6 +2,7 @@ use core::ops::DerefMut;
 
 use alloc::sync::Arc;
 use freertos_rust::{Duration, InterruptContext, Mutex, Task, TaskPriority};
+use my_proc_macro::c_str;
 use stm32_usbd::UsbBus;
 
 use stm32l4xx_hal::interrupt;
@@ -51,7 +52,7 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
     let mut scsi = Scsi::new(
         unsafe { USB_BUS.as_ref().unwrap() }, //&usb_bus,
         64, // для устройств full speed: max_packet_size 8, 16, 32 or 64
-        EMfatStorage::new("LOGGER\0"),
+        EMfatStorage::new(c_str!("LOGGER")),
         "SCTB", // <= max 8 больших букв
         "SelfWriter",
         "L442",

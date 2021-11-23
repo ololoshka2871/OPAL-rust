@@ -13,6 +13,7 @@ include!("bindings/pb_decode.rs");
 
 extern crate alloc;
 use alloc::vec::Vec;
+use my_proc_macro::c_str;
 
 use crate::pb::Error;
 
@@ -125,7 +126,7 @@ impl pb_istream_t {
         let mut eof = false;
         if unsafe { pb_decode_tag(self, wire_type, &mut tag, &mut eof) } {
             if eof {
-                Err(Error::from_str("EOF\0")) // TODO
+                Err(Error::from_str(c_str!("EOF"))) // TODO
             } else {
                 Ok(tag)
             }

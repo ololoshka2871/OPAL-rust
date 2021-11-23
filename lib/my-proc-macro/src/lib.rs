@@ -2,12 +2,9 @@ use chrono::{DateTime, Datelike, Local};
 use proc_macro::TokenStream;
 use quote::quote;
 use quote::ToTokens;
-use syn::{parse::Parse, Expr, ExprBinary, Token};
 
-#[proc_macro]
-pub fn test_macro(_item: TokenStream) -> TokenStream {
-    "fn answer() -> u32 { 42 }".parse().unwrap()
-}
+use syn::Lit;
+use syn::{parse::Parse, Expr, ExprBinary, Token};
 
 #[proc_macro]
 pub fn store_coeff(cfg: TokenStream) -> TokenStream {
@@ -89,4 +86,14 @@ pub fn git_version(_: TokenStream) -> TokenStream {
 
     static V: &str = git_version!(args = ["--always", "--abbrev=16"]);
     format!("0x{}_u64", V).parse().unwrap()
+}
+
+#[proc_macro]
+pub fn c_str(s: TokenStream) -> TokenStream {
+    let lit = syn::parse_macro_input!(s as Lit);
+    if let Lit::Str(litstr) = lit {
+        format!("\"{}\0\"", litstr.value()).parse().unwrap()
+    } else {
+        panic!("Not a string literal!")
+    }
 }

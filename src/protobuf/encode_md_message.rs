@@ -1,5 +1,6 @@
 use alloc::vec;
 use alloc::vec::Vec;
+use my_proc_macro::c_str;
 use nanopb_rs::{Error, OStream};
 
 use crate::protobuf::messages::ru_sktbelpa_pressure_self_writer_INFO_MAGICK;
@@ -21,11 +22,11 @@ pub fn encode_md_message(
         .stream()
         .write(&[ru_sktbelpa_pressure_self_writer_INFO_MAGICK])
     {
-        return Err(Error::from_str("Failed to write magick\0"));
+        return Err(Error::from_str(c_str!("Failed to write magick")));
     }
 
     if let Err(_) = os.stream().encode_varint(size as u64) {
-        return Err(Error::from_str("Failed to encode size\0"));
+        return Err(Error::from_str(c_str!("Failed to encode size\0")));
     }
 
     if let Err(e) = os

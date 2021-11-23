@@ -8,6 +8,7 @@ use core::ptr::{null, slice_from_raw_parts};
 extern crate alloc;
 
 use alloc::boxed::Box;
+use my_proc_macro::c_str;
 
 pub use crate::common::{
     pb_byte_t, pb_field_iter_t, pb_msgdesc_t, pb_ostream_t, pb_wire_type_t, size_t,
@@ -202,6 +203,6 @@ pub fn get_encoded_size(
     if unsafe { pb_get_encoded_size(&mut s, fields, src_struct) } {
         Ok(s)
     } else {
-        Err(Error::from_str("Failed to calculule message size\0"))
+        Err(Error::from_str(c_str!("Failed to calculule message size")))
     }
 }

@@ -1,8 +1,9 @@
 use alloc::{string::String, vec::Vec};
 
-use emfat_rust::{emfat_entry, emfat_t};
+use emfat_rust::{emfat_entry, emfat_t, EntryBuilder};
 
 use freertos_rust::Duration;
+use my_proc_macro::c_str;
 use usbd_scsi::{BlockDevice, BlockDeviceError};
 
 pub struct EMfatStorage {
@@ -14,7 +15,7 @@ struct StaticData {
     data: &'static str,
 }
 
-// terminate strings with '\0' for strlen() compatible
+// terminate strings with '\0' c_str("text") for strlen() compatible
 
 static README: &str = "# СКТБ \"ЭЛПА\": Автономный регистратор давления\r\n\
 \r\n\
@@ -115,13 +116,12 @@ impl EMfatStorage {
     fn build_files_table() -> Vec<emfat_entry> {
         defmt::trace!("EmFat: Registring virtual files:");
 
-        // TODO incapsulate constructing files
-        let mut res = Vec::<emfat_entry>::new();
+        let mut res: Vec<emfat_entry> = Vec::new();
 
         defmt::trace!("EmFat: .. /");
         res.push(
-            emfat_rust::EntryBuilder::new()
-                .name("\0")
+            EntryBuilder::new()
+                .name(c_str!(""))
                 .dir(true)
                 .lvl(0)
                 .offset(0)
@@ -133,8 +133,8 @@ impl EMfatStorage {
         defmt::trace!("EmFat: .. /Readme.txt");
         let ptr = &README_INFO as *const StaticData;
         res.push(
-            emfat_rust::EntryBuilder::new()
-                .name("Readme.txt\0")
+            EntryBuilder::new()
+                .name(c_str!("Readme.txt"))
                 .dir(false)
                 .lvl(1)
                 .offset(0)
@@ -147,8 +147,8 @@ impl EMfatStorage {
 
         defmt::trace!("EmFat: .. /settings.var");
         res.push(
-            emfat_rust::EntryBuilder::new()
-                .name("config.var\0")
+            EntryBuilder::new()
+                .name(c_str!("config.var"))
                 .dir(false)
                 .lvl(1)
                 .offset(0)
@@ -160,8 +160,8 @@ impl EMfatStorage {
 
         defmt::trace!("EmFat: .. /storage.var");
         res.push(
-            emfat_rust::EntryBuilder::new()
-                .name("storage.var\0")
+            EntryBuilder::new()
+                .name(c_str!("storage.var"))
                 .dir(false)
                 .lvl(1)
                 .offset(0)
@@ -174,8 +174,8 @@ impl EMfatStorage {
         /*
         defmt::trace!("EmFat: .. /Testfile.bin");
         res.push(
-            emfat_rust::EntryBuilder::new()
-                .name("Testfile.bin\0")
+            EntryBuilder::new()
+                .name(c_str!("Testfile.bin"))
                 .dir(false)
                 .lvl(1)
                 .offset(0)
@@ -189,8 +189,8 @@ impl EMfatStorage {
         /*
         defmt::trace!("EmFat: .. /fill.x");
         res.push(
-            emfat_rust::EntryBuilder::new()
-                .name("fill.x\0")
+            EntryBuilder::new()
+                .name(c_str!("fill.x"))
                 .dir(false)
                 .lvl(1)
                 .offset(0)
@@ -200,7 +200,7 @@ impl EMfatStorage {
                 .build(),
         );*/
 
-        res.push(emfat_rust::EntryBuilder::terminator_entry());
+        res.push(EntryBuilder::terminator_entry());
 
         res
     }
