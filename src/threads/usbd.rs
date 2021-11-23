@@ -12,7 +12,7 @@ use usb_device::{class_prelude::UsbBusAllocator, prelude::*};
 use usbd_scsi::Scsi;
 use usbd_serial::SerialPort;
 
-use crate::threads::{protobuf_server, storage::EMfatStorage, usb_periph::UsbPeriph};
+use crate::threads::{protobuf_server, usb_periph::UsbPeriph, vfs::EMfatStorage};
 
 static mut USBD_THREAD: Option<freertos_rust::Task> = None;
 static mut USB_BUS: Option<UsbBusAllocator<UsbBus<UsbPeriph>>> = None;

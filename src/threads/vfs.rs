@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
 use emfat_rust::{emfat_entry, emfat_t};
 
@@ -21,7 +21,8 @@ static README: &str = "# СКТБ \"ЭЛПА\": Автономный регис�
 Этот виртуальный диск предоставляет доступ к содержимому внутреннего накопителя устройства.\n\
 \r\n\
 - Для расшифровки содержимого используйте программу %TODO%.\r\n\
-- Коэффициенты полиномов для рассчета находятся в файле config.cfg (формат json)\r\n\
+- Коэффициенты полиномов для рассчета находятся в файле config.var (формат json)\r\n\
+- Информация о занятой памяти в файле storage.var (формат json)\r\n\
 - Для управление функционалом устройства используйте программу KalibratorGUI\r\n";
 
 static README_INFO: StaticData = StaticData { data: README };
@@ -42,34 +43,62 @@ unsafe extern "C" fn const_reader(dest: *mut u8, size: i32, offset: u32, userdat
 
 //unsafe extern "C" fn null_read(_dest: *mut u8, _size: i32, _offset: u32, _userdata: usize) {}
 
-unsafe extern "C" fn settings_read(dest: *mut u8, size: i32, _offset: u32, _userdata: usize) {
+unsafe fn store_block_data(s: String, dest: *mut u8, size: i32, _offset: u32) {
+    let src = s.as_bytes();
+    let offset = _offset as usize;
+    if src.len() > offset {
+        let src = &src[offset..];
+        let to_write = core::cmp::min(size as usize, src.len());
+        core::ptr::copy_nonoverlapping(src.as_ptr(), dest, to_write);
+
+        // забиваем буфер пробелами до конца, чтобы в блокноте он нормально выглядел
+        core::ptr::write_bytes(dest.add(src.len()), b' ', size as usize - to_write);
+    } else {
+        // все пробелами забить
+        core::ptr::write_bytes(dest, b' ', size as usize);
+    }
+}
+
+unsafe extern "C" fn settings_read(dest: *mut u8, size: i32, offset: u32, _userdata: usize) {
     match crate::settings::settings_action(Duration::ms(5), |(ws, _)| {
         serde_json::to_string_pretty(&ws)
     }) {
-        Ok(s) => {
-            let src = s.as_bytes();
-            let offset = _offset as usize;
-            if src.len() > offset {
-                let src = &src[offset..];
-                let to_write = core::cmp::min(size as usize, src.len());
-                core::ptr::copy_nonoverlapping(src.as_ptr(), dest, to_write);
-
-                // забиваем буфер пробелами до конца, чтобы в блокноте он нормально выглядел
-                core::ptr::write_bytes(dest.add(src.len()), b' ', size as usize - to_write);
-            } else {
-                // все пробелами забить
-                core::ptr::write_bytes(dest, b' ', size as usize);
-            }
-        }
+        Ok(s) => store_block_data(s, dest, size, offset),
         Err(crate::settings::SettingActionError::AccessError(e)) => {
-            defmt::error!("Failed to setialise settings: {}", defmt::Debug2Format(&e));
+            defmt::error!("Failed to serialise settings: {}", defmt::Debug2Format(&e));
         }
         Err(crate::settings::SettingActionError::ActionError(e)) => {
             defmt::error!(
-                "Failed to setialise settings: {}",
+                "Failed to serialise settings: {}",
                 defmt::Display2Format(&e)
             );
         }
+    }
+}
+
+unsafe extern "C" fn meminfo_read(dest: *mut u8, size: i32, offset: u32, _userdata: usize) {
+    use serde::Serialize;
+
+    #[allow(non_snake_case)]
+    #[derive(Serialize)]
+    struct MemInfo {
+        FlashPageSize: u32,
+        FlashPages: u32,
+        FlashUsedPages: u32,
+    }
+
+    let info = MemInfo {
+        FlashPageSize: crate::main_data_storage::flash_page_size(),
+        FlashPages: 0,
+        FlashUsedPages: 0,
+    };
+
+    match serde_json::to_string_pretty(&info) {
+        Ok(s) => store_block_data(s, dest, size, offset),
+        Err(e) => defmt::error!(
+            "Failed to serialise flash info: {}",
+            defmt::Display2Format(&e)
+        ),
     }
 }
 
@@ -116,16 +145,29 @@ impl EMfatStorage {
                 .build(),
         );
 
-        defmt::trace!("EmFat: .. /settings.json");
+        defmt::trace!("EmFat: .. /settings.var");
         res.push(
             emfat_rust::EntryBuilder::new()
-                .name("config.cfg\0")
+                .name("config.var\0")
                 .dir(false)
                 .lvl(1)
                 .offset(0)
                 .size(2048) // noauto, размер может меняться - это генерированный текст
                 .max_size(2048)
                 .read_cb(settings_read)
+                .build(),
+        );
+
+        defmt::trace!("EmFat: .. /storage.var");
+        res.push(
+            emfat_rust::EntryBuilder::new()
+                .name("storage.var\0")
+                .dir(false)
+                .lvl(1)
+                .offset(0)
+                .size(512) // noauto, размер может меняться - это генерированный текст
+                .max_size(2048)
+                .read_cb(meminfo_read)
                 .build(),
         );
 

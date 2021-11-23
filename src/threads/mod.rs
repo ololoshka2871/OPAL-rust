@@ -5,6 +5,6 @@ pub mod monitor;
 
 pub mod usb_periph;
 
-mod storage;
+mod vfs;
 
 mod protobuf_server;
