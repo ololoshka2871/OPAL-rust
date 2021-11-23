@@ -70,7 +70,7 @@ fn write_responce<B: usb_device::bus::UsbBus>(
         match serial_container.lock(Duration::infinite()) {
             Ok(mut serial) => match serial.write(buf) {
                 Ok(len) if len > 0 => {
-                    defmt::trace!("Serial: {} bytes writen", len);
+                    //defmt::trace!("Serial: {} bytes writen", len);
                     if len == buf.len() {
                         return Ok(());
                     }

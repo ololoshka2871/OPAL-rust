@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
 
+use num_derive::FromPrimitive;
 use serde::Serialize;
 
 #[derive(Debug, Copy, Clone, Serialize)]
@@ -46,6 +48,32 @@ pub(crate) struct Monitoring {
     pub OverPower: bool,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, FromPrimitive)]
+pub(crate) enum PressureMeassureUnits {
+    INVALID_ZERO = 0,
+
+    // Паскали
+    Pa = 0x00220000,
+
+    // Бар
+    Bar = 0x004E0000,
+
+    // Ат (кгс/см2)
+    At = 0x00A10000,
+
+    // мм водного столба
+    mmH20 = 0x00A20000,
+
+    // м. ртутного столба
+    mHg = 0x00A30000,
+
+    // Атм
+    Atm = 0x00A40000,
+
+    // Фунт на квадратный дюйм
+    PSI = 0x00AB0000,
+}
+
 #[derive(Debug, Copy, Clone, Serialize)]
 pub(crate) struct AppSettings {
     pub Serial: u32,
@@ -75,6 +103,8 @@ pub(crate) struct AppSettings {
     pub writeConfig: WriteConfig,
 
     pub startDelay: u32,
+
+    pub pressureMeassureUnits: PressureMeassureUnits,
 
     #[serde(skip_serializing)]
     pub password: [u8; crate::protobuf::PASSWORD_SIZE],

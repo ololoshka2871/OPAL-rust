@@ -61,6 +61,8 @@ pub fn fill_settings(
 
         settings_resp.startDelay = ws.startDelay;
 
+        settings_resp.pressureMeassureUnits = ws.pressureMeassureUnits as u32;
+
         settings_resp.password[..PASSWORD_SIZE].copy_from_slice(&ts.current_password);
 
         Ok(())
@@ -153,6 +155,17 @@ fn verify_parameters(
             return Err(SettingActionError::ActionError(format!(
                 "Write base period {} too small, min= {}",
                 ws.setWriteConfig.BaseInterval_ms, MIN_MT
+            )));
+        }
+    }
+
+    if ws.has_setPressureMeassureUnits {
+        if let Some(crate::settings::app_settings::PressureMeassureUnits::INVALID_ZERO) | None =
+            num::FromPrimitive::from_u32(ws.setPressureMeassureUnits)
+        {
+            return Err(SettingActionError::ActionError(format!(
+                "Value {} is not a valid pressure measure unit code.",
+                ws.setPressureMeassureUnits
             )));
         }
     }
@@ -254,6 +267,12 @@ pub fn update_settings(
         }
 
         store_coeff!(ws.startDelay <= w; setStartDelay; need_write);
+
+        if w.has_setPressureMeassureUnits {
+            ws.pressureMeassureUnits =
+                num::FromPrimitive::from_u32(w.setPressureMeassureUnits).unwrap();
+            need_write = true;
+        }
 
         if w.has_setPassword {
             ts.current_password

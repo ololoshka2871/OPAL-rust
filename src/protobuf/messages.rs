@@ -35,6 +35,18 @@ pub use self::_ru_sktbelpa_pressure_self_writer_FlashStatus_Status as ru_sktbelp
 
 //----------------------------------------------------------------------------------------------------
 
+pub const _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_Pa : _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits = 2228224 ;
+pub const _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_Bar : _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits = 5111808 ;
+pub const _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_At : _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits = 10551296 ;
+pub const _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_mmH20 : _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits = 10616832 ;
+pub const _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_mHg : _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits = 10682368 ;
+pub const _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_Atm : _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits = 10747904 ;
+pub const _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_ru_sktbelpa_pressure_self_writer_PressureMeassureUnits_PSI : _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits = 11206656 ;
+pub type _ru_sktbelpa_pressure_self_writer_PressureMeassureUnits = u32;
+pub use self::_ru_sktbelpa_pressure_self_writer_PressureMeassureUnits as ru_sktbelpa_pressure_self_writer_PressureMeassureUnits;
+
+//----------------------------------------------------------------------------------------------------
+
 pub const P_COEFFS_COUNT: usize = 16;
 pub const T_COEFFS_COUNT: usize = 5;
 pub const PASSWORD_SIZE: usize = 10;
@@ -125,6 +137,7 @@ pub struct _ru_sktbelpa_pressure_self_writer_SettingsResponse {
     pub TZeroCorrection: f32,
     pub writeConfig: ru_sktbelpa_pressure_self_writer_WriteConfig,
     pub startDelay: u32,
+    pub pressureMeassureUnits: ru_sktbelpa_pressure_self_writer_PressureMeassureUnits,
     pub password: [u8; PASSWORD_SIZE + 1],
 }
 pub type ru_sktbelpa_pressure_self_writer_SettingsResponse =
@@ -171,6 +184,8 @@ pub struct _ru_sktbelpa_pressure_self_writer_WriteSettingsReq {
     pub setWriteConfig: ru_sktbelpa_pressure_self_writer_WriteConfig,
     pub has_setStartDelay: bool,
     pub setStartDelay: u32,
+    pub has_setPressureMeassureUnits: bool,
+    pub setPressureMeassureUnits: ru_sktbelpa_pressure_self_writer_PressureMeassureUnits,
     pub has_setPassword: bool,
     pub setPassword: [u8; PASSWORD_SIZE + 1],
 }

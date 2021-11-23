@@ -23,7 +23,7 @@ impl<'a, B: UsbBus> rx_context for Reader<'a, B> {
                     match ser.read(buff) {
                         Ok(count) => {
                             if count > 0 {
-                                defmt::trace!("Serial: {} bytes ressived", count);
+                                //defmt::trace!("Serial: {} bytes ressived", count);
                                 return Ok(count);
                             } else {
                                 block_thread()

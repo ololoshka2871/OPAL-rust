@@ -131,6 +131,9 @@ message WriteSettingsReq {
     // Установить задержку старта записи в секундах
     optional uint32             setStartDelay = 80;
 
+    // Установить единицы измерение давления
+    optional PressureMeassureUnits setPressureMeassureUnits = 90;
+
     // Установить пароль доступа
     optional string             setPassword = 100;
 }
@@ -181,6 +184,9 @@ message SettingsResponse {
 
     // Задержка старта записи в секундах
     required uint32             startDelay = 80;
+
+    // Единицы измерение давления
+    required PressureMeassureUnits pressureMeassureUnits = 90;
 
     // пароль доступа
     required string             password = 100;
@@ -245,6 +251,29 @@ message T5Coefficients {
     optional float				C3 = 12;
     optional float				C4 = 13;
     optional float				C5 = 14;
+}
+
+enum PressureMeassureUnits {
+    // Паскали
+    Pa = 0x00220000;
+
+    // Бар
+    Bar = 0x004E0000;
+
+    // Ат (кгс/см2)
+    At = 0x00A10000;
+
+    // мм водного столба
+    mmH20 = 0x00A20000;
+
+    // м. ртутного столба
+    mHg = 0x00A30000;
+
+    // Атм
+    Atm = 0x00A40000;
+
+    // Фунт на квадратный дюйм
+    PSI = 0x00AB0000;
 }
 
 //----------------------------------------------------------------------------
