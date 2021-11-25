@@ -77,6 +77,20 @@ impl MasterCounter {
             self.counter.clear_interrupt(&*self.interrupt_controller);
         }
     }
+
+    fn wrap_result_if_ovf(&self, mut value: u32) -> (u32, bool) {
+        let mut was_wraped = false;
+        let mut ext = self.extander as u32;
+        if let Some(mask) = self.counter.uif_cpy_mask() {
+            if value & mask == mask {
+                value &= !mask;
+                ext = ext.wrapping_add(1);
+                was_wraped = true;
+            }
+        }
+
+        (value | (ext << 16), was_wraped)
+    }
 }
 
 impl MasterTimerInfo {
@@ -96,14 +110,13 @@ impl MasterTimerInfo {
         }
     }
 
-    pub fn update_captured_value(&self, v: u32) -> u32 {
-        // fixme
-        v & ((self.master.extander as u32) << 16)
+    pub fn update_captured_value(&self, v: u32) -> (u32, bool) {
+        self.master.wrap_result_if_ovf(v)
     }
 
-    pub fn value(&self) -> u32 {
+    pub fn value(&self) -> (u32, bool) {
         let counter_value = self.master.counter.value();
-        counter_value | ((self.master.extander as u32) << 16)
+        self.master.wrap_result_if_ovf(counter_value)
     }
 }
 

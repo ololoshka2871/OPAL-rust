@@ -50,6 +50,8 @@ pub fn monitord<D: DurationTicks>(period: D) -> ! {
 
         defmt::info!("{}", Display2Format(&stat));
 
+        defmt::info!("Total run time: {}", staticstics.total_run_time);
+
         #[cfg(feature = "monitor-heap")]
         unsafe {
             defmt::info!(

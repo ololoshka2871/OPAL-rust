@@ -25,6 +25,9 @@ pub(crate) trait MasterCounterInfo: Sync + Send {
 
     /// DMA source address
     fn cnt_addr(&self) -> usize;
+
+    /// TIMx_CNT:UIF_CPY bit mask. None if not supported
+    fn uif_cpy_mask(&self) -> Option<u32>;
 }
 
 #[cfg(feature = "stm32l433")]

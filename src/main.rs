@@ -17,6 +17,7 @@ pub mod config;
 
 use cortex_m_rt::entry;
 
+use sensors::freqmeter::master_counter::{MasterCounter, MasterTimerInfo};
 use stm32l4xx_hal::stm32;
 use support::{usb_connection_checker::UsbConnectionChecker, vusb_monitor::VUsbMonitor};
 
@@ -33,6 +34,33 @@ mod threads;
 
 #[global_allocator]
 static GLOBAL: freertos_rust::FreeRtosAllocator = freertos_rust::FreeRtosAllocator;
+
+//---------------------------------------------------------------
+
+struct MasterGetter {
+    master: MasterTimerInfo,
+    val: u64,
+}
+
+impl MasterGetter {
+    fn new(master: MasterTimerInfo) -> Self {
+        Self { master, val: 0 }
+    }
+
+    fn value(&mut self) -> u32 {
+        let v = self.master.value().0 as u64;
+        if v < self.val & 0xffff_ffff {
+            self.val = ((self.val >> 32) + 1) << 32;
+        } else {
+            self.val &= 0xffff_ffff_0000_0000;
+        }
+        self.val |= v as u64;
+
+        (self.val >> 16) as u32
+    }
+}
+
+static mut MASTER_TIMER_VALUE_GETTER: Option<MasterGetter> = None;
 
 //---------------------------------------------------------------
 
@@ -64,26 +92,20 @@ fn start_at_mode<T>(
 where
     T: WorkMode<T>,
 {
-    //use stm32l4xx_hal::time::U32Ext;
-
     let mut mode = T::new(p, dp);
     mode.ini_static();
     mode.configure_clock();
     mode.print_clock_config();
+
+    {
+        let mut master = MasterCounter::allocate().unwrap();
+        master.want_start();
+        unsafe {
+            MASTER_TIMER_VALUE_GETTER = Some(MasterGetter::new(master));
+        };
+    }
+
     mode.start_threads()
-
-    /*
-    let mut flash = stm32l4xx_hal::prelude::_stm32l4_hal_FlashExt::constrain(dp.FLASH);
-    let mut rcc = stm32l4xx_hal::rcc::RccExt::constrain(dp.RCC);
-    let mut pwr = stm32l4xx_hal::pwr::PwrExt::constrain(dp.PWR, &mut rcc.apb1r1);
-
-    // Try a different clock configuration
-    let clocks = rcc.cfgr.freeze(&mut flash.acr, &mut pwr);
-
-    let _timer = stm32l4xx_hal::timer::Timer::tim6(dp.TIM6, 1000.hz(), clocks, &mut rcc.apb1r1);
-
-    loop {}
-    */
 }
 
 fn is_usb_connected() -> bool {
@@ -91,4 +113,16 @@ fn is_usb_connected() -> bool {
     let pwr = unsafe { &*stm32::PWR::ptr() };
 
     VUsbMonitor::new(rcc, pwr).is_usb_connected()
+}
+
+//-----------------------------------------------------------------------------
+
+#[allow(non_camel_case_types)]
+#[no_mangle]
+pub unsafe extern "C" fn getMaterCounterValue() -> u32 {
+    if MASTER_TIMER_VALUE_GETTER.is_some() {
+        MASTER_TIMER_VALUE_GETTER.as_mut().unwrap().value()
+    } else {
+        0
+    }
 }

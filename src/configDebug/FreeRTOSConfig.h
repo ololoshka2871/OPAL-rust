@@ -175,14 +175,14 @@ See http://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html. */
 #define configMAX_SYSCALL_INTERRUPT_PRIORITY 	( configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS) )
 
 /* Run time stats related macros. */
-//#define configGENERATE_RUN_TIME_STATS	0
+#define configGENERATE_RUN_TIME_STATS	     (1)
 #define configUSE_STATS_FORMATTING_FUNCTIONS (1)
-//#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() //vConfigureTimerForRunTimeStats()
-//#define portALT_GET_RUN_TIME_COUNTER_VALUE( ulCountValue )
-//	{
-//		TIM_Cmd( TIM6, DISABLE );
-//		ulCountValue = ( ( ulTIM6_OverflowCount << 16UL ) | ( unsigned long ) TIM6->CNT );
-//		TIM_Cmd( TIM6, ENABLE );
-//	}
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() //vConfigureTimerForRunTimeStats()
+
+#define portALT_GET_RUN_TIME_COUNTER_VALUE( ulCountValue )                                  \
+	do {                                                                                    \
+        extern unsigned int getMaterCounterValue(void);                                     \
+		ulCountValue = getMaterCounterValue();                                              \
+	} while(0);
 
 #endif /* FREERTOS_CONFIG_H */

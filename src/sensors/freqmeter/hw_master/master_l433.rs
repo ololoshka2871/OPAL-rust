@@ -76,6 +76,10 @@ impl MasterCounterInfo for Tim6_7MasterCounter {
         // Trigger an update event to load the prescaler value to the clock
         tim.egr.write(|w| w.ug().set_bit());
 
+        // enable UIF_CPY
+        tim.cr1
+            .modify(|r, w| unsafe { w.bits(r.bits() | 1u32 << 11) });
+
         // start counter
         tim.cr1.modify(|_, w| w.cen().set_bit());
     }
@@ -106,6 +110,10 @@ impl MasterCounterInfo for Tim6_7MasterCounter {
 
     fn cnt_addr(&self) -> usize {
         &self.tim().cnt as *const _ as usize
+    }
+
+    fn uif_cpy_mask(&self) -> Option<u32> {
+        Some(1u32 << 31)
     }
 }
 
