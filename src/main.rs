@@ -8,9 +8,12 @@ extern crate alloc;
 
 mod main_data_storage;
 mod protobuf;
+mod sensors;
 mod settings;
 mod support;
 mod workmodes;
+
+pub mod config;
 
 use cortex_m_rt::entry;
 
@@ -61,11 +64,26 @@ fn start_at_mode<T>(
 where
     T: WorkMode<T>,
 {
+    //use stm32l4xx_hal::time::U32Ext;
+
     let mut mode = T::new(p, dp);
     mode.ini_static();
     mode.configure_clock();
     mode.print_clock_config();
     mode.start_threads()
+
+    /*
+    let mut flash = stm32l4xx_hal::prelude::_stm32l4_hal_FlashExt::constrain(dp.FLASH);
+    let mut rcc = stm32l4xx_hal::rcc::RccExt::constrain(dp.RCC);
+    let mut pwr = stm32l4xx_hal::pwr::PwrExt::constrain(dp.PWR, &mut rcc.apb1r1);
+
+    // Try a different clock configuration
+    let clocks = rcc.cfgr.freeze(&mut flash.acr, &mut pwr);
+
+    let _timer = stm32l4xx_hal::timer::Timer::tim6(dp.TIM6, 1000.hz(), clocks, &mut rcc.apb1r1);
+
+    loop {}
+    */
 }
 
 fn is_usb_connected() -> bool {

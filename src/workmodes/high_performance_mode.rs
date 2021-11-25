@@ -3,15 +3,11 @@ use freertos_rust::{Duration, Mutex, Task, TaskPriority};
 use stm32l4xx_hal::rcc::{PllConfig, PllDivider};
 use stm32l4xx_hal::{prelude::*, stm32};
 
+use crate::sensors::freqmeter::master_counter;
+use crate::support::{interrupt_controller::IInterruptController, InterruptController};
 use crate::threads;
 
 use super::WorkMode;
-
-// see: src/config/FreeRTOSConfig.h: configMAX_SYSCALL_INTERRUPT_PRIORITY
-static IRQ_HIGEST_PRIO: u8 = 80;
-
-/// USB interrupt ptiority
-static USB_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 1;
 
 pub struct HighPerformanceMode {
     rcc: stm32l4xx_hal::rcc::Rcc,
@@ -23,22 +19,15 @@ pub struct HighPerformanceMode {
     usb: stm32l4xx_hal::stm32::USB,
     gpioa: stm32l4xx_hal::gpio::gpioa::Parts,
 
-    nvic: cortex_m::peripheral::NVIC,
+    interrupt_controller: Arc<dyn IInterruptController>,
 
     crc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>,
-}
-
-impl HighPerformanceMode {
-    fn set_interrupt_prio(&mut self, irq: stm32l4xx_hal::stm32l4::stm32l4x2::Interrupt, prio: u8) {
-        unsafe {
-            self.nvic.set_priority(irq, prio);
-        }
-    }
 }
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     fn new(p: cortex_m::Peripherals, dp: stm32l4xx_hal::stm32l4::stm32l4x2::Peripherals) -> Self {
         let mut rcc = dp.RCC.constrain();
+        let ic = Arc::new(InterruptController::new(p.NVIC));
 
         HighPerformanceMode {
             flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
@@ -52,7 +41,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             pwr: dp.PWR.constrain(&mut rcc.apb1r1),
             clocks: None,
 
-            nvic: p.NVIC,
+            interrupt_controller: ic,
 
             rcc,
         }
@@ -99,7 +88,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             unsafe { _rcc.ccipr.modify(|_, w| w.clk48sel().bits(0b01)) };
         }
 
-        fn setut_cfgr(work_cfgr: &mut stm32l4xx_hal::rcc::CFGR) {
+        fn setup_cfgr(work_cfgr: &mut stm32l4xx_hal::rcc::CFGR) {
             let mut cfgr = unsafe {
                 core::mem::MaybeUninit::<stm32l4xx_hal::rcc::CFGR>::zeroed().assume_init()
             };
@@ -124,7 +113,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             core::mem::swap(&mut cfgr, work_cfgr);
         }
 
-        setut_cfgr(&mut self.rcc.cfgr);
+        setup_cfgr(&mut self.rcc.cfgr);
 
         let clocks = if let Ok(mut flash) = self.flash.lock(Duration::infinite()) {
             self.rcc.cfgr.freeze(&mut flash.acr, &mut self.pwr)
@@ -134,26 +123,26 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         configure_usb48();
 
+        master_counter::MasterCounter::init(self.interrupt_controller.clone());
+
         self.clocks = Some(clocks);
     }
 
-    fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
-        use stm32l4xx_hal::stm32l4::stm32l4x2::Interrupt;
-
-        defmt::trace!("Set usb interrupt prio = {}", USB_INTERRUPT_PRIO);
-        self.set_interrupt_prio(Interrupt::USB, USB_INTERRUPT_PRIO);
-
+    fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
         {
             defmt::trace!("Creating usb thread...");
             let usbperith = threads::usbd::UsbdPeriph {
                 usb: self.usb,
                 gpioa: self.gpioa,
             };
+            let ic = self.interrupt_controller.clone();
             Task::new()
                 .name("Usbd")
                 .stack_size(1024)
                 .priority(TaskPriority(2))
-                .start(move |_| threads::usbd::usbd(usbperith))?;
+                .start(move |_| {
+                    threads::usbd::usbd(usbperith, ic, crate::config::USB_INTERRUPT_PRIO)
+                })?;
         }
         // ---
         crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk())?;

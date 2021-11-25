@@ -13,7 +13,10 @@ use usb_device::{class_prelude::UsbBusAllocator, prelude::*};
 use usbd_scsi::Scsi;
 use usbd_serial::SerialPort;
 
-use crate::threads::{protobuf_server, usb_periph::UsbPeriph, vfs::EMfatStorage};
+use crate::{
+    support::{self},
+    threads::{protobuf_server, usb_periph::UsbPeriph, vfs::EMfatStorage},
+};
 
 static mut USBD_THREAD: Option<freertos_rust::Task> = None;
 static mut USB_BUS: Option<UsbBusAllocator<UsbBus<UsbPeriph>>> = None;
@@ -25,7 +28,11 @@ pub struct UsbdPeriph {
     pub gpioa: stm32l4xx_hal::gpio::gpioa::Parts,
 }
 
-pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
+pub fn usbd(
+    mut usbd_periph: UsbdPeriph,
+    interrupt_controller: Arc<dyn support::interrupt_controller::IInterruptController>,
+    interrupt_prio: u8,
+) -> ! {
     defmt::info!("Usb thread started!");
 
     unsafe {
@@ -74,10 +81,13 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
         .composite_with_iads()
         .build();
 
+    defmt::trace!("Set usb interrupt prio = {}", interrupt_prio);
+    interrupt_controller.set_priority(Interrupt::USB.into(), interrupt_prio);
+
     defmt::info!("USB ready!");
 
     {
-        let sn = Arc::clone(&serial_container);
+        let sn = serial_container.clone();
         defmt::trace!("Creating protobuf server thread...");
         Task::new()
             .name("Protobuf")
@@ -100,9 +110,8 @@ pub fn usbd(mut usbd_periph: UsbdPeriph) -> ! {
             pool_failed += 1;
             if pool_failed > POOL_FORCED {
                 // block until usb interrupt
-                unsafe {
-                    cortex_m::peripheral::NVIC::unmask(Interrupt::USB);
-                }
+                interrupt_controller.unmask(Interrupt::USB.into());
+
                 pool_failed = match freertos_rust::Task::current()
                     .unwrap()
                     .wait_for_notification(0, 0, Duration::ms(5))
@@ -133,6 +142,7 @@ unsafe fn USB() {
     // НО ивент вызвавший прерыывание пока не снялся, поэтому мы будем
     // бесконечно в него заходить по кругу, нужно запретить пока что это
     // прерывание
+    // TODO: device independent layer
     cortex_m::peripheral::NVIC::mask(Interrupt::USB);
     cortex_m::peripheral::NVIC::unpend(Interrupt::USB);
 }

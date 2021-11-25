@@ -103,6 +103,19 @@ unsafe extern "C" fn meminfo_read(dest: *mut u8, size: i32, offset: u32, _userda
     }
 }
 
+/*
+unsafe extern "C" fn master_read(dest: *mut u8, _size: i32, _offset: u32, userdata: usize) {
+    let boxed = alloc::boxed::Box::from_raw(
+        userdata as *mut crate::sensors::freqmeter::master_counter::MasterTimerInfo,
+    );
+
+    let s = alloc::format!("0x{:08X}", boxed.value());
+    core::ptr::copy_nonoverlapping(s.as_ptr(), dest, s.len());
+
+    core::mem::forget(boxed);
+}
+*/
+
 impl EMfatStorage {
     pub fn new(disk_label: &str) -> EMfatStorage {
         let mut res = EMfatStorage {
@@ -170,6 +183,27 @@ impl EMfatStorage {
                 .read_cb(meminfo_read)
                 .build(),
         );
+
+        /*
+        let mut master = alloc::boxed::Box::new(
+            crate::sensors::freqmeter::master_counter::MasterCounter::allocate().unwrap(),
+        );
+        master.want_start();
+
+        defmt::trace!("EmFat: .. /master.val");
+        res.push(
+            EntryBuilder::new()
+                .name(c_str!("master.val"))
+                .dir(false)
+                .lvl(1)
+                .offset(0)
+                .size(10)
+                .max_size(10)
+                .read_cb(master_read)
+                .user_data(alloc::boxed::Box::into_raw(master) as usize)
+                .build(),
+        );
+        */
 
         /*
         defmt::trace!("EmFat: .. /Testfile.bin");

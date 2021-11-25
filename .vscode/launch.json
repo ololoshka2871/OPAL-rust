@@ -21,7 +21,7 @@
                 "set print asm-demangle on",
                 "set backtrace limit 64",
 
-                "set target-async 1",
+                "set mi-async 1",
                 "set pagination off",
                 "set non-stop on",
                 "skip -rfunction ^core::",
@@ -55,7 +55,7 @@
                 "set print asm-demangle on",
                 "set backtrace limit 64",
 
-                "set target-async 1",
+                "set mi-async 1",
                 "set pagination off",
                 "set non-stop on",
                 "skip -rfunction ^core::",
@@ -96,7 +96,7 @@
                 "set print asm-demangle on",
                 "set backtrace limit 8",
 
-                "set target-async 1",
+                "set mi-async 1",
                 "set pagination off",
                 "set non-stop on",
                 "skip -rfunction ^core::",
@@ -128,7 +128,7 @@
                 "set print asm-demangle on",
                 "set backtrace limit 8",
 
-                "set target-async 1",
+                "set mi-async 1",
                 "set pagination off",
                 "set non-stop on",
                 "skip -rfunction ^core::",
