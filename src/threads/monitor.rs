@@ -1,4 +1,4 @@
-use alloc::string::ToString;
+use alloc::{format, string::ToString};
 use defmt::Display2Format;
 use freertos_rust::{CriticalRegion, DurationTicks, FreeRtosSchedulerState, FreeRtosUtils};
 
@@ -20,11 +20,11 @@ pub fn monitord<D: DurationTicks>(period: D) -> ! {
             staticstics = FreeRtosUtils::get_all_tasks(None);
         }
 
-        let stat = staticstics
+        let mut stat = staticstics
             .tasks
             .iter()
             .fold(HEADER.to_string(), |mut acc, task| {
-                let s = alloc::format!(
+                let s = format!(
                     "└─ {id: <2} | {name: <10} | {state: <9} | {priority: <8} | {stack: >10} | {cpu_abs: >10} | {cpu_rel: >4}\n",
                     id = task.task_number,
                     name = task.name,
@@ -48,17 +48,20 @@ pub fn monitord<D: DurationTicks>(period: D) -> ! {
                 acc
             });
 
-        defmt::info!("{}", Display2Format(&stat));
-
-        defmt::info!("Total run time: {}", staticstics.total_run_time);
+        stat.push_str(format!("Total run time: {}", staticstics.total_run_time).as_str());
 
         #[cfg(feature = "monitor-heap")]
         unsafe {
-            defmt::info!(
-                "Heap statistics: Free {} bytes, Min: {} bytes",
-                xPortGetFreeHeapSize(),
-                xPortGetMinimumEverFreeHeapSize()
+            stat.push_str(
+                format!(
+                    "\nHeap statistics: Free {} bytes, Min: {} bytes",
+                    xPortGetFreeHeapSize(),
+                    xPortGetMinimumEverFreeHeapSize()
+                )
+                .as_str(),
             );
         }
+
+        defmt::info!("{}", Display2Format(&stat));
     }
 }

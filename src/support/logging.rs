@@ -5,8 +5,6 @@ use defmt_rtt as _;
 use freertos_rust::FreeRtosUtils;
 use panic_probe as _;
 
-use crate::workmodes::common::FreeRtosTickTypeExt;
-
 // same panicking *behavior* as `panic-probe` but doesn't print a panic message
 // this prevents the panic message being printed *twice* when `defmt::panic` is invoked
 #[defmt::panic_handler]
@@ -24,4 +22,7 @@ defmt::timestamp!("{=usize}", {
 });
 */
 
-defmt::timestamp!("[{:?}]", FreeRtosUtils::get_tick_count().to_hmss());
+defmt::timestamp!(
+    "[{:?}]",
+    crate::workmodes::common::Ticks(FreeRtosUtils::get_tick_count())
+);
