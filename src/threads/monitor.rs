@@ -12,13 +12,17 @@ pub fn monitord<D: DurationTicks>(period: D) -> ! {
     }
 
     loop {
-        let staticstics: FreeRtosSchedulerState;
+        let mut staticstics: FreeRtosSchedulerState;
         freertos_rust::CurrentTask::delay(period);
 
         {
             let _ = CriticalRegion::enter();
             staticstics = FreeRtosUtils::get_all_tasks(None);
         }
+
+        staticstics
+            .tasks
+            .sort_by(|a, b| a.task_number.cmp(&b.task_number));
 
         let mut stat = staticstics
             .tasks

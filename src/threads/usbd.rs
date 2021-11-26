@@ -84,16 +84,16 @@ pub fn usbd(
 
     defmt::info!("USB ready!");
 
-    {
+    let protobuf_srv = {
         let sn = serial_container.clone();
         defmt::trace!("Creating protobuf server thread...");
         Task::new()
             .name("Protobuf")
             .stack_size(2048)
-            .priority(TaskPriority(1))
+            .priority(TaskPriority(crate::config::PROTOBUF_TASK_PRIO))
             .start(move |_| protobuf_server::protobuf_server(sn))
-            .expect("Failed to create protobuf server");
-    }
+            .expect("Failed to create protobuf server")
+    };
 
     loop {
         // Важно! Список передаваемый сюда в том же порядке,
@@ -110,9 +110,12 @@ pub fn usbd(
 
             let _ = freertos_rust::Task::current()
                 .unwrap()
-                .wait_for_notification(0, 0, Duration::infinite());
+                // ожидаем, что нотификационное значение будет > 0
+                .take_notification(true, Duration::infinite());
 
             interrupt_controller.mask(Interrupt::USB.into());
+        } else {
+            protobuf_srv.notify(freertos_rust::TaskNotification::Increment);
         }
     }
 }
@@ -126,7 +129,8 @@ unsafe fn USB() {
     if let Some(usbd) = USBD_THREAD.as_ref() {
         // Результат не особо важен
         core::mem::forget(
-            usbd.notify_from_isr(&interrupt_ctx, freertos_rust::TaskNotification::NoAction),
+            // инкремент нотификационного значения
+            usbd.notify_from_isr(&interrupt_ctx, freertos_rust::TaskNotification::Increment),
         );
     }
 

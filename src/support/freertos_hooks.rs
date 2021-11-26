@@ -51,10 +51,3 @@ pub extern "C" fn rust_begin_unwind(
 ) -> ! {
     defmt::panic!("unwind() failed at {}:{}", file, line);
 }
-
-#[cfg(debug_assertions)]
-#[no_mangle]
-// debug mode: disable sleep (wfi)
-pub extern "C" fn vApplicationIdleHook() {
-    //loop {}
-}

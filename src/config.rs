@@ -6,3 +6,17 @@ pub const USB_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 1;
 
 /// master counter interrupt prio
 pub const MASTER_COUNTER_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO;
+
+//-----------------------------------------------------------------------------
+
+/// pseudo-idle task prio
+pub const PSEOUDO_IDLE_TASK_PRIO: u8 = 1;
+
+/// usbd task prio
+pub const USBD_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 2;
+
+/// protobuf task prio
+pub const PROTOBUF_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 1;
+
+/// monitor task prio
+pub const MONITOR_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 1;

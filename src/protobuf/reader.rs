@@ -1,7 +1,7 @@
 use core::borrow::BorrowMut;
 
 use alloc::sync::Arc;
-use freertos_rust::{CurrentTask, Duration, FreeRtosError, Mutex};
+use freertos_rust::{Duration, FreeRtosError, Mutex};
 use nanopb_rs::pb_decode::rx_context;
 use usb_device::{class_prelude::UsbBus, UsbError};
 use usbd_serial::SerialPort;
@@ -13,7 +13,9 @@ pub struct Reader<'a, B: UsbBus> {
 impl<'a, B: UsbBus> rx_context for Reader<'a, B> {
     fn read(&mut self, buff: &mut [u8]) -> Result<usize, ()> {
         fn block_thread() {
-            CurrentTask::delay(Duration::ms(1));
+            let _ = freertos_rust::Task::current()
+                .unwrap()
+                .take_notification(true, Duration::infinite());
         }
 
         loop {

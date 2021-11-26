@@ -60,7 +60,7 @@ pub fn create_monitor(sysclk: Hertz) -> Result<(), freertos_rust::FreeRtosError>
         Task::new()
             .name("Monitord")
             .stack_size(MONITOR_STACK_SIZE)
-            .priority(TaskPriority(1))
+            .priority(TaskPriority(crate::config::MONITOR_TASK_PRIO))
             .start(move |_| threads::monitor::monitord(monitoring_period))?;
     }
 

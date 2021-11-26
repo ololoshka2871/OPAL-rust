@@ -129,23 +129,37 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     }
 
     fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
-        {
-            defmt::trace!("Creating usb thread...");
-            let usbperith = threads::usbd::UsbdPeriph {
-                usb: self.usb,
-                gpioa: self.gpioa,
-            };
-            let ic = self.interrupt_controller.clone();
-            Task::new()
-                .name("Usbd")
-                .stack_size(1024)
-                .priority(TaskPriority(2))
-                .start(move |_| {
-                    threads::usbd::usbd(usbperith, ic, crate::config::USB_INTERRUPT_PRIO)
-                })?;
-        }
+        defmt::trace!("Creating usb thread...");
+        let usbperith = threads::usbd::UsbdPeriph {
+            usb: self.usb,
+            gpioa: self.gpioa,
+        };
+        let ic = self.interrupt_controller.clone();
+        Task::new()
+            .name("Usbd")
+            .stack_size(1024)
+            .priority(TaskPriority(crate::config::USBD_TASK_PRIO))
+            .start(move |_| {
+                threads::usbd::usbd(usbperith, ic, crate::config::USB_INTERRUPT_PRIO)
+            })?;
+
         // ---
         crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk())?;
+
+        #[cfg(debug_assertions)]
+        {
+            defmt::trace!("Creating pseudo-idle thread...");
+            Task::new()
+                .name("T_IDLE")
+                .stack_size(128)
+                .priority(TaskPriority(crate::config::PSEOUDO_IDLE_TASK_PRIO))
+                .start(move |_| loop {
+                    unsafe {
+                        freertos_rust::freertos_rs_isr_yield();
+                    }
+                })?;
+        }
+
         Ok(())
     }
 
