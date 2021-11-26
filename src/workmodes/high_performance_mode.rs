@@ -107,8 +107,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                     PllConfig::new(3, 40, PllDivider::Div2), // PLL config
                 )
                 .pll_source(stm32l4xx_hal::rcc::PllSource::HSE)
-                .pclk1(80.mhz())
-                .pclk2(80.mhz());
+                .pclk1(10.mhz())
+                .pclk2(10.mhz());
 
             core::mem::swap(&mut cfgr, work_cfgr);
         }
@@ -151,7 +151,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             defmt::trace!("Creating pseudo-idle thread...");
             Task::new()
                 .name("T_IDLE")
-                .stack_size(128)
+                .stack_size(48)
                 .priority(TaskPriority(crate::config::PSEOUDO_IDLE_TASK_PRIO))
                 .start(move |_| loop {
                     unsafe {

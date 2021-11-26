@@ -5,7 +5,7 @@ pub const IRQ_HIGEST_PRIO: u8 = 80;
 pub const USB_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 1;
 
 /// master counter interrupt prio
-pub const MASTER_COUNTER_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO;
+pub const MASTER_COUNTER_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 20;
 
 //-----------------------------------------------------------------------------
 

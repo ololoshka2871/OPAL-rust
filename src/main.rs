@@ -39,24 +39,15 @@ static GLOBAL: freertos_rust::FreeRtosAllocator = freertos_rust::FreeRtosAllocat
 
 struct MasterGetter {
     master: MasterTimerInfo,
-    val: u64,
 }
 
 impl MasterGetter {
     fn new(master: MasterTimerInfo) -> Self {
-        Self { master, val: 0 }
+        Self { master }
     }
 
     fn value(&mut self) -> u32 {
-        let v = self.master.value().0 as u64;
-        if v < self.val & 0xffff_ffff {
-            self.val = ((self.val >> 32) + 1) << 32;
-        } else {
-            self.val &= 0xffff_ffff_0000_0000;
-        }
-        self.val |= v as u64;
-
-        (self.val >> 16) as u32
+        self.master.value64() as u32
     }
 }
 

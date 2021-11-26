@@ -10,7 +10,7 @@ pub struct MasterCounter {
     counter: &'static dyn MasterCounterInfo,
     interrupt_controller: Arc<dyn IInterruptController>,
     want_enable_counter: AtomicUsize,
-    extander: u16,
+    extander: u64,
 }
 
 pub struct MasterTimerInfo {
@@ -91,6 +91,20 @@ impl MasterCounter {
 
         (value | (ext << 16), was_wraped)
     }
+
+    fn wrap_result_if_ovf64(&self, mut value: u32) -> u64 {
+        let mut was_wraped = false;
+        let mut ext = self.extander;
+        if let Some(mask) = self.counter.uif_cpy_mask() {
+            if value & mask == mask {
+                value &= !mask;
+                ext = ext.wrapping_add(1);
+                was_wraped = true;
+            }
+        }
+
+        value as u64 | (ext << 16)
+    }
 }
 
 impl MasterTimerInfo {
@@ -117,6 +131,11 @@ impl MasterTimerInfo {
     pub fn value(&self) -> (u32, bool) {
         let counter_value = self.master.counter.value();
         self.master.wrap_result_if_ovf(counter_value)
+    }
+
+    pub fn value64(&self) -> u64 {
+        let counter_value = self.master.counter.value();
+        self.master.wrap_result_if_ovf64(counter_value)
     }
 }
 
