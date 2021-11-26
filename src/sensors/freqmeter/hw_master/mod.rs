@@ -20,6 +20,9 @@ pub(crate) trait MasterCounterInfo: Sync + Send {
     /// clear interrupt flag
     fn clear_interrupt(&self, controller: &dyn IInterruptController);
 
+    /// interrupt pending?
+    fn is_irq_pending(&self, controller: &dyn IInterruptController) -> bool;
+
     /// current value of counter register
     fn value(&self) -> u32;
 

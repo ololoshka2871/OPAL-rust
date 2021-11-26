@@ -52,7 +52,7 @@ pub fn monitord<D: DurationTicks>(period: D) -> ! {
                 acc
             });
 
-        stat.push_str(format!("Total run time: {}", staticstics.total_run_time).as_str());
+        //stat.push_str(format!("Total run time: {}", staticstics.total_run_time).as_str());
 
         #[cfg(feature = "monitor-heap")]
         unsafe {

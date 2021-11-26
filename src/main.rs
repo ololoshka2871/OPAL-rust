@@ -47,7 +47,7 @@ impl MasterGetter {
     }
 
     fn value(&mut self) -> u32 {
-        self.master.value64() as u32
+        (self.master.value64().0 >> 4) as u32
     }
 }
 

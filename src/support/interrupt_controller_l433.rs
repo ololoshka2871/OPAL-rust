@@ -37,6 +37,10 @@ impl interrupt_controller::IInterruptController for InterruptController {
     fn unpend(&self, interrupt: interrupt_controller::Interrupt) {
         NVIC::unpend(interrupt);
     }
+
+    fn is_pending(&self, interrupt: Interrupt) -> bool {
+        NVIC::is_pending(interrupt)
+    }
 }
 
 impl Into<Interrupt> for IRQ {

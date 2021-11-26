@@ -14,4 +14,5 @@ pub trait IInterruptController: Sync + Send {
     fn unmask(&self, interrupt: Interrupt);
     fn mask(&self, interrupt: Interrupt);
     fn unpend(&self, interrupt: Interrupt);
+    fn is_pending(&self, interrupt: Interrupt) -> bool;
 }

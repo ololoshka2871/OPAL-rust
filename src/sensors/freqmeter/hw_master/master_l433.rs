@@ -115,6 +115,10 @@ impl MasterCounterInfo for Tim6_7MasterCounter {
     fn uif_cpy_mask(&self) -> Option<u32> {
         Some(1u32 << 31)
     }
+
+    fn is_irq_pending(&self, controller: &dyn IInterruptController) -> bool {
+        controller.is_pending(self.interrupt_n())
+    }
 }
 
 pub(crate) static MASTER_LIST: [&dyn MasterCounterInfo; 2] = [
