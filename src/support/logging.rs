@@ -23,6 +23,6 @@ defmt::timestamp!("{=usize}", {
 */
 
 defmt::timestamp!(
-    "[{:?}]",
+    "[{:?}T]",
     crate::workmodes::common::Ticks(FreeRtosUtils::get_tick_count())
 );

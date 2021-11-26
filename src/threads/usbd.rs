@@ -21,8 +21,6 @@ use crate::{
 static mut USBD_THREAD: Option<freertos_rust::Task> = None;
 static mut USB_BUS: Option<UsbBusAllocator<UsbBus<UsbPeriph>>> = None;
 
-static POOL_FORCED: u8 = 3;
-
 pub struct UsbdPeriph {
     pub usb: stm32l4xx_hal::device::USB,
     pub gpioa: stm32l4xx_hal::gpio::gpioa::Parts,
@@ -97,7 +95,6 @@ pub fn usbd(
             .expect("Failed to create protobuf server");
     }
 
-    let mut pool_failed = 0u8;
     loop {
         // Важно! Список передаваемый сюда в том же порядке,
         // что были инициализированы интерфейсы
@@ -107,20 +104,15 @@ pub fn usbd(
         };
 
         if !res {
-            pool_failed += 1;
-            if pool_failed > POOL_FORCED {
-                // block until usb interrupt
-                interrupt_controller.unmask(Interrupt::USB.into());
+            // block until usb interrupt
+            interrupt_controller.unpend(Interrupt::USB.into());
+            interrupt_controller.unmask(Interrupt::USB.into());
 
-                pool_failed = match freertos_rust::Task::current()
-                    .unwrap()
-                    .wait_for_notification(0, 0, Duration::ms(5))
-                {
-                    Ok(_) => 0,
-                    Err(_) => POOL_FORCED - 1,
-                };
-            }
-            continue;
+            let _ = freertos_rust::Task::current()
+                .unwrap()
+                .wait_for_notification(0, 0, Duration::infinite());
+
+            interrupt_controller.mask(Interrupt::USB.into());
         }
     }
 }

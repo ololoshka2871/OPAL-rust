@@ -1,3 +1,4 @@
+pub mod filter;
 pub mod free_rtos_error_ext;
 pub mod interrupt_controller;
 pub mod logging;
