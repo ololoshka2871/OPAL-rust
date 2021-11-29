@@ -15,9 +15,11 @@ mod workmodes;
 
 pub mod config;
 
+#[cfg(debug_assertions)]
+mod master_value_stat;
+
 use cortex_m_rt::entry;
 
-use sensors::freqmeter::master_counter::{MasterCounter, MasterTimerInfo};
 use stm32l4xx_hal::stm32;
 use support::{usb_connection_checker::UsbConnectionChecker, vusb_monitor::VUsbMonitor};
 
@@ -34,24 +36,6 @@ mod threads;
 
 #[global_allocator]
 static GLOBAL: freertos_rust::FreeRtosAllocator = freertos_rust::FreeRtosAllocator;
-
-//---------------------------------------------------------------
-
-struct MasterGetter {
-    master: MasterTimerInfo,
-}
-
-impl MasterGetter {
-    fn new(master: MasterTimerInfo) -> Self {
-        Self { master }
-    }
-
-    fn value(&mut self) -> u32 {
-        (self.master.value64().0 >> 4) as u32
-    }
-}
-
-static mut MASTER_TIMER_VALUE_GETTER: Option<MasterGetter> = None;
 
 //---------------------------------------------------------------
 
@@ -88,13 +72,10 @@ where
     mode.configure_clock();
     mode.print_clock_config();
 
-    {
-        let mut master = MasterCounter::allocate().unwrap();
-        master.want_start();
-        unsafe {
-            MASTER_TIMER_VALUE_GETTER = Some(MasterGetter::new(master));
-        };
-    }
+    #[cfg(debug_assertions)]
+    master_value_stat::init_master_getter(
+        sensors::freqmeter::master_counter::MasterCounter::allocate().unwrap(),
+    );
 
     mode.start_threads()
 }
@@ -107,13 +88,3 @@ fn is_usb_connected() -> bool {
 }
 
 //-----------------------------------------------------------------------------
-
-#[allow(non_camel_case_types)]
-#[no_mangle]
-pub unsafe extern "C" fn getMaterCounterValue() -> u32 {
-    if MASTER_TIMER_VALUE_GETTER.is_some() {
-        MASTER_TIMER_VALUE_GETTER.as_mut().unwrap().value()
-    } else {
-        0
-    }
-}

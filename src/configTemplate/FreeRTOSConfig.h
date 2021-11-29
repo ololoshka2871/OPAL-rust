@@ -121,12 +121,11 @@ extern void vAssertCalled( unsigned long ulLine, const char * const pcFileName )
 #define configUSE_LOBARO_TICKLESS_IDLE	1				//use optimized lobaro tickless idle implementation (clock scaling + stop mode for longer sleep periods)
 														//configUSE_TICKLESS_IDLE must also be 1!
 
-extern void set_PA0_dbgOut(bool onOff);
 //Called immediately before entering tickless idle
-#define traceLOW_POWER_IDLE_BEGIN()  //set_PA0_dbgOut(false)
+#define traceLOW_POWER_IDLE_BEGIN() 
 
 //Called when returning to the Idle task after a tickless idle.
-#define traceLOW_POWER_IDLE_END()	 //set_PA0_dbgOut(true)
+#define traceLOW_POWER_IDLE_END()
 
 //optional processing for sleep tickless mode (short tickless periods)
 #define configPRE_STOP_PROCESSING( x )
@@ -158,11 +157,11 @@ to exclude the API function. */
 
 /* Use the system definition, if there is one */
 //#ifdef __NVIC_PRIO_BITS
-//	#define configPRIO_BITS       __NVIC_PRIO_BITS
+//	#define configPRIO_BITS             __NVIC_PRIO_BITS
 //#else
-//	#define configPRIO_BITS       4        /* 15 priority levels */
+//	#define configPRIO_BITS             4        /* 15 priority levels */
 //#endif
-#define configPRIO_BITS       4        /* 15 priority levels (STM32L15x*/
+#define configPRIO_BITS                 4        /* 15 priority levels (STM32L15x*/
 
 #define configLIBRARY_LOWEST_INTERRUPT_PRIORITY			15
 #define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY	5
@@ -175,8 +174,8 @@ See http://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html. */
 #define configMAX_SYSCALL_INTERRUPT_PRIORITY 	( configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS) )
 
 /* Run time stats related macros. */
-#define configGENERATE_RUN_TIME_STATS	     (1)
-#define configUSE_STATS_FORMATTING_FUNCTIONS (1)
+#define configGENERATE_RUN_TIME_STATS	     (%RUNTIME_STATS%)
+#define configUSE_STATS_FORMATTING_FUNCTIONS (%RUNTIME_STATS%)
 #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() //vConfigureTimerForRunTimeStats()
 
 #define portALT_GET_RUN_TIME_COUNTER_VALUE( ulCountValue )                                  \

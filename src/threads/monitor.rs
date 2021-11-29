@@ -5,12 +5,6 @@ use freertos_rust::{CriticalRegion, DurationTicks, FreeRtosSchedulerState, FreeR
 pub fn monitord<D: DurationTicks>(period: D) -> ! {
     static HEADER: &str = "FreeRTOS threadinfo:\n   ID | Name       | State     | Priority | Stack left | CPU Abs.   |  %\n";
 
-    #[cfg(feature = "monitor-heap")]
-    extern "C" {
-        fn xPortGetFreeHeapSize() -> usize;
-        fn xPortGetMinimumEverFreeHeapSize() -> usize;
-    }
-
     loop {
         let mut staticstics: FreeRtosSchedulerState;
         freertos_rust::CurrentTask::delay(period);
@@ -55,15 +49,22 @@ pub fn monitord<D: DurationTicks>(period: D) -> ! {
         //stat.push_str(format!("Total run time: {}", staticstics.total_run_time).as_str());
 
         #[cfg(feature = "monitor-heap")]
-        unsafe {
-            stat.push_str(
-                format!(
-                    "\nHeap statistics: Free {} bytes, Min: {} bytes",
-                    xPortGetFreeHeapSize(),
-                    xPortGetMinimumEverFreeHeapSize()
-                )
-                .as_str(),
-            );
+        {
+            extern "C" {
+                fn xPortGetFreeHeapSize() -> usize;
+                fn xPortGetMinimumEverFreeHeapSize() -> usize;
+            }
+
+            unsafe {
+                stat.push_str(
+                    format!(
+                        "\nHeap statistics: Free {} bytes, Min: {} bytes",
+                        xPortGetFreeHeapSize(),
+                        xPortGetMinimumEverFreeHeapSize()
+                    )
+                    .as_str(),
+                );
+            }
         }
 
         defmt::info!("{}", Display2Format(&stat));
