@@ -5,7 +5,8 @@ use freertos_rust::{Duration, InterruptContext, Mutex, Task, TaskPriority};
 use my_proc_macro::c_str;
 use stm32_usbd::UsbBus;
 
-use stm32l4xx_hal::interrupt;
+use stm32l4xx_hal::gpio::{Alternate, Floating};
+use stm32l4xx_hal::{gpio::Input, interrupt};
 
 use stm32l4xx_hal::stm32l4::stm32l4x2::Interrupt;
 
@@ -23,11 +24,12 @@ static mut USB_BUS: Option<UsbBusAllocator<UsbBus<UsbPeriph>>> = None;
 
 pub struct UsbdPeriph {
     pub usb: stm32l4xx_hal::device::USB,
-    pub gpioa: stm32l4xx_hal::gpio::gpioa::Parts,
+    pub pin_dm: stm32l4xx_hal::gpio::PA11<Alternate<stm32l4xx_hal::gpio::AF10, Input<Floating>>>,
+    pub pin_dp: stm32l4xx_hal::gpio::PA12<Alternate<stm32l4xx_hal::gpio::AF10, Input<Floating>>>,
 }
 
 pub fn usbd(
-    mut usbd_periph: UsbdPeriph,
+    usbd_periph: UsbdPeriph,
     interrupt_controller: Arc<dyn support::interrupt_controller::IInterruptController>,
     interrupt_prio: u8,
 ) -> ! {
@@ -38,18 +40,13 @@ pub fn usbd(
     }
 
     defmt::info!("Creating usb low-level driver: PA11, PA12, AF10");
+
     unsafe {
         // Должен быть статик, так как заимствуется сущностью, которая будет статик.
         USB_BUS = Some(UsbBus::new(UsbPeriph {
             usb: usbd_periph.usb,
-            pin_dm: usbd_periph
-                .gpioa
-                .pa11
-                .into_af10(&mut usbd_periph.gpioa.moder, &mut usbd_periph.gpioa.afrh),
-            pin_dp: usbd_periph
-                .gpioa
-                .pa12
-                .into_af10(&mut usbd_periph.gpioa.moder, &mut usbd_periph.gpioa.afrh),
+            pin_dm: usbd_periph.pin_dm,
+            pin_dp: usbd_periph.pin_dp,
         }))
     }
 
@@ -128,10 +125,8 @@ unsafe fn USB() {
     let interrupt_ctx = InterruptContext::new();
     if let Some(usbd) = USBD_THREAD.as_ref() {
         // Результат не особо важен
-        core::mem::forget(
-            // инкремент нотификационного значения
-            usbd.notify_from_isr(&interrupt_ctx, freertos_rust::TaskNotification::Increment),
-        );
+        // инкремент нотификационного значения
+        let _ = usbd.notify_from_isr(&interrupt_ctx, freertos_rust::TaskNotification::Increment);
     }
 
     // Как только прерывание случилось, мы посылаем сигнал потоку

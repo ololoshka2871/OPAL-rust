@@ -17,7 +17,7 @@ cortex-m-rt = "0.6.11" # need by stm32l4 == 0.13.0
 #freertos-rust = "0.1.2"
 freertos-rust = { git = "https://github.com/lobaro/FreeRTOS-rust.git" }
 
-stm32l4xx-hal = { version= "0.6.0", features = ["stm32l4x2", "rt"] }
+stm32l4xx-hal = { version= "0.6.0", features = ["rt"] }
 
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
@@ -65,7 +65,7 @@ default = [
  ]
 
  monitor-heap = []
- stm32l433 = []
+ stm32l433 = [ "stm32l4xx-hal/stm32l4x2" ]
 
  # do NOT modify these features
 defmt-default = []

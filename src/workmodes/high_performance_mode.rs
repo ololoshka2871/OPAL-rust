@@ -1,5 +1,6 @@
 use alloc::sync::Arc;
 use freertos_rust::{Duration, Mutex, Task, TaskPriority};
+use stm32l4xx_hal::gpio::{Alternate, Floating, Input, AF1, AF10, PA0, PA11, PA12, PA8};
 use stm32l4xx_hal::rcc::{PllConfig, PllDivider};
 use stm32l4xx_hal::{prelude::*, stm32};
 
@@ -17,17 +18,29 @@ pub struct HighPerformanceMode {
     clocks: Option<stm32l4xx_hal::rcc::Clocks>,
 
     usb: stm32l4xx_hal::stm32::USB,
-    gpioa: stm32l4xx_hal::gpio::gpioa::Parts,
+
+    usb_dm: PA11<Alternate<AF10, Input<Floating>>>,
+    usb_dp: PA12<Alternate<AF10, Input<Floating>>>,
 
     interrupt_controller: Arc<dyn IInterruptController>,
 
     crc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>,
+
+    in_p: PA8<Alternate<AF1, Input<Floating>>>,
+    in_t: PA0<Alternate<AF1, Input<Floating>>>,
+    dma1_ch2: stm32l4xx_hal::dma::dma1::C2,
+    dma1_ch6: stm32l4xx_hal::dma::dma1::C6,
+    timer1: stm32l4xx_hal::stm32l4::stm32l4x2::TIM1,
+    timer2: stm32l4xx_hal::stm32l4::stm32l4x2::TIM2,
 }
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     fn new(p: cortex_m::Peripherals, dp: stm32l4xx_hal::stm32l4::stm32l4x2::Peripherals) -> Self {
         let mut rcc = dp.RCC.constrain();
         let ic = Arc::new(InterruptController::new(p.NVIC));
+        let dma_channels = dp.DMA1.split(&mut rcc.ahb1);
+
+        let mut gpioa = dp.GPIOA.split(&mut rcc.ahb2);
 
         HighPerformanceMode {
             flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
@@ -37,13 +50,22 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             usb: dp.USB,
 
-            gpioa: dp.GPIOA.split(&mut rcc.ahb2),
+            usb_dm: gpioa.pa11.into_af10(&mut gpioa.moder, &mut gpioa.afrh),
+            usb_dp: gpioa.pa12.into_af10(&mut gpioa.moder, &mut gpioa.afrh),
+
             pwr: dp.PWR.constrain(&mut rcc.apb1r1),
             clocks: None,
 
             interrupt_controller: ic,
 
             rcc,
+
+            in_p: gpioa.pa8.into_af1(&mut gpioa.moder, &mut gpioa.afrh),
+            in_t: gpioa.pa0.into_af1(&mut gpioa.moder, &mut gpioa.afrl),
+            dma1_ch2: dma_channels.2,
+            dma1_ch6: dma_channels.6,
+            timer1: dp.TIM1,
+            timer2: dp.TIM2,
         }
     }
 
@@ -132,7 +154,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         defmt::trace!("Creating usb thread...");
         let usbperith = threads::usbd::UsbdPeriph {
             usb: self.usb,
-            gpioa: self.gpioa,
+            pin_dp: self.usb_dp,
+            pin_dm: self.usb_dm,
         };
         let ic = self.interrupt_controller.clone();
         Task::new()
@@ -142,6 +165,21 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             .start(move |_| {
                 threads::usbd::usbd(usbperith, ic, crate::config::USB_INTERRUPT_PRIO)
             })?;
+
+        defmt::trace!("Creating Sensors Processor thread...");
+        let sp = threads::sensor_processor::SensorPerith {
+            timer1: self.timer1,
+            timer1_dma_ch: self.dma1_ch6,
+            timer1_pin: self.in_p,
+            timer2: self.timer2,
+            timer2_dma_ch: self.dma1_ch2,
+            timer2_pin: self.in_t,
+        };
+        Task::new()
+            .name("SensProc")
+            .stack_size(1024)
+            .priority(TaskPriority(crate::config::SENS_PROC_TASK_PRIO))
+            .start(move |_| threads::sensor_processor::sensor_processor(sp))?;
 
         // ---
         crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk())?;
