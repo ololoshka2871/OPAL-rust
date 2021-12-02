@@ -85,7 +85,7 @@ pub(crate) struct AppSettings {
     pub P_enabled: bool,
     pub T_enabled: bool,
     pub TCPUEnabled: bool,
-    pub VBatEnable: bool,
+    pub VBatEnabled: bool,
 
     pub P_Coefficients: P16Coeffs,
     pub T_Coefficients: T5Coeffs,

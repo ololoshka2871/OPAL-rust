@@ -33,7 +33,7 @@ pub fn fill_settings(
         settings_resp.PEnabled = ws.P_enabled;
         settings_resp.TEnabled = ws.T_enabled;
         settings_resp.TCPUEnabled = ws.TCPUEnabled;
-        settings_resp.VBatEnable = ws.VBatEnable;
+        settings_resp.VBatEnable = ws.VBatEnabled;
 
         settings_resp.PCoefficients =
             ru_sktbelpa_pressure_self_writer_PCoefficients::from(&ws.P_Coefficients);
@@ -244,7 +244,7 @@ pub fn update_settings(
         store_coeff!(ws.P_enabled <= w; setPEnabled; need_write);
         store_coeff!(ws.T_enabled <= w; setTEnabled; need_write);
         store_coeff!(ws.TCPUEnabled <= w; setTCPUEnabled; need_write);
-        store_coeff!(ws.VBatEnable <= w; setVBatEnable; need_write);
+        store_coeff!(ws.VBatEnabled <= w; setVBatEnable; need_write);
 
         if w.has_setPCoefficients {
             store_coeff!(ws.P_Coefficients.Fp0 <= w.setPCoefficients; Fp0; need_write);

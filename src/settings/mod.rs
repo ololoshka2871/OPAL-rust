@@ -25,7 +25,7 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
     P_enabled: true,
     T_enabled: true,
     TCPUEnabled: true,
-    VBatEnable: true,
+    VBatEnabled: true,
 
     P_Coefficients: app_settings::P16Coeffs {
         Fp0: 0.0,

@@ -32,6 +32,8 @@ pub struct HighPerformanceMode {
     dma1_ch6: stm32l4xx_hal::dma::dma1::C6,
     timer1: stm32l4xx_hal::stm32l4::stm32l4x2::TIM1,
     timer2: stm32l4xx_hal::stm32l4::stm32l4x2::TIM2,
+
+    sensor_command_queue: Arc<freertos_rust::Queue<threads::sensor_processor::Command>>,
 }
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
@@ -66,6 +68,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             dma1_ch6: dma_channels.6,
             timer1: dp.TIM1,
             timer2: dp.TIM2,
+
+            sensor_command_queue: Arc::new(freertos_rust::Queue::new(5).unwrap()),
         }
     }
 
@@ -175,11 +179,13 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             timer2_dma_ch: self.dma1_ch2,
             timer2_pin: self.in_t,
         };
+        let cq = self.sensor_command_queue.clone();
+        let ic = self.interrupt_controller.clone();
         Task::new()
             .name("SensProc")
             .stack_size(1024)
             .priority(TaskPriority(crate::config::SENS_PROC_TASK_PRIO))
-            .start(move |_| threads::sensor_processor::sensor_processor(sp))?;
+            .start(move |_| threads::sensor_processor::sensor_processor(sp, cq, ic))?;
 
         // ---
         crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk())?;

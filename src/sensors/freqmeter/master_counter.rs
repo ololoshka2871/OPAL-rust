@@ -110,6 +110,11 @@ impl MasterCounter {
         let (ext_wraped, value, was_wraped) = self.wrap_result_if_ovf_common(value);
         (value as u64 | ((ext_wraped as u64) << 16), was_wraped)
     }
+
+    #[inline]
+    fn cnt_addr(&self) -> usize {
+        self.counter.cnt_addr()
+    }
 }
 
 impl MasterTimerInfo {
@@ -141,6 +146,11 @@ impl MasterTimerInfo {
     pub fn value64(&self) -> (u64, bool) {
         let counter_value = self.master.counter.value();
         self.master.wrap_result_if_ovf64(counter_value)
+    }
+
+    #[inline]
+    pub fn cnt_addr(&self) -> usize {
+        self.master.cnt_addr()
     }
 }
 

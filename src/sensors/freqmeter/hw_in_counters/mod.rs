@@ -1,35 +1,21 @@
+use crate::support::interrupt_controller::{IInterruptController, Interrupt};
+
+pub trait OnCycleFinished: Sync {
+    fn cycle_finished(&self, captured: u32, target: u32, irq: Interrupt);
+}
+
 pub trait InCounter<DMA, PIN> {
-    /// just number of counter
-    fn id(&self) -> u32;
-
     /// init timer
-    fn init(&self);
+    fn configure<CB: 'static + OnCycleFinished>(
+        &mut self,
+        master_cnt_addr: usize,
+        dma: &mut DMA,
+        input: PIN, // сам пин не используется, но нужен для выведения типа и поглащается
+        ic: &dyn IInterruptController,
+        dma_complead: CB,
+    );
 
-    /// dma channel
-    fn configure_dma(&self);
-
-    /// input pin
-    fn configure_gpio(&self);
-
-    /*
-    /// interrupt priority
-    fn set_interrupt_prio(&self, controller: &dyn IInterruptController, prio: u8);
-
-    /// start counting
-    fn start(&self);
-
-    /// stop counting
-    fn stop(&self);
-
-    /// Enable or disable interrupt
-    fn enable_interrupt(&self, controller: &dyn IInterruptController, enable: bool);
-
-    /// clear interrupt flag
-    fn clear_interrupt(&self, controller: &dyn IInterruptController);
-
-    /// interrupt pending?
-    fn is_irq_pending(&self, controller: &dyn IInterruptController) -> bool;
-    */
+    fn target() -> u32;
 }
 
 #[cfg(feature = "stm32l433")]

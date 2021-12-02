@@ -3,6 +3,9 @@ use freertos_rust::{Duration, DurationTicks};
 
 use stm32l4xx_hal::time::{Hertz, MegaHertz};
 
+use crate::threads;
+use freertos_rust::{Task, TaskPriority};
+
 pub static HSE_FREQ: MegaHertz = MegaHertz(12);
 
 #[derive(Default)]
@@ -52,9 +55,6 @@ pub fn create_monitor(_sysclk: Hertz) -> Result<(), freertos_rust::FreeRtosError
     {
         static MONITOR_STACK_SIZE: u16 = 384;
         pub static MONITOR_MSG_PERIOD: u32 = 1000;
-
-        use crate::threads;
-        use freertos_rust::{Task, TaskPriority};
 
         defmt::trace!("Creating monitor thread...");
         let monitoring_period = _sysclk.duration_ms(MONITOR_MSG_PERIOD);
