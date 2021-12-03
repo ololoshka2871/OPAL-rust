@@ -7,9 +7,6 @@ pub mod power_save_mode;
 pub(crate) mod common;
 //mod my_clock_freeze;
 
-const CRC_POLY: u32 = 0xffff_ffff;
-const CRC_INITIAL: u32 = 0xffff_ffff;
-
 pub trait WorkMode<T> {
     fn new(p: cortex_m::Peripherals, dp: stm32l4xx_hal::device::Peripherals) -> T;
     fn ini_static(&mut self);
@@ -21,8 +18,12 @@ pub trait WorkMode<T> {
 }
 
 fn configure_crc_module(config: stm32l4xx_hal::crc::Config) -> stm32l4xx_hal::crc::Crc {
+    // FIXME
+    //const CRC_POLY: u32 = 0xffff_ffff;
+    //const CRC_INITIAL: u32 = 0xffff_ffff;
+
     config
-        .polynomial(stm32l4xx_hal::crc::Polynomial::L32(CRC_POLY))
-        .initial_value(CRC_INITIAL)
+        //.polynomial(stm32l4xx_hal::crc::Polynomial::L32(CRC_POLY))
+        //.initial_value(CRC_INITIAL)
         .freeze()
 }

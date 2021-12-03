@@ -43,7 +43,7 @@ pub enum Command {
 }
 
 struct DMAFinished {
-    master: Arc<MasterTimerInfo>,
+    master: MasterTimerInfo,
     cc: Arc<freertos_rust::Queue<Command>>,
     ic: Arc<dyn IInterruptController>,
     ch: Channel,
@@ -72,28 +72,28 @@ where
     PTIM: InCounter<PDMA, PPIN> + Enable,
     TTIM: InCounter<TDMA, TPIN> + Enable,
 {
-    let master_counter = Arc::new(MasterCounter::allocate().unwrap());
-
+    let master_counter = MasterCounter::allocate().unwrap();
     perith.timer1.configure(
         master_counter.cnt_addr(),
         &mut perith.timer1_dma_ch,
         perith.timer1_pin,
         ic.as_ref(),
         DMAFinished {
-            master: master_counter.clone(),
+            master: master_counter,
             cc: command_queue.clone(),
             ic: ic.clone(),
             ch: Channel::Pressure,
         },
     );
 
+    let master_counter = MasterCounter::allocate().unwrap();
     perith.timer2.configure(
         master_counter.cnt_addr(),
         &mut perith.timer2_dma_ch,
         perith.timer2_pin,
         ic.as_ref(),
         DMAFinished {
-            master: master_counter.clone(),
+            master: master_counter,
             cc: command_queue.clone(),
             ic: ic.clone(),
             ch: Channel::Temperature,
@@ -117,10 +117,6 @@ where
     //-----------------------------------------------------
 
     loop {
-        unsafe {
-            freertos_rust::freertos_rs_isr_yield();
-        }
-
         if let Ok(cmd) = command_queue.receive(Duration::zero()) {
             defmt::warn!("sensors command: {}", defmt::Debug2Format(&cmd));
             match cmd {

@@ -1,7 +1,12 @@
+use core::{
+    ptr,
+    sync::atomic::{self, AtomicU32, Ordering},
+};
+
 use alloc::boxed::Box;
 use stm32l4xx_hal::{
-    device::{tim1, tim2, RCC},
-    dma::dma1,
+    device::{tim1, tim2, DMA1, RCC},
+    dma::{dma1, Event},
     gpio::{Alternate, Floating, Input, AF1, PA0, PA8},
     interrupt,
     stm32l4::stm32l4x2::{Interrupt as IRQ, TIM1, TIM2},
@@ -16,9 +21,9 @@ use super::{InCounter, OnCycleFinished};
 
 pub type DmaCb = Box<dyn OnCycleFinished>;
 
-trait Utils<T> {
-    fn tim() -> &'static T;
+trait Utils<T, DMA> {
     fn clk_enable();
+    fn select_dma_channel(dma: &mut DMA);
 }
 
 impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
@@ -36,13 +41,11 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
 
         Self::clk_enable();
 
-        let tim = Self::tim();
-
         // pause
-        tim.cr1.modify(|_, w| w.cen().clear_bit());
+        self.stop();
 
         // clear config
-        tim.smcr.modify(|_, w| unsafe {
+        self.smcr.modify(|_, w| unsafe {
             w.sms()
                 .disabled()
                 .ts()
@@ -57,38 +60,81 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
                 .clear_bit()
         });
 
+        self.cr1.modify(|_, w| {
+            w.ckd()
+                .div1()
+                .cms()
+                .edge_aligned()
+                .dir()
+                .up()
+                .opm()
+                .clear_bit()
+                .urs()
+                .clear_bit() // update event generation
+                .udis()
+                .clear_bit()
+        });
+
         // stm32l4xx_hal_tim.c:6569
-        tim.ccer
+        self.ccer
             .modify(|_, w| w.cc1e().clear_bit().cc1p().clear_bit().cc1np().clear_bit());
-        tim.ccmr1_input().modify(|_, w| w.ic1f().fck_int_n2());
+        self.ccmr1_input().modify(|_, w| w.ic1f().fck_int_n2());
 
         // configure clock input PA8 -> CH1
         // stm32l4xx_hal_tim.c:6786
-        //tim.smcr.modify(|_, w| w.ts().itr1().sms().ext_clock_mode());
-        tim.smcr.modify(|_, w| w.ts().itr1().sms().disabled());
+        //tim.smcr.modify(|_, w| w.ts().itr1().sms().ext_clock_mode()); // TODO clock src
+        self.smcr.modify(|_, w| w.ts().itr1().sms().disabled());
 
         // initial state
-        //tim.psc.write(|w| w.psc().bits(0)); // no prescaler
-        tim.psc.write(|w| w.psc().bits(0xF000));
+        //tim.psc.write(|w| w.psc().bits(0)); // TODO: no prescaler
+        self.psc.write(|w| w.psc().bits(0xF000));
 
         // initial target
-        tim.arr
+        self.arr
             .write(|w| unsafe { w.bits(crate::config::INITIAL_FREQMETER_TARGET) });
 
-        // Trigger DMA event to load the prescaler value to the clock
-        tim.egr.write(|w| w.ug().set_bit());
+        // reset DMA request
+        self.sr.modify(|_, w| w.uif().clear_bit());
+
+        // DMA request on overflow
+        self.dier.modify(|_, w| w.ude().set_bit());
+
+        atomic::compiler_fence(Ordering::SeqCst);
 
         // configure dma event src
         // dma master -> buf
-        dma.set_memory_address(unsafe { &TIM1_DMA_BUF as *const _ as u32 }, false);
-        dma.set_peripheral_address(master_cnt_addr as u32, false);
-        dma.set_transfer_length(core::mem::size_of::<u32>() as u16);
+        dma.stop();
+        dma.set_peripheral_address(unsafe { &TIM1_DMA_BUF as *const _ as u32 }, false);
+        dma.set_memory_address(master_cnt_addr as u32, false);
+        dma.set_transfer_length(1); // 1 транзакция 32 -> 32
+        Self::select_dma_channel(dma);
+
+        // в dma .ccrX() приватное, поэтому руками
+        unsafe {
+            (*DMA1::ptr()).ccr6.modify(|_, w| {
+                w.pl()
+                    .very_high() // prio
+                    .msize()
+                    .bits32() // 32 bit
+                    .psize()
+                    .bits32() // 32 bit
+                    .circ()
+                    .clear_bit() // not circular
+                    .dir()
+                    .from_peripheral() // p -> M
+                    .teie()
+                    .disabled() // error irq - disable
+                    .htie()
+                    .disabled() // half transfer - disable
+            });
+        }
 
         // dma enable irq
-        ic.unmask(IRQ::DMA1_CH2.into());
+        ic.set_priority(IRQ::DMA1_CH6.into(), crate::config::DMA_IRQ_PRIO);
+        ic.unmask(IRQ::DMA1_CH6.into());
 
         // dma enable
-        dma.listen(stm32l4xx_hal::dma::Event::TransferComplete);
+        dma.listen(Event::TransferComplete);
         dma.start();
     }
 
@@ -99,27 +145,30 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
 
 impl Enable for TIM1 {
     fn start(&mut self) {
-        todo!()
+        self.cr1.modify(|_, w| w.cen().set_bit());
     }
 
     fn stop(&mut self) {
-        todo!()
+        self.cr1.modify(|_, w| w.cen().clear_bit());
     }
 }
 
-impl Utils<tim1::RegisterBlock> for TIM1 {
-    fn tim() -> &'static tim1::RegisterBlock {
-        unsafe { &*TIM1::ptr() }
-    }
-
+impl Utils<tim1::RegisterBlock, dma1::C6> for TIM1 {
     fn clk_enable() {
-        let enr = unsafe { &(*RCC::ptr()).apb2enr };
-        let rstr = unsafe { &(*RCC::ptr()).apb2rstr };
+        let apb2enr = unsafe { &(*RCC::ptr()).apb2enr };
+        let apb2rstr = unsafe { &(*RCC::ptr()).apb2rstr };
 
         // enable and reset peripheral to a clean slate state
-        enr.modify(|_, w| w.tim1en().set_bit());
-        rstr.modify(|_, w| w.tim1rst().set_bit());
-        rstr.modify(|_, w| w.tim1rst().clear_bit());
+        apb2enr.modify(|_, w| w.tim1en().set_bit());
+        apb2rstr.modify(|_, w| w.tim1rst().set_bit());
+        apb2rstr.modify(|_, w| w.tim1rst().clear_bit());
+    }
+
+    fn select_dma_channel(_dma: &mut dma1::C6) {
+        let dma_reg = unsafe { &*DMA1::ptr() };
+
+        // stm32l433.pdf:p.299 -> TIM1_UP
+        dma_reg.cselr.modify(|_, w| w.c6s().map7());
     }
 }
 
@@ -138,13 +187,11 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
 
         Self::clk_enable();
 
-        let tim = Self::tim();
-
         // pause
-        tim.cr1.modify(|_, w| w.cen().clear_bit());
+        self.stop();
 
         // clear config
-        tim.smcr.modify(|_, w| unsafe {
+        self.smcr.modify(|_, w| unsafe {
             w.sms()
                 .disabled()
                 .ts()
@@ -159,36 +206,81 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
                 .clear_bit()
         });
 
-        // stm32l4xx_hal_tim.c:6569
-        tim.ccer
-            .modify(|_, w| w.cc1e().clear_bit().cc1p().clear_bit().cc1np().clear_bit());
-        tim.ccmr1_input().modify(|_, w| w.ic1f().fck_int_n2());
+        self.cr1.modify(|_, w| {
+            w.ckd()
+                .div1()
+                .cms()
+                .edge_aligned()
+                .dir()
+                .up()
+                .opm()
+                .clear_bit()
+                .urs()
+                .clear_bit() // update event generation
+                .udis()
+                .clear_bit()
+        });
 
-        // configure clock input PA8 -> CH1
+        // stm32l4xx_hal_tim.c:6569
+        self.ccer
+            .modify(|_, w| w.cc1e().clear_bit().cc1p().clear_bit().cc1np().clear_bit());
+        self.ccmr1_input().modify(|_, w| w.ic1f().fck_int_n2());
+
+        // configure clock input PA0 -> CH1
         // stm32l4xx_hal_tim.c:6786
-        tim.smcr.modify(|_, w| w.ts().itr1().sms().ext_clock_mode());
+        //tim.smcr.modify(|_, w| w.ts().itr1().sms().ext_clock_mode()); // TODO clock src
+        self.smcr.modify(|_, w| w.ts().itr1().sms().disabled());
 
         // initial state
-        tim.psc.write(|w| w.psc().bits(0)); // no prescaler
+        //tim.psc.write(|w| w.psc().bits(0)); // TODO: no prescaler
+        self.psc.write(|w| w.psc().bits(0xF000));
 
         // initial target
-        tim.arr
+        self.arr
             .write(|w| unsafe { w.bits(crate::config::INITIAL_FREQMETER_TARGET) });
 
-        // Trigger DMA event to load the prescaler value to the clock
-        tim.egr.write(|w| w.ug().set_bit());
+        // reset DMA request
+        self.sr.modify(|_, w| w.uif().clear_bit());
+
+        // DMA request on overflow
+        self.dier.modify(|_, w| w.ude().set_bit());
+
+        atomic::compiler_fence(Ordering::SeqCst);
 
         // configure dma event src
         // dma master -> buf
-        dma.set_memory_address(unsafe { &TIM1_DMA_BUF as *const _ as u32 }, false);
-        dma.set_peripheral_address(master_cnt_addr as u32, false);
-        dma.set_transfer_length(core::mem::size_of::<u32>() as u16);
+        dma.stop();
+        dma.set_peripheral_address(unsafe { &TIM2_DMA_BUF as *const _ as u32 }, false);
+        dma.set_memory_address(master_cnt_addr as u32, false);
+        dma.set_transfer_length(1); // 1 транзакция 32 -> 32
+        Self::select_dma_channel(dma);
+
+        // в dma .ccrX() приватное, поэтому руками
+        unsafe {
+            (*DMA1::ptr()).ccr2.modify(|_, w| {
+                w.pl()
+                    .very_high() // prio
+                    .msize()
+                    .bits32() // 32 bit
+                    .psize()
+                    .bits32() // 32 bit
+                    .circ()
+                    .clear_bit() // not circular
+                    .dir()
+                    .from_peripheral() // p -> M
+                    .teie()
+                    .disabled() // error irq - disable
+                    .htie()
+                    .disabled() // half transfer - disable
+            });
+        }
 
         // dma enable irq
+        ic.set_priority(IRQ::DMA1_CH2.into(), crate::config::DMA_IRQ_PRIO);
         ic.unmask(IRQ::DMA1_CH2.into());
 
         // dma enable
-        dma.listen(stm32l4xx_hal::dma::Event::TransferComplete);
+        dma.listen(Event::TransferComplete);
         dma.start();
     }
 
@@ -199,27 +291,30 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
 
 impl Enable for TIM2 {
     fn start(&mut self) {
-        todo!()
+        self.cr1.modify(|_, w| w.cen().set_bit());
     }
 
     fn stop(&mut self) {
-        todo!()
+        self.cr1.modify(|_, w| w.cen().clear_bit());
     }
 }
 
-impl Utils<tim2::RegisterBlock> for TIM2 {
-    fn tim() -> &'static tim2::RegisterBlock {
-        unsafe { &*TIM2::ptr() }
-    }
-
+impl Utils<tim2::RegisterBlock, dma1::C2> for TIM2 {
     fn clk_enable() {
-        let enr = unsafe { &(*RCC::ptr()).apb1enr1 };
-        let rstr = unsafe { &(*RCC::ptr()).apb1rstr1 };
+        let apb1enr1 = unsafe { &(*RCC::ptr()).apb1enr1 };
+        let apb1rstr1 = unsafe { &(*RCC::ptr()).apb1rstr1 };
 
         // enable and reset peripheral to a clean slate state
-        enr.modify(|_, w| w.tim2en().set_bit());
-        rstr.modify(|_, w| w.tim2rst().set_bit());
-        rstr.modify(|_, w| w.tim2rst().clear_bit());
+        apb1enr1.modify(|_, w| w.tim2en().set_bit());
+        apb1rstr1.modify(|_, w| w.tim2rst().set_bit());
+        apb1rstr1.modify(|_, w| w.tim2rst().clear_bit());
+    }
+
+    fn select_dma_channel(_dma: &mut dma1::C2) {
+        let dma_reg = unsafe { &*DMA1::ptr() };
+
+        // stm32l433.pdf:p.299 -> TIM1_UP
+        dma_reg.cselr.modify(|_, w| w.c2s().map4());
     }
 }
 
@@ -243,7 +338,7 @@ unsafe fn call_dma_cb(cb: &Option<DmaCb>, captured: u32, target: u32, irq: Inter
 unsafe fn DMA1_CH2() {
     call_dma_cb(
         &DMA1_CH2_CB,
-        TIM1_DMA_BUF,
+        ptr::read_volatile(&TIM1_DMA_BUF as *const _),
         TIM1::target(),
         IRQ::DMA1_CH2.into(),
     );
@@ -253,7 +348,7 @@ unsafe fn DMA1_CH2() {
 unsafe fn DMA1_CH6() {
     call_dma_cb(
         &DMA1_CH6_CB,
-        TIM2_DMA_BUF,
+        ptr::read_volatile(&TIM2_DMA_BUF as *const _),
         TIM2::target(),
         IRQ::DMA1_CH6.into(),
     );

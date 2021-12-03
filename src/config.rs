@@ -7,6 +7,9 @@ pub const USB_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 1;
 /// master counter interrupt prio
 pub const MASTER_COUNTER_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 20;
 
+// dma value captured interrupt prio
+pub const DMA_IRQ_PRIO: u8 = IRQ_HIGEST_PRIO + 5;
+
 //-----------------------------------------------------------------------------
 
 /// pseudo-idle task prio
