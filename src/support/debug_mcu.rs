@@ -27,3 +27,6 @@ impl Writable for CR {}
 
 pub mod cr;
 */
+
+pub const DEBUG_MCU: *mut crate::support::debug_mcu::RegisterBlock =
+    0xE004_2000 as *mut crate::support::debug_mcu::RegisterBlock;

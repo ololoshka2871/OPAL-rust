@@ -20,3 +20,6 @@ target/
 test/protocol_pb2.py
 __pycache__/
 .pytest_cache/
+
+#regs
+*_regs.txt

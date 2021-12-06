@@ -22,10 +22,6 @@ use super::{InCounter, OnCycleFinished};
 
 pub type DmaCb = Box<dyn OnCycleFinished>;
 
-#[cfg(debug_assertions)]
-const DEBUG_MCU: *mut crate::support::debug_mcu::RegisterBlock =
-    0xE004_2000 as *mut crate::support::debug_mcu::RegisterBlock;
-
 trait Utils<T, DMA> {
     fn clk_enable();
     fn select_dma_channel(dma: &mut DMA);
@@ -206,6 +202,8 @@ impl Utils<tim1::RegisterBlock, dma1::C6> for TIM1 {
 
     #[cfg(debug_assertions)]
     fn configure_debug_freeze() {
+        use crate::support::debug_mcu::DEBUG_MCU;
+
         // __HAL_DBGMCU_FREEZE_TIM1() implementation
         unsafe {
             (*DEBUG_MCU)
@@ -395,6 +393,8 @@ impl Utils<tim2::RegisterBlock, dma1::C2> for TIM2 {
 
     #[cfg(debug_assertions)]
     fn configure_debug_freeze() {
+        use crate::support::debug_mcu::DEBUG_MCU;
+
         // __HAL_DBGMCU_FREEZE_TIM1() implementation
         unsafe {
             (*DEBUG_MCU)
