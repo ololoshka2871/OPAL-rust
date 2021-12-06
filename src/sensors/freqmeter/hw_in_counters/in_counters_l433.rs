@@ -1,6 +1,6 @@
 use core::{
     ptr,
-    sync::atomic::{self, AtomicU32, Ordering},
+    sync::atomic::{self, Ordering},
 };
 
 use alloc::boxed::Box;
@@ -21,9 +21,14 @@ use super::{InCounter, OnCycleFinished};
 
 pub type DmaCb = Box<dyn OnCycleFinished>;
 
+#[cfg(debug_assertions)]
+const DEBUG_MCU: *mut crate::support::debug_mcu::RegisterBlock =
+    0xE004_2000 as *mut crate::support::debug_mcu::RegisterBlock;
+
 trait Utils<T, DMA> {
     fn clk_enable();
     fn select_dma_channel(dma: &mut DMA);
+    fn configure_debug_freeze();
 }
 
 impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
@@ -104,8 +109,8 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
         // configure dma event src
         // dma master -> buf
         dma.stop();
-        dma.set_peripheral_address(unsafe { &TIM1_DMA_BUF as *const _ as u32 }, false);
-        dma.set_memory_address(master_cnt_addr as u32, false);
+        dma.set_memory_address(unsafe { &TIM1_DMA_BUF as *const _ as u32 }, false);
+        dma.set_peripheral_address(master_cnt_addr as u32, false);
         dma.set_transfer_length(1); // 1 транзакция 32 -> 32
         Self::select_dma_channel(dma);
 
@@ -119,7 +124,7 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
                     .psize()
                     .bits32() // 32 bit
                     .circ()
-                    .clear_bit() // not circular
+                    .set_bit() // circular mode
                     .dir()
                     .from_peripheral() // p -> M
                     .teie()
@@ -136,6 +141,9 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
         // dma enable
         dma.listen(Event::TransferComplete);
         dma.start();
+
+        #[cfg(debug_assertions)]
+        Self::configure_debug_freeze();
     }
 
     fn target() -> u32 {
@@ -169,6 +177,15 @@ impl Utils<tim1::RegisterBlock, dma1::C6> for TIM1 {
 
         // stm32l433.pdf:p.299 -> TIM1_UP
         dma_reg.cselr.modify(|_, w| w.c6s().map7());
+    }
+
+    fn configure_debug_freeze() {
+        // __HAL_DBGMCU_FREEZE_TIM1() implementation
+        unsafe {
+            (*DEBUG_MCU)
+                .apb2fz
+                .set((*DEBUG_MCU).apb2fz.get() | (1 << 11));
+        }
     }
 }
 
@@ -233,7 +250,7 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
 
         // initial state
         //tim.psc.write(|w| w.psc().bits(0)); // TODO: no prescaler
-        self.psc.write(|w| w.psc().bits(0xF000));
+        self.psc.write(|w| w.psc().bits(0xF001));
 
         // initial target
         self.arr
@@ -250,8 +267,8 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
         // configure dma event src
         // dma master -> buf
         dma.stop();
-        dma.set_peripheral_address(unsafe { &TIM2_DMA_BUF as *const _ as u32 }, false);
-        dma.set_memory_address(master_cnt_addr as u32, false);
+        dma.set_memory_address(unsafe { &TIM2_DMA_BUF as *const _ as u32 }, false);
+        dma.set_peripheral_address(master_cnt_addr as u32, false);
         dma.set_transfer_length(1); // 1 транзакция 32 -> 32
         Self::select_dma_channel(dma);
 
@@ -265,7 +282,7 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
                     .psize()
                     .bits32() // 32 bit
                     .circ()
-                    .clear_bit() // not circular
+                    .set_bit() // circular mode
                     .dir()
                     .from_peripheral() // p -> M
                     .teie()
@@ -282,6 +299,9 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
         // dma enable
         dma.listen(Event::TransferComplete);
         dma.start();
+
+        #[cfg(debug_assertions)]
+        Self::configure_debug_freeze();
     }
 
     fn target() -> u32 {
@@ -316,10 +336,19 @@ impl Utils<tim2::RegisterBlock, dma1::C2> for TIM2 {
         // stm32l433.pdf:p.299 -> TIM1_UP
         dma_reg.cselr.modify(|_, w| w.c2s().map4());
     }
+
+    fn configure_debug_freeze() {
+        // __HAL_DBGMCU_FREEZE_TIM1() implementation
+        unsafe {
+            (*DEBUG_MCU)
+                .apb1fzr1
+                .set((*DEBUG_MCU).apb1fzr1.get() | (1 << 0));
+        }
+    }
 }
 
-static mut TIM1_DMA_BUF: u32 = 0;
-static mut TIM2_DMA_BUF: u32 = 0;
+static mut TIM1_DMA_BUF: u32 = 0xA55AA55A;
+static mut TIM2_DMA_BUF: u32 = !0xA55AA55A;
 
 static mut DMA1_CH2_CB: Option<DmaCb> = None;
 static mut DMA1_CH6_CB: Option<DmaCb> = None;
@@ -336,6 +365,19 @@ unsafe fn call_dma_cb(cb: &Option<DmaCb>, captured: u32, target: u32, irq: Inter
 
 #[interrupt]
 unsafe fn DMA1_CH2() {
+    let dma = &*DMA1::ptr();
+    if dma.isr.read().teif2().bits() {
+        panic!(
+            "DMA1_CH2: Transferr error: 0x{:08X} -> 0x{:08X} count {}",
+            dma.cpar2.read().bits(),
+            dma.cmar2.read().bits(),
+            dma.cndtr2.read().bits()
+        );
+    }
+
+    // reset interrupt flag
+    dma.ifcr.write(|w| w.cgif2().set_bit());
+
     call_dma_cb(
         &DMA1_CH2_CB,
         ptr::read_volatile(&TIM1_DMA_BUF as *const _),
@@ -346,6 +388,19 @@ unsafe fn DMA1_CH2() {
 
 #[interrupt]
 unsafe fn DMA1_CH6() {
+    let dma = &*DMA1::ptr();
+    if dma.isr.read().teif6().bits() {
+        panic!(
+            "DMA1_CH2: Transferr error: 0x{:08X} -> 0x{:08X} count {}",
+            dma.cpar6.read().bits(),
+            dma.cmar6.read().bits(),
+            dma.cndtr6.read().bits()
+        );
+    }
+
+    // reset interrupt flag
+    dma.ifcr.write(|w| w.cgif6().set_bit());
+
     call_dma_cb(
         &DMA1_CH6_CB,
         ptr::read_volatile(&TIM2_DMA_BUF as *const _),

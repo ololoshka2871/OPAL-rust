@@ -12,3 +12,5 @@ mod interrupt_controller_l433;
 
 #[cfg(feature = "stm32l433")]
 pub use interrupt_controller_l433::InterruptController;
+
+pub mod debug_mcu;
