@@ -1,5 +1,5 @@
 use core::{
-    ptr,
+    panic,
     sync::atomic::{self, Ordering},
 };
 
@@ -11,6 +11,7 @@ use stm32l4xx_hal::{
     interrupt,
     stm32l4::stm32l4x2::{Interrupt as IRQ, TIM1, TIM2},
 };
+use vcell::VolatileCell;
 
 use crate::{
     sensors::Enable,
@@ -28,6 +29,14 @@ const DEBUG_MCU: *mut crate::support::debug_mcu::RegisterBlock =
 trait Utils<T, DMA> {
     fn clk_enable();
     fn select_dma_channel(dma: &mut DMA);
+
+    fn target() -> u32;
+    fn prescaler() -> u32;
+
+    fn set_prescaler(psc: u32);
+    fn set_reload(reload: u32);
+
+    #[cfg(debug_assertions)]
     fn configure_debug_freeze();
 }
 
@@ -91,12 +100,7 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
         self.smcr.modify(|_, w| w.ts().itr1().sms().disabled());
 
         // initial state
-        //tim.psc.write(|w| w.psc().bits(0)); // TODO: no prescaler
-        self.psc.write(|w| w.psc().bits(0xF000));
-
-        // initial target
-        self.arr
-            .write(|w| unsafe { w.bits(crate::config::INITIAL_FREQMETER_TARGET) });
+        self.set_target32(crate::config::INITIAL_FREQMETER_TARGET);
 
         // reset DMA request
         self.sr.modify(|_, w| w.uif().clear_bit());
@@ -109,7 +113,7 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
         // configure dma event src
         // dma master -> buf
         dma.stop();
-        dma.set_memory_address(unsafe { &TIM1_DMA_BUF as *const _ as u32 }, false);
+        dma.set_memory_address(unsafe { TIM1_DMA_BUF.as_ptr() as u32 }, false);
         dma.set_peripheral_address(master_cnt_addr as u32, false);
         dma.set_transfer_length(1); // 1 транзакция 32 -> 32
         Self::select_dma_channel(dma);
@@ -128,7 +132,7 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
                     .dir()
                     .from_peripheral() // p -> M
                     .teie()
-                    .disabled() // error irq - disable
+                    .enabled() // error irq - disable
                     .htie()
                     .disabled() // half transfer - disable
             });
@@ -146,8 +150,26 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
         Self::configure_debug_freeze();
     }
 
-    fn target() -> u32 {
-        unsafe { (*TIM1::ptr()).arr.read().bits() }
+    fn reset(&mut self) {
+        self.egr.write(|w| w.ug().set_bit());
+    }
+
+    fn target32(&self) -> u32 {
+        as_target32(Self::prescaler(), Self::target())
+    }
+
+    fn set_target32(&mut self, target: u32) {
+        let (psc, reload) = transform_target32(target);
+        let was_run = self.stop();
+
+        Self::set_prescaler(psc);
+        Self::set_reload(reload);
+
+        self.reset();
+
+        if was_run {
+            self.start();
+        }
     }
 }
 
@@ -156,8 +178,11 @@ impl Enable for TIM1 {
         self.cr1.modify(|_, w| w.cen().set_bit());
     }
 
-    fn stop(&mut self) {
+    fn stop(&mut self) -> bool {
+        let res = self.cr1.read().cen().bit_is_set();
         self.cr1.modify(|_, w| w.cen().clear_bit());
+
+        res
     }
 }
 
@@ -173,12 +198,13 @@ impl Utils<tim1::RegisterBlock, dma1::C6> for TIM1 {
     }
 
     fn select_dma_channel(_dma: &mut dma1::C6) {
-        let dma_reg = unsafe { &*DMA1::ptr() };
-
         // stm32l433.pdf:p.299 -> TIM1_UP
-        dma_reg.cselr.modify(|_, w| w.c6s().map7());
+        unsafe {
+            (*DMA1::ptr()).cselr.modify(|_, w| w.c6s().map7());
+        }
     }
 
+    #[cfg(debug_assertions)]
     fn configure_debug_freeze() {
         // __HAL_DBGMCU_FREEZE_TIM1() implementation
         unsafe {
@@ -186,6 +212,22 @@ impl Utils<tim1::RegisterBlock, dma1::C6> for TIM1 {
                 .apb2fz
                 .set((*DEBUG_MCU).apb2fz.get() | (1 << 11));
         }
+    }
+
+    fn set_prescaler(psc: u32) {
+        unsafe { (*Self::ptr()).psc.write(|w| w.bits(psc)) }
+    }
+
+    fn set_reload(reload: u32) {
+        unsafe { (*Self::ptr()).arr.write(|w| w.bits(reload)) }
+    }
+
+    fn target() -> u32 {
+        unsafe { (*Self::ptr()).arr.read().bits() }
+    }
+
+    fn prescaler() -> u32 {
+        unsafe { (*Self::ptr()).psc.read().bits() }
     }
 }
 
@@ -249,12 +291,7 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
         self.smcr.modify(|_, w| w.ts().itr1().sms().disabled());
 
         // initial state
-        //tim.psc.write(|w| w.psc().bits(0)); // TODO: no prescaler
-        self.psc.write(|w| w.psc().bits(0xF001));
-
-        // initial target
-        self.arr
-            .write(|w| unsafe { w.bits(crate::config::INITIAL_FREQMETER_TARGET) });
+        self.set_target32(crate::config::INITIAL_FREQMETER_TARGET);
 
         // reset DMA request
         self.sr.modify(|_, w| w.uif().clear_bit());
@@ -267,7 +304,7 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
         // configure dma event src
         // dma master -> buf
         dma.stop();
-        dma.set_memory_address(unsafe { &TIM2_DMA_BUF as *const _ as u32 }, false);
+        dma.set_memory_address(unsafe { TIM2_DMA_BUF.as_ptr() as u32 }, false);
         dma.set_peripheral_address(master_cnt_addr as u32, false);
         dma.set_transfer_length(1); // 1 транзакция 32 -> 32
         Self::select_dma_channel(dma);
@@ -286,7 +323,7 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
                     .dir()
                     .from_peripheral() // p -> M
                     .teie()
-                    .disabled() // error irq - disable
+                    .enabled() // error irq - enable
                     .htie()
                     .disabled() // half transfer - disable
             });
@@ -304,8 +341,26 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
         Self::configure_debug_freeze();
     }
 
-    fn target() -> u32 {
-        unsafe { (*TIM2::ptr()).arr.read().bits() }
+    fn reset(&mut self) {
+        self.egr.write(|w| w.ug().set_bit());
+    }
+
+    fn target32(&self) -> u32 {
+        as_target32(Self::prescaler(), Self::target())
+    }
+
+    fn set_target32(&mut self, target: u32) {
+        let (psc, reload) = transform_target32(target);
+        let was_run = self.stop();
+
+        Self::set_prescaler(psc);
+        Self::set_reload(reload);
+
+        self.reset();
+
+        if was_run {
+            self.start();
+        }
     }
 }
 
@@ -314,8 +369,11 @@ impl Enable for TIM2 {
         self.cr1.modify(|_, w| w.cen().set_bit());
     }
 
-    fn stop(&mut self) {
+    fn stop(&mut self) -> bool {
+        let res = self.cr1.read().cen().bit_is_set();
         self.cr1.modify(|_, w| w.cen().clear_bit());
+
+        res
     }
 }
 
@@ -331,12 +389,11 @@ impl Utils<tim2::RegisterBlock, dma1::C2> for TIM2 {
     }
 
     fn select_dma_channel(_dma: &mut dma1::C2) {
-        let dma_reg = unsafe { &*DMA1::ptr() };
-
         // stm32l433.pdf:p.299 -> TIM1_UP
-        dma_reg.cselr.modify(|_, w| w.c2s().map4());
+        unsafe { (*DMA1::ptr()).cselr.modify(|_, w| w.c2s().map4()) }
     }
 
+    #[cfg(debug_assertions)]
     fn configure_debug_freeze() {
         // __HAL_DBGMCU_FREEZE_TIM1() implementation
         unsafe {
@@ -345,10 +402,26 @@ impl Utils<tim2::RegisterBlock, dma1::C2> for TIM2 {
                 .set((*DEBUG_MCU).apb1fzr1.get() | (1 << 0));
         }
     }
+
+    fn target() -> u32 {
+        unsafe { (*Self::ptr()).arr.read().bits() }
+    }
+
+    fn prescaler() -> u32 {
+        unsafe { (*Self::ptr()).psc.read().bits() }
+    }
+
+    fn set_prescaler(psc: u32) {
+        unsafe { (*Self::ptr()).psc.write(|w| w.bits(psc)) }
+    }
+
+    fn set_reload(reload: u32) {
+        unsafe { (*Self::ptr()).arr.write(|w| w.bits(reload)) }
+    }
 }
 
-static mut TIM1_DMA_BUF: u32 = 0xA55AA55A;
-static mut TIM2_DMA_BUF: u32 = !0xA55AA55A;
+static mut TIM1_DMA_BUF: VolatileCell<u32> = VolatileCell::new(0);
+static mut TIM2_DMA_BUF: VolatileCell<u32> = VolatileCell::new(0);
 
 static mut DMA1_CH2_CB: Option<DmaCb> = None;
 static mut DMA1_CH6_CB: Option<DmaCb> = None;
@@ -357,9 +430,30 @@ fn set_cb<CB: 'static + OnCycleFinished>(cb: &mut Option<DmaCb>, f: CB) {
     *cb = Some(Box::new(f));
 }
 
-unsafe fn call_dma_cb(cb: &Option<DmaCb>, captured: u32, target: u32, irq: Interrupt) {
+fn as_target32(prescaler: u32, reload: u32) -> u32 {
+    (prescaler + 1) * reload
+}
+
+fn transform_target32(target: u32) -> (u32, u32) {
+    for prescaler in 1..u16::MAX as u32 {
+        let reload = target / prescaler;
+        if reload < u16::MAX as u32 {
+            return (prescaler - 1, reload + 1);
+        }
+    }
+    panic!("Can't find prescaler for target: {}", target);
+}
+
+unsafe fn call_dma_cb(
+    cb: &Option<DmaCb>,
+    captured: u32,
+    prescaler: u32,
+    reload: u32,
+    irq: Interrupt,
+) {
     if let Some(f) = cb {
-        f.cycle_finished(captured, target, irq);
+        // reload | prescaler -> 32 bit target
+        f.cycle_finished(captured, as_target32(prescaler, reload), irq);
     }
 }
 
@@ -380,7 +474,8 @@ unsafe fn DMA1_CH2() {
 
     call_dma_cb(
         &DMA1_CH2_CB,
-        ptr::read_volatile(&TIM1_DMA_BUF as *const _),
+        TIM1_DMA_BUF.get(),
+        TIM1::prescaler(),
         TIM1::target(),
         IRQ::DMA1_CH2.into(),
     );
@@ -403,7 +498,8 @@ unsafe fn DMA1_CH6() {
 
     call_dma_cb(
         &DMA1_CH6_CB,
-        ptr::read_volatile(&TIM2_DMA_BUF as *const _),
+        TIM2_DMA_BUF.get(),
+        TIM2::prescaler(),
         TIM2::target(),
         IRQ::DMA1_CH6.into(),
     );

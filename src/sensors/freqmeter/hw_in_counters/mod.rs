@@ -15,7 +15,9 @@ pub trait InCounter<DMA, PIN> {
         dma_complead: CB,
     );
 
-    fn target() -> u32;
+    fn target32(&self) -> u32;
+    fn reset(&mut self);
+    fn set_target32(&mut self, target: u32);
 }
 
 #[cfg(feature = "stm32l433")]

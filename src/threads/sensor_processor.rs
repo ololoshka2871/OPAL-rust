@@ -118,7 +118,7 @@ where
 
     loop {
         if let Ok(cmd) = command_queue.receive(Duration::zero()) {
-            defmt::warn!("sensors command: {}", defmt::Debug2Format(&cmd));
+            //defmt::warn!("sensors command: {}", defmt::Debug2Format(&cmd));
             match cmd {
                 Command::Start(c) => {
                     channels[c as usize].start();
