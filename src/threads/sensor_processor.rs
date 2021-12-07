@@ -1,15 +1,13 @@
 use core::{fmt::Debug, marker::PhantomData};
 
 use alloc::sync::Arc;
-use defmt::Format;
 use freertos_rust::{Duration, InterruptContext};
-use num_traits::ops::wrapping;
 use stm32l4xx_hal::{gpio::State, prelude::OutputPin};
 
 use crate::{
     sensors::freqmeter::{
         master_counter::{MasterCounter, MasterTimerInfo},
-        InCounter, OnCycleFinished,
+        InCounter, OnCycleFinished, TimerEvent,
     },
     support::interrupt_controller::{IInterruptController, Interrupt},
 };
@@ -45,12 +43,13 @@ pub enum Channel {
 pub enum Command {
     Start(Channel),
     Stop(Channel),
-    Ready(Channel, u32, u32, bool),
+    Ready(Channel, TimerEvent, u32, u32, bool),
 }
 
 trait Enabler {
     fn enable(&mut self);
     fn diasbe(&mut self);
+    fn start_cycle(&mut self);
 }
 
 struct FreqmeterEnable<'a, TIM, DMA, INPIN, ENPIN>
@@ -85,6 +84,11 @@ where
         self.freqmeter.stop();
         self.set_lvl(crate::config::GENERATOR_DISABLE_LVL);
     }
+
+    #[inline]
+    fn start_cycle(&mut self) {
+        self.freqmeter.start();
+    }
 }
 
 impl<'a, TIM, DMA, INPIN, ENPIN> FreqmeterEnable<'a, TIM, DMA, INPIN, ENPIN>
@@ -111,13 +115,13 @@ where
 }
 
 impl OnCycleFinished for DMAFinished {
-    fn cycle_finished(&self, captured: u32, target: u32, irq: Interrupt) {
+    fn cycle_finished(&self, event: TimerEvent, captured: u32, target: u32, irq: Interrupt) {
         let mut ctx = InterruptContext::new();
         let (result, wraped) = self.master.update_captured_value(captured);
-        if let Err(e) = self
-            .cc
-            .send_from_isr(&mut ctx, Command::Ready(self.ch, target, result, wraped))
-        {
+        if let Err(e) = self.cc.send_from_isr(
+            &mut ctx,
+            Command::Ready(self.ch, event, target, result, wraped),
+        ) {
             defmt::error!("Sensor command queue error: {}", defmt::Debug2Format(&e));
         }
         self.ic.unpend(irq);
@@ -168,9 +172,10 @@ where
     let mut enabler1 = FreqmeterEnable::new(&mut perith.timer1, perith.en_1);
     let mut enabler2 = FreqmeterEnable::new(&mut perith.timer2, perith.en_2);
 
-    let mut channels: [&mut dyn Enabler; 2] = [&mut enabler1, &mut enabler2];
+    let channels: [&mut dyn Enabler; 2] = [&mut enabler1, &mut enabler2];
 
     //------------------ remove after tests --------------
+    /*
     crate::settings::settings_action::<_, _, _, ()>(Duration::infinite(), |(ws, _)| {
         let flags = [ws.P_enabled, ws.T_enabled, ws.TCPUEnabled, ws.VBatEnabled];
         for (c, f) in channels.iter_mut().zip(flags.iter()) {
@@ -182,9 +187,10 @@ where
         Ok(())
     })
     .expect("Failed to read channel enable");
-    //-----------------------------------------------------
+    //-----------------------------------------------------*/
+    channels[0].enable();
 
-    let mut prev = [0u32; 2];
+    let mut start = [0u32; 2];
 
     loop {
         if let Ok(cmd) = command_queue.receive(Duration::zero()) {
@@ -196,28 +202,46 @@ where
                 Command::Stop(c) => {
                     channels[c as usize].diasbe();
                 }
-                Command::Ready(_c, _target, _result, _wraped) => {
-                    if _c == Channel::Pressure {
-                        let prev = &mut prev[_c as usize];
+                Command::Ready(c, ev, target, result, wraped) => {
+                    let prev = &mut start[c as usize];
 
-                        let diff = if *prev <= _result {
-                            _result - *prev
-                        } else {
-                            u32::MAX - *prev + _result
-                        } as f32;
+                    match ev {
+                        TimerEvent::Start => {
+                            *prev = result;
+                        }
+                        TimerEvent::Stop => {
+                            let diff = if *prev <= result {
+                                result - *prev
+                            } else {
+                                u32::MAX - *prev + result
+                            } as f32;
 
-                        *prev = _result;
+                            *prev = result;
 
-                        let F = 20000000.0f32 / diff * _target as f32;
+                            let f = 20000000.0f32 / diff * target as f32;
 
-                        defmt::trace!(
-                            "Sensor result: c={}, target={}, diff={}, wraped={}: F = {}",
-                            _c,
-                            _target,
-                            diff,
-                            _wraped,
-                            F
-                        )
+                            if wraped {
+                                defmt::warn!(
+                                    "Sensor result: c={}, target={}, diff={}, wraped={}: F = {}",
+                                    c,
+                                    target,
+                                    diff,
+                                    wraped,
+                                    f
+                                );
+                            } else {
+                                defmt::trace!(
+                                    "Sensor result: c={}, target={}, diff={}, wraped={}: F = {}",
+                                    c,
+                                    target,
+                                    diff,
+                                    wraped,
+                                    f
+                                );
+                            }
+
+                            channels[c as usize].start_cycle();
+                        }
                     }
                 }
             }

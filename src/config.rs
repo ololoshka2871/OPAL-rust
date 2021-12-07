@@ -1,13 +1,14 @@
 use stm32l4xx_hal::gpio::State;
 
 // see: src/config/FreeRTOSConfig.h: configMAX_SYSCALL_INTERRUPT_PRIORITY
+// value + -> prio -
 pub const IRQ_HIGEST_PRIO: u8 = 80;
-
-/// USB interrupt ptiority
-pub const USB_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 1;
 
 /// master counter interrupt prio
 pub const MASTER_COUNTER_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 20;
+
+/// USB interrupt ptiority
+pub const USB_INTERRUPT_PRIO: u8 = MASTER_COUNTER_INTERRUPT_PRIO + 1;
 
 // dma value captured interrupt prio
 pub const DMA_IRQ_PRIO: u8 = IRQ_HIGEST_PRIO + 5;
