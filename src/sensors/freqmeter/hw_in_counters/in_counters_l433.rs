@@ -527,17 +527,17 @@ unsafe fn DMA1_CH2() {
     // reset interrupt flag
     dma.ifcr.write(|w| w.cgif2().set_bit());
 
-    let opm = TIM1::opm();
+    let opm = TIM2::opm();
     if !opm {
-        TIM1::set_opm()
+        TIM2::set_opm()
     }
 
     call_dma_cb(
         &DMA1_CH2_CB,
         opm,
-        TIM1_DMA_BUF.get(),
-        TIM1::prescaler(),
-        TIM1::target(),
+        TIM2_DMA_BUF.get(),
+        TIM2::prescaler(),
+        TIM2::target(),
         IRQ::DMA1_CH2.into(),
     );
 }
@@ -557,17 +557,17 @@ unsafe fn DMA1_CH6() {
     // reset interrupt flag
     dma.ifcr.write(|w| w.cgif6().set_bit());
 
-    let opm = TIM2::opm();
+    let opm = TIM1::opm();
     if !opm {
-        TIM2::set_opm()
+        TIM1::set_opm()
     }
 
     call_dma_cb(
         &DMA1_CH6_CB,
         opm,
-        TIM2_DMA_BUF.get(),
-        TIM2::prescaler(),
-        TIM2::target(),
+        TIM1_DMA_BUF.get(),
+        TIM1::prescaler(),
+        TIM1::target(),
         IRQ::DMA1_CH6.into(),
     );
 }

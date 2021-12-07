@@ -32,7 +32,7 @@ pub const SENS_PROC_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 1;
 
 //-----------------------------------------------------------------------------
 
-pub const INITIAL_FREQMETER_TARGET: u32 = 100;
+pub const INITIAL_FREQMETER_TARGET: u32 = 1000;
 
 //-----------------------------------------------------------------------------
 

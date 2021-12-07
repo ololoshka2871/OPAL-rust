@@ -172,10 +172,9 @@ where
     let mut enabler1 = FreqmeterEnable::new(&mut perith.timer1, perith.en_1);
     let mut enabler2 = FreqmeterEnable::new(&mut perith.timer2, perith.en_2);
 
-    let channels: [&mut dyn Enabler; 2] = [&mut enabler1, &mut enabler2];
+    let mut channels: [&mut dyn Enabler; 2] = [&mut enabler1, &mut enabler2];
 
     //------------------ remove after tests --------------
-    /*
     crate::settings::settings_action::<_, _, _, ()>(Duration::infinite(), |(ws, _)| {
         let flags = [ws.P_enabled, ws.T_enabled, ws.TCPUEnabled, ws.VBatEnabled];
         for (c, f) in channels.iter_mut().zip(flags.iter()) {
@@ -187,8 +186,7 @@ where
         Ok(())
     })
     .expect("Failed to read channel enable");
-    //-----------------------------------------------------*/
-    channels[0].enable();
+    //-----------------------------------------------------
 
     let mut start = [0u32; 2];
 
