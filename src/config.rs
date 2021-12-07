@@ -1,3 +1,5 @@
+use stm32l4xx_hal::gpio::State;
+
 // see: src/config/FreeRTOSConfig.h: configMAX_SYSCALL_INTERRUPT_PRIORITY
 pub const IRQ_HIGEST_PRIO: u8 = 80;
 
@@ -29,4 +31,10 @@ pub const SENS_PROC_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 1;
 
 //-----------------------------------------------------------------------------
 
-pub const INITIAL_FREQMETER_TARGET: u32 = 0x10000;
+pub const INITIAL_FREQMETER_TARGET: u32 = 100;
+
+//-----------------------------------------------------------------------------
+
+// generator enable/disable lvls
+pub const GENERATOR_ENABLE_LVL: State = State::High;
+pub const GENERATOR_DISABLE_LVL: State = State::Low;

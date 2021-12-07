@@ -13,10 +13,7 @@ use stm32l4xx_hal::{
 };
 use vcell::VolatileCell;
 
-use crate::{
-    sensors::Enable,
-    support::interrupt_controller::{IInterruptController, Interrupt},
-};
+use crate::support::interrupt_controller::{IInterruptController, Interrupt};
 
 use super::{InCounter, OnCycleFinished};
 
@@ -86,14 +83,24 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
         });
 
         // stm32l4xx_hal_tim.c:6569
-        self.ccer
-            .modify(|_, w| w.cc1e().clear_bit().cc1p().clear_bit().cc1np().clear_bit());
-        self.ccmr1_input().modify(|_, w| w.ic1f().fck_int_n2());
+        self.ccer.modify(|_, w| {
+            w.cc1e()
+                .clear_bit()
+                // raising edge
+                .cc1p()
+                .clear_bit()
+                .cc1np()
+                .clear_bit()
+        });
+        // filter
+        self.ccmr1_input().modify(|_, w| w.ic1f().fck_int_n8());
 
-        // configure clock input PA8 -> CH1
+        // configure clock input PA0 -> CH1
         // stm32l4xx_hal_tim.c:6786
-        //tim.smcr.modify(|_, w| w.ts().itr1().sms().ext_clock_mode()); // TODO clock src
-        self.smcr.modify(|_, w| w.ts().itr1().sms().disabled());
+        self.smcr
+            .modify(|_, w| w.ts().ti1fp1().sms().ext_clock_mode());
+
+        //self.smcr.modify(|_, w| w.ts().itr1().sms().disabled());
 
         // initial state
         self.set_target32(crate::config::INITIAL_FREQMETER_TARGET);
@@ -167,9 +174,7 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
             self.start();
         }
     }
-}
 
-impl Enable for TIM1 {
     fn start(&mut self) {
         self.cr1.modify(|_, w| w.cen().set_bit());
     }
@@ -279,14 +284,24 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
         });
 
         // stm32l4xx_hal_tim.c:6569
-        self.ccer
-            .modify(|_, w| w.cc1e().clear_bit().cc1p().clear_bit().cc1np().clear_bit());
-        self.ccmr1_input().modify(|_, w| w.ic1f().fck_int_n2());
+        self.ccer.modify(|_, w| {
+            w.cc1e()
+                .clear_bit()
+                // raising edge
+                .cc1p()
+                .clear_bit()
+                .cc1np()
+                .clear_bit()
+        });
+        // filter
+        self.ccmr1_input().modify(|_, w| w.ic1f().fck_int_n8());
 
         // configure clock input PA0 -> CH1
         // stm32l4xx_hal_tim.c:6786
-        //tim.smcr.modify(|_, w| w.ts().itr1().sms().ext_clock_mode()); // TODO clock src
-        self.smcr.modify(|_, w| w.ts().itr1().sms().disabled());
+        self.smcr
+            .modify(|_, w| w.ts().ti1fp1().sms().ext_clock_mode());
+
+        //self.smcr.modify(|_, w| w.ts().itr1().sms().disabled());
 
         // initial state
         self.set_target32(crate::config::INITIAL_FREQMETER_TARGET);
@@ -360,9 +375,7 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
             self.start();
         }
     }
-}
 
-impl Enable for TIM2 {
     fn start(&mut self) {
         self.cr1.modify(|_, w| w.cen().set_bit());
     }
@@ -434,11 +447,14 @@ fn as_target32(prescaler: u32, reload: u32) -> u32 {
     (prescaler + 1) * reload
 }
 
-fn transform_target32(target: u32) -> (u32, u32) {
+fn transform_target32(mut target: u32) -> (u32, u32) {
+    if target < 3 {
+        target = 3;
+    }
     for prescaler in 1..u16::MAX as u32 {
         let reload = target / prescaler;
         if reload < u16::MAX as u32 {
-            return (prescaler - 1, reload + 1);
+            return (prescaler - 1, reload);
         }
     }
     panic!("Can't find prescaler for target: {}", target);

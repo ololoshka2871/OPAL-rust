@@ -1,6 +1,8 @@
 use alloc::sync::Arc;
 use freertos_rust::{Duration, Mutex, Task, TaskPriority};
-use stm32l4xx_hal::gpio::{Alternate, Floating, Input, AF1, AF10, PA0, PA11, PA12, PA8};
+use stm32l4xx_hal::gpio::{
+    Alternate, Floating, Input, Output, PushPull, AF1, AF10, PA0, PA11, PA12, PA8, PD10, PD13,
+};
 use stm32l4xx_hal::rcc::{PllConfig, PllDivider};
 use stm32l4xx_hal::{prelude::*, stm32};
 
@@ -28,6 +30,8 @@ pub struct HighPerformanceMode {
 
     in_p: PA8<Alternate<AF1, Input<Floating>>>,
     in_t: PA0<Alternate<AF1, Input<Floating>>>,
+    en_p: PD13<Output<PushPull>>,
+    en_t: PD10<Output<PushPull>>,
     dma1_ch2: stm32l4xx_hal::dma::dma1::C2,
     dma1_ch6: stm32l4xx_hal::dma::dma1::C6,
     timer1: stm32l4xx_hal::stm32l4::stm32l4x2::TIM1,
@@ -38,11 +42,14 @@ pub struct HighPerformanceMode {
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     fn new(p: cortex_m::Peripherals, dp: stm32l4xx_hal::stm32l4::stm32l4x2::Peripherals) -> Self {
+        use crate::config::GENERATOR_DISABLE_LVL;
+
         let mut rcc = dp.RCC.constrain();
         let ic = Arc::new(InterruptController::new(p.NVIC));
         let dma_channels = dp.DMA1.split(&mut rcc.ahb1);
 
         let mut gpioa = dp.GPIOA.split(&mut rcc.ahb2);
+        let mut gpiod = dp.GPIOD.split(&mut rcc.ahb2);
 
         HighPerformanceMode {
             flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
@@ -64,6 +71,18 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             in_p: gpioa.pa8.into_af1(&mut gpioa.moder, &mut gpioa.afrh),
             in_t: gpioa.pa0.into_af1(&mut gpioa.moder, &mut gpioa.afrl),
+
+            en_p: gpiod.pd13.into_push_pull_output_with_state(
+                &mut gpiod.moder,
+                &mut gpiod.otyper,
+                GENERATOR_DISABLE_LVL,
+            ),
+            en_t: gpiod.pd10.into_push_pull_output_with_state(
+                &mut gpiod.moder,
+                &mut gpiod.otyper,
+                GENERATOR_DISABLE_LVL,
+            ),
+
             dma1_ch2: dma_channels.2,
             dma1_ch6: dma_channels.6,
             timer1: dp.TIM1,
@@ -133,6 +152,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                     PllConfig::new(3, 40, PllDivider::Div2), // PLL config
                 )
                 .pll_source(stm32l4xx_hal::rcc::PllSource::HSE)
+                // if apb prescaler > 1 tomer clock = apb * 2
                 .pclk1(10.mhz())
                 .pclk2(10.mhz());
 
@@ -175,9 +195,12 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             timer1: self.timer1,
             timer1_dma_ch: self.dma1_ch6,
             timer1_pin: self.in_p,
+            en_1: self.en_p,
+
             timer2: self.timer2,
             timer2_dma_ch: self.dma1_ch2,
             timer2_pin: self.in_t,
+            en_2: self.en_t,
         };
         let cq = self.sensor_command_queue.clone();
         let ic = self.interrupt_controller.clone();
