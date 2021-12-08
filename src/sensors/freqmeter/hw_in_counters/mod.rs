@@ -1,13 +1,12 @@
 use crate::support::interrupt_controller::{IInterruptController, Interrupt};
 
-#[derive(Clone, Copy, Debug)]
-pub enum TimerEvent {
-    Start,
-    Stop,
-}
-
 pub trait OnCycleFinished: Sync {
-    fn cycle_finished(&self, event: TimerEvent, captured: u32, target: u32, irq: Interrupt);
+    fn cycle_finished(
+        &self,
+        /*event: TimerEvent,*/ captured: u32,
+        target: u32,
+        irq: Interrupt,
+    );
 }
 
 pub trait InCounter<DMA, PIN> {
@@ -25,7 +24,7 @@ pub trait InCounter<DMA, PIN> {
     fn reset(&mut self);
     fn set_target32(&mut self, target: u32);
 
-    fn start(&mut self);
+    fn cold_start(&mut self);
     fn stop(&mut self) -> bool;
 }
 

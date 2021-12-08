@@ -7,7 +7,7 @@ use stm32l4xx_hal::{gpio::State, prelude::OutputPin};
 use crate::{
     sensors::freqmeter::{
         master_counter::{MasterCounter, MasterTimerInfo},
-        InCounter, OnCycleFinished, TimerEvent,
+        InCounter, OnCycleFinished,
     },
     support::interrupt_controller::{IInterruptController, Interrupt},
 };
@@ -43,13 +43,14 @@ pub enum Channel {
 pub enum Command {
     Start(Channel),
     Stop(Channel),
-    Ready(Channel, TimerEvent, u32, u32, bool),
+    Ready(Channel, u32, u32, bool),
 }
 
-trait Enabler {
+trait Processor {
     fn enable(&mut self);
     fn diasbe(&mut self);
-    fn start_cycle(&mut self);
+
+    fn is_initial_result(&mut self) -> bool;
 }
 
 struct FreqmeterEnable<'a, TIM, DMA, INPIN, ENPIN>
@@ -58,6 +59,7 @@ where
 {
     freqmeter: &'a mut TIM,
     gpio_pin: ENPIN,
+    startup: bool,
     _phantomdata1: PhantomData<DMA>,
     _phantomdata2: PhantomData<INPIN>,
 }
@@ -69,7 +71,7 @@ struct DMAFinished {
     ch: Channel,
 }
 
-impl<'a, TIM, DMA, INPIN, ENPIN> Enabler for FreqmeterEnable<'a, TIM, DMA, INPIN, ENPIN>
+impl<'a, TIM, DMA, INPIN, ENPIN> Processor for FreqmeterEnable<'a, TIM, DMA, INPIN, ENPIN>
 where
     TIM: InCounter<DMA, INPIN>,
     ENPIN: OutputPin,
@@ -77,7 +79,8 @@ where
 {
     fn enable(&mut self) {
         self.set_lvl(crate::config::GENERATOR_ENABLE_LVL);
-        self.freqmeter.start();
+        self.startup = true;
+        self.freqmeter.cold_start();
     }
 
     fn diasbe(&mut self) {
@@ -85,9 +88,13 @@ where
         self.set_lvl(crate::config::GENERATOR_DISABLE_LVL);
     }
 
-    #[inline]
-    fn start_cycle(&mut self) {
-        self.freqmeter.start();
+    fn is_initial_result(&mut self) -> bool {
+        if self.startup {
+            self.startup = false;
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -101,6 +108,7 @@ where
         Self {
             freqmeter,
             gpio_pin,
+            startup: false,
             _phantomdata1: PhantomData,
             _phantomdata2: PhantomData,
         }
@@ -114,14 +122,25 @@ where
     }
 }
 
+impl DMAFinished {
+    fn new(
+        master: MasterTimerInfo,
+        cc: Arc<freertos_rust::Queue<Command>>,
+        ic: Arc<dyn IInterruptController>,
+        ch: Channel,
+    ) -> Self {
+        Self { master, cc, ic, ch }
+    }
+}
+
 impl OnCycleFinished for DMAFinished {
-    fn cycle_finished(&self, event: TimerEvent, captured: u32, target: u32, irq: Interrupt) {
+    fn cycle_finished(&self, captured: u32, target: u32, irq: Interrupt) {
         let mut ctx = InterruptContext::new();
         let (result, wraped) = self.master.update_captured_value(captured);
-        if let Err(e) = self.cc.send_from_isr(
-            &mut ctx,
-            Command::Ready(self.ch, event, target, result, wraped),
-        ) {
+        if let Err(e) = self
+            .cc
+            .send_from_isr(&mut ctx, Command::Ready(self.ch, target, result, wraped))
+        {
             defmt::error!("Sensor command queue error: {}", defmt::Debug2Format(&e));
         }
         self.ic.unpend(irq);
@@ -147,12 +166,12 @@ where
         &mut perith.timer1_dma_ch,
         perith.timer1_pin,
         ic.as_ref(),
-        DMAFinished {
-            master: master_counter,
-            cc: command_queue.clone(),
-            ic: ic.clone(),
-            ch: Channel::Pressure,
-        },
+        DMAFinished::new(
+            master_counter,
+            command_queue.clone(),
+            ic.clone(),
+            Channel::Pressure,
+        ),
     );
 
     let master_counter = MasterCounter::allocate().unwrap();
@@ -161,18 +180,18 @@ where
         &mut perith.timer2_dma_ch,
         perith.timer2_pin,
         ic.as_ref(),
-        DMAFinished {
-            master: master_counter,
-            cc: command_queue.clone(),
-            ic: ic.clone(),
-            ch: Channel::Temperature,
-        },
+        DMAFinished::new(
+            master_counter,
+            command_queue.clone(),
+            ic.clone(),
+            Channel::Temperature,
+        ),
     );
 
     let mut enabler1 = FreqmeterEnable::new(&mut perith.timer1, perith.en_1);
     let mut enabler2 = FreqmeterEnable::new(&mut perith.timer2, perith.en_2);
 
-    let mut channels: [&mut dyn Enabler; 2] = [&mut enabler1, &mut enabler2];
+    let mut channels: [&mut dyn Processor; 2] = [&mut enabler1, &mut enabler2];
 
     //------------------ remove after tests --------------
     crate::settings::settings_action::<_, _, _, ()>(Duration::infinite(), |(ws, _)| {
@@ -188,11 +207,10 @@ where
     .expect("Failed to read channel enable");
     //-----------------------------------------------------
 
-    let mut start = [0u32; 2];
+    let mut prev = [0u32; 2];
 
     loop {
         if let Ok(cmd) = command_queue.receive(Duration::zero()) {
-            //defmt::warn!("sensors command: {}", defmt::Debug2Format(&cmd));
             match cmd {
                 Command::Start(c) => {
                     channels[c as usize].enable();
@@ -200,45 +218,40 @@ where
                 Command::Stop(c) => {
                     channels[c as usize].diasbe();
                 }
-                Command::Ready(c, ev, target, result, wraped) => {
-                    let prev = &mut start[c as usize];
+                Command::Ready(c, target, result, wraped) => {
+                    let prev = &mut prev[c as usize];
 
-                    match ev {
-                        TimerEvent::Start => {
-                            *prev = result;
-                        }
-                        TimerEvent::Stop => {
-                            let diff = if *prev <= result {
-                                result - *prev
-                            } else {
-                                u32::MAX - *prev + result
-                            } as f32;
+                    if channels[c as usize].is_initial_result() {
+                        *prev = result;
+                    } else {
+                        let diff = if *prev <= result {
+                            result - *prev
+                        } else {
+                            u32::MAX - *prev + result
+                        } as f32;
 
-                            *prev = result;
+                        *prev = result;
 
-                            let f = 20000000.0f32 / diff * target as f32;
+                        let f = 20000000.0f32 / diff * target as f32;
 
-                            if wraped {
-                                defmt::warn!(
-                                    "Sensor result: c={}, target={}, diff={}, wraped={}: F = {}",
-                                    c,
-                                    target,
-                                    diff,
-                                    wraped,
-                                    f
-                                );
-                            } else {
-                                defmt::trace!(
-                                    "Sensor result: c={}, target={}, diff={}, wraped={}: F = {}",
-                                    c,
-                                    target,
-                                    diff,
-                                    wraped,
-                                    f
-                                );
-                            }
-
-                            channels[c as usize].start_cycle();
+                        if wraped {
+                            defmt::warn!(
+                                "Sensor result: c={}, target={}, diff={}, wraped={}: F = {}",
+                                c,
+                                target,
+                                diff,
+                                wraped,
+                                f
+                            );
+                        } else {
+                            defmt::trace!(
+                                "Sensor result: c={}, target={}, diff={}, wraped={}: F = {}",
+                                c,
+                                target,
+                                diff,
+                                wraped,
+                                f
+                            );
                         }
                     }
                 }
