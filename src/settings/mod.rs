@@ -20,7 +20,7 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
     PMesureTime_ms: 1000,
     TMesureTime_ms: 1000,
 
-    Fref: 16000000,
+    Fref: crate::config::XTAL_FREQ,
 
     P_enabled: true,
     T_enabled: true,

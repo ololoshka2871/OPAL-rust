@@ -1,7 +1,7 @@
 use core::{fmt::Debug, marker::PhantomData};
 
 use alloc::sync::Arc;
-use freertos_rust::{Duration, InterruptContext};
+use freertos_rust::{CurrentTask, Duration, InterruptContext};
 use stm32l4xx_hal::{gpio::State, prelude::OutputPin};
 
 use crate::{
@@ -9,6 +9,7 @@ use crate::{
         master_counter::{MasterCounter, MasterTimerInfo},
         InCounter, OnCycleFinished,
     },
+    settings::SettingActionError,
     support::interrupt_controller::{IInterruptController, Interrupt},
 };
 
@@ -151,6 +152,7 @@ pub fn sensor_processor<PTIM, PDMA, TTIM, TDMA, PPIN, TPIN, ENPIN1, ENPIN2>(
     mut perith: SensorPerith<PTIM, PDMA, TTIM, TDMA, PPIN, TPIN, ENPIN1, ENPIN2>,
     command_queue: Arc<freertos_rust::Queue<Command>>,
     ic: Arc<dyn IInterruptController>,
+    xtal2master_freq_multiplier: f32,
 ) -> !
 where
     PTIM: InCounter<PDMA, PPIN>,
@@ -210,7 +212,7 @@ where
     let mut prev = [0u32; 2];
 
     loop {
-        if let Ok(cmd) = command_queue.receive(Duration::zero()) {
+        if let Ok(cmd) = command_queue.receive(Duration::infinite()) {
             match cmd {
                 Command::Start(c) => {
                     channels[c as usize].enable();
@@ -232,30 +234,40 @@ where
 
                         *prev = result;
 
-                        let f = 20000000.0f32 / diff * target as f32;
-
-                        if wraped {
-                            defmt::warn!(
-                                "Sensor result: c={}, target={}, diff={}, wraped={}: F = {}",
-                                c,
-                                target,
-                                diff,
-                                wraped,
-                                f
-                            );
-                        } else {
-                            defmt::trace!(
-                                "Sensor result: c={}, target={}, diff={}, wraped={}: F = {}",
-                                c,
-                                target,
-                                diff,
-                                wraped,
-                                f
-                            );
+                        if let Ok(_f) =
+                            freq(xtal2master_freq_multiplier, target as f32, diff as f32)
+                        {
+                            if wraped {
+                                defmt::warn!(
+                                    "Sensor result: c={}, target={}, diff={}, wraped={}: F = {}",
+                                    c,
+                                    target,
+                                    diff,
+                                    wraped,
+                                    _f
+                                );
+                            } else {
+                                defmt::trace!(
+                                    "Sensor result: c={}, target={}, diff={}, wraped={}: F = {}",
+                                    c,
+                                    target,
+                                    diff,
+                                    wraped,
+                                    _f
+                                );
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
+
+fn freq(fref_multiplier: f32, target: f32, diff: f32) -> Result<f32, SettingActionError<()>> {
+    let fref =
+        crate::settings::settings_action::<_, _, _, ()>(Duration::ms(1), |(ws, _)| Ok(ws.Fref))?
+            as f32;
+
+    Ok(fref * fref_multiplier * target / diff)
 }

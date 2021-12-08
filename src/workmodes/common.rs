@@ -1,12 +1,19 @@
 use defmt::{write, Format};
 use freertos_rust::{Duration, DurationTicks};
 
-use stm32l4xx_hal::time::{Hertz, MegaHertz};
+use stm32l4xx_hal::{rcc::PllConfig, time::Hertz};
 
 use crate::threads;
 use freertos_rust::{Task, TaskPriority};
 
-pub static HSE_FREQ: MegaHertz = MegaHertz(12);
+pub trait ClockConfigProvider {
+    fn core_frequency() -> Hertz;
+    fn apb1_frequency() -> Hertz;
+    fn apb2_frequency() -> Hertz;
+    fn master_counter_frequency() -> Hertz;
+    fn pll_config() -> PllConfig;
+    fn xtal2master_freq_multiplier() -> f32;
+}
 
 #[derive(Default)]
 pub struct Ticks(pub u32);
@@ -28,7 +35,7 @@ impl Format for Ticks {
 }
 
 pub fn to_real_period<D: DurationTicks, F: Into<Hertz>>(period: D, sysclk: F) -> Duration {
-    let in_freq_hz: Hertz = HSE_FREQ.into();
+    let in_freq_hz = Hertz(crate::config::XTAL_FREQ);
     let fcpu_hz: Hertz = sysclk.into();
 
     let ticks = period.to_ticks() as u64 * fcpu_hz.0 as u64 / in_freq_hz.0 as u64;

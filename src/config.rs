@@ -1,5 +1,11 @@
 use stm32l4xx_hal::gpio::State;
 
+//-----------------------------------------------------------------------------
+
+pub const XTAL_FREQ: u32 = 12_000_000;
+
+//-----------------------------------------------------------------------------
+
 // see: src/config/FreeRTOSConfig.h: configMAX_SYSCALL_INTERRUPT_PRIORITY
 // value + -> prio -
 pub const IRQ_HIGEST_PRIO: u8 = 80;

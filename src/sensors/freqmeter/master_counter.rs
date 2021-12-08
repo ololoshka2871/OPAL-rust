@@ -3,6 +3,7 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use alloc::sync::Arc;
+use stm32l4xx_hal::time::Hertz;
 
 use crate::support::interrupt_controller::IInterruptController;
 
@@ -13,6 +14,7 @@ pub struct MasterCounter {
     interrupt_controller: Arc<dyn IInterruptController>,
     want_enable_counter: AtomicUsize,
     extander: u32,
+    ref_freq: Hertz,
 }
 
 pub struct MasterTimerInfo {
@@ -34,7 +36,7 @@ impl MasterCounter {
         }
     }
 
-    pub fn init(interrupt_controller: Arc<dyn IInterruptController>) {
+    pub fn init(ref_freq: Hertz, interrupt_controller: Arc<dyn IInterruptController>) {
         let master = super::hw_master::get_master_list()[0];
 
         master.init();
@@ -50,6 +52,7 @@ impl MasterCounter {
                 interrupt_controller,
                 want_enable_counter: AtomicUsize::new(0),
                 extander: 0,
+                ref_freq,
             })
         };
     }
@@ -115,6 +118,10 @@ impl MasterCounter {
     fn cnt_addr(&self) -> usize {
         self.counter.cnt_addr()
     }
+
+    pub fn freq(&self) -> Hertz {
+        self.ref_freq
+    }
 }
 
 impl MasterTimerInfo {
@@ -151,6 +158,11 @@ impl MasterTimerInfo {
     #[inline]
     pub fn cnt_addr(&self) -> usize {
         self.master.cnt_addr()
+    }
+
+    #[inline]
+    pub fn freq(&self) -> Hertz {
+        self.master.freq()
     }
 }
 

@@ -167,7 +167,6 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
         }
 
         let (psc, reload) = transform_target32(target);
-        let was_run = self.stop();
 
         Self::set_prescaler(psc);
         Self::set_reload(reload);
@@ -370,7 +369,6 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
         }
 
         let (psc, reload) = transform_target32(target);
-        let was_run = self.stop();
 
         Self::set_prescaler(psc);
         Self::set_reload(reload);

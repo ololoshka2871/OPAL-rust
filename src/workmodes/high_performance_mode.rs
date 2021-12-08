@@ -4,13 +4,64 @@ use stm32l4xx_hal::gpio::{
     Alternate, Floating, Input, Output, PushPull, AF1, AF10, PA0, PA11, PA12, PA8, PD10, PD13,
 };
 use stm32l4xx_hal::rcc::{PllConfig, PllDivider};
+use stm32l4xx_hal::time::*;
 use stm32l4xx_hal::{prelude::*, stm32};
 
 use crate::sensors::freqmeter::master_counter;
 use crate::support::{interrupt_controller::IInterruptController, InterruptController};
 use crate::threads;
+use crate::workmodes::common::ClockConfigProvider;
 
 use super::WorkMode;
+
+const PLL_CFG: (u32, u32, u32) = (3, 40, 2);
+const APB1_DEVIDER: u32 = 8;
+const APB2_DEVIDER: u32 = 8;
+
+struct HighPerformanceClockConfigProvider;
+
+impl ClockConfigProvider for HighPerformanceClockConfigProvider {
+    fn core_frequency() -> Hertz {
+        let f = crate::config::XTAL_FREQ * PLL_CFG.1 / (PLL_CFG.0 * PLL_CFG.2);
+        Hertz(f)
+    }
+
+    fn apb1_frequency() -> Hertz {
+        Hertz(Self::core_frequency().0 / APB1_DEVIDER)
+    }
+
+    fn apb2_frequency() -> Hertz {
+        Hertz(Self::core_frequency().0 / APB2_DEVIDER)
+    }
+
+    // stm32_cube: if APB devider > 1, timers freq APB*2
+    fn master_counter_frequency() -> Hertz {
+        if APB1_DEVIDER > 1 {
+            Hertz(Self::apb1_frequency().0 * 2)
+        } else {
+            Self::apb1_frequency()
+        }
+    }
+
+    fn pll_config() -> PllConfig {
+        let div = match PLL_CFG.2 {
+            2 => PllDivider::Div2,
+            4 => PllDivider::Div4,
+            6 => PllDivider::Div6,
+            8 => PllDivider::Div8,
+            _ => panic!(),
+        };
+        PllConfig::new(PLL_CFG.0 as u8, PLL_CFG.1 as u8, div)
+    }
+
+    fn xtal2master_freq_multiplier() -> f32 {
+        if APB1_DEVIDER > 1 {
+            PLL_CFG.1 as f32 / (PLL_CFG.0 * PLL_CFG.2) as f32 / APB1_DEVIDER as f32 * 2.0
+        } else {
+            PLL_CFG.1 as f32 / (PLL_CFG.0 * PLL_CFG.2) as f32
+        }
+    }
+}
 
 pub struct HighPerformanceMode {
     rcc: stm32l4xx_hal::rcc::Rcc,
@@ -143,18 +194,18 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             let mut cfgr = cfgr
                 .hsi48(true)
                 .hse(
-                    crate::workmodes::common::HSE_FREQ, // onboard crystall
+                    Hertz(crate::config::XTAL_FREQ), // onboard crystall
                     stm32l4xx_hal::rcc::CrystalBypass::Disable,
                     stm32l4xx_hal::rcc::ClockSecuritySystem::Enable,
                 )
                 .sysclk_with_pll(
-                    80.mhz(),                                // CPU clock
-                    PllConfig::new(3, 40, PllDivider::Div2), // PLL config
+                    HighPerformanceClockConfigProvider::core_frequency(),
+                    HighPerformanceClockConfigProvider::pll_config(),
                 )
                 .pll_source(stm32l4xx_hal::rcc::PllSource::HSE)
                 // if apb prescaler > 1 tomer clock = apb * 2
-                .pclk1(10.mhz())
-                .pclk2(10.mhz());
+                .pclk1(HighPerformanceClockConfigProvider::apb1_frequency())
+                .pclk2(HighPerformanceClockConfigProvider::apb2_frequency());
 
             core::mem::swap(&mut cfgr, work_cfgr);
         }
@@ -169,7 +220,11 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         configure_usb48();
 
-        master_counter::MasterCounter::init(self.interrupt_controller.clone());
+        // stm32l433cc.pdf: fugure. 4
+        master_counter::MasterCounter::init(
+            HighPerformanceClockConfigProvider::master_counter_frequency(),
+            self.interrupt_controller.clone(),
+        );
 
         self.clocks = Some(clocks);
     }
@@ -208,7 +263,14 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             .name("SensProc")
             .stack_size(1024)
             .priority(TaskPriority(crate::config::SENS_PROC_TASK_PRIO))
-            .start(move |_| threads::sensor_processor::sensor_processor(sp, cq, ic))?;
+            .start(move |_| {
+                threads::sensor_processor::sensor_processor(
+                    sp,
+                    cq,
+                    ic,
+                    HighPerformanceClockConfigProvider::xtal2master_freq_multiplier(),
+                )
+            })?;
 
         // ---
         crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk())?;
