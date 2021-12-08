@@ -6,10 +6,11 @@ use nanopb_rs::{Error, IStream};
 
 use usbd_serial::SerialPort;
 
-use crate::protobuf;
+use crate::{protobuf, workmodes::output_storage::OutputStorage};
 
 pub fn protobuf_server<B: usb_device::bus::UsbBus>(
     serial_container: Arc<Mutex<SerialPort<B>>>,
+    output: Arc<Mutex<OutputStorage>>,
 ) -> ! {
     loop {
         let msg_size =
@@ -37,7 +38,7 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
 
         let response = {
             let id = request.id;
-            match protobuf::process_requiest(request, protobuf::new_response(id)) {
+            match protobuf::process_requiest(request, protobuf::new_response(id), &output) {
                 Ok(r) => r,
                 Err(_) => {
                     defmt::error!("Failed to generate response");

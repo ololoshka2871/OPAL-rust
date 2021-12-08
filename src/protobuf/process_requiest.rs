@@ -1,4 +1,7 @@
-use freertos_rust::FreeRtosError;
+use alloc::sync::Arc;
+use freertos_rust::{FreeRtosError, Mutex};
+
+use crate::workmodes::output_storage::OutputStorage;
 
 use super::{
     messages::ru_sktbelpa_pressure_self_writer_FlashStatus,
@@ -8,6 +11,7 @@ use super::{
 pub fn process_requiest(
     req: ru_sktbelpa_pressure_self_writer_Request,
     mut resp: ru_sktbelpa_pressure_self_writer_Response,
+    output: &Arc<Mutex<OutputStorage>>,
 ) -> Result<ru_sktbelpa_pressure_self_writer_Response, ()> {
     use super::messages::{
         ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER,
@@ -113,7 +117,9 @@ pub fn process_requiest(
 
     if req.has_getOutputValues {
         resp.has_output = true;
-        super::output::fill_output(&mut resp.output, &req.getOutputValues)?;
+        if let Err(_) = super::output::fill_output(&mut resp.output, &req.getOutputValues, output) {
+            resp.Global_status = ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS;
+        }
     }
 
     Ok(resp)

@@ -7,6 +7,8 @@ pub mod power_save_mode;
 pub(crate) mod common;
 //mod my_clock_freeze;
 
+pub mod output_storage;
+
 pub trait WorkMode<T> {
     fn new(p: cortex_m::Peripherals, dp: stm32l4xx_hal::device::Peripherals) -> T;
     fn ini_static(&mut self);

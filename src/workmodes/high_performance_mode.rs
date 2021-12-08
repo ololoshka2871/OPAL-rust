@@ -12,6 +12,7 @@ use crate::support::{interrupt_controller::IInterruptController, InterruptContro
 use crate::threads;
 use crate::workmodes::common::ClockConfigProvider;
 
+use super::output_storage::OutputStorage;
 use super::WorkMode;
 
 const PLL_CFG: (u32, u32, u32) = (3, 40, 2);
@@ -54,11 +55,11 @@ impl ClockConfigProvider for HighPerformanceClockConfigProvider {
         PllConfig::new(PLL_CFG.0 as u8, PLL_CFG.1 as u8, div)
     }
 
-    fn xtal2master_freq_multiplier() -> f32 {
+    fn xtal2master_freq_multiplier() -> f64 {
         if APB1_DEVIDER > 1 {
-            PLL_CFG.1 as f32 / (PLL_CFG.0 * PLL_CFG.2) as f32 / APB1_DEVIDER as f32 * 2.0
+            PLL_CFG.1 as f64 / (PLL_CFG.0 * PLL_CFG.2) as f64 / APB1_DEVIDER as f64 * 2.0
         } else {
-            PLL_CFG.1 as f32 / (PLL_CFG.0 * PLL_CFG.2) as f32
+            PLL_CFG.1 as f64 / (PLL_CFG.0 * PLL_CFG.2) as f64
         }
     }
 }
@@ -89,6 +90,8 @@ pub struct HighPerformanceMode {
     timer2: stm32l4xx_hal::stm32l4::stm32l4x2::TIM2,
 
     sensor_command_queue: Arc<freertos_rust::Queue<threads::sensor_processor::Command>>,
+
+    output: Arc<Mutex<OutputStorage>>,
 }
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
@@ -140,6 +143,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             timer2: dp.TIM2,
 
             sensor_command_queue: Arc::new(freertos_rust::Queue::new(5).unwrap()),
+
+            output: Arc::new(Mutex::new(OutputStorage::default()).unwrap()),
         }
     }
 
@@ -237,12 +242,13 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             pin_dm: self.usb_dm,
         };
         let ic = self.interrupt_controller.clone();
+        let output = self.output.clone();
         Task::new()
             .name("Usbd")
             .stack_size(1024)
             .priority(TaskPriority(crate::config::USBD_TASK_PRIO))
             .start(move |_| {
-                threads::usbd::usbd(usbperith, ic, crate::config::USB_INTERRUPT_PRIO)
+                threads::usbd::usbd(usbperith, ic, crate::config::USB_INTERRUPT_PRIO, output)
             })?;
 
         defmt::trace!("Creating Sensors Processor thread...");
@@ -259,6 +265,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         };
         let cq = self.sensor_command_queue.clone();
         let ic = self.interrupt_controller.clone();
+        let output = self.output.clone();
         Task::new()
             .name("SensProc")
             .stack_size(1024)
@@ -269,6 +276,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                     cq,
                     ic,
                     HighPerformanceClockConfigProvider::xtal2master_freq_multiplier(),
+                    output,
                 )
             })?;
 

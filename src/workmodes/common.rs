@@ -12,7 +12,7 @@ pub trait ClockConfigProvider {
     fn apb2_frequency() -> Hertz;
     fn master_counter_frequency() -> Hertz;
     fn pll_config() -> PllConfig;
-    fn xtal2master_freq_multiplier() -> f32;
+    fn xtal2master_freq_multiplier() -> f64;
 }
 
 #[derive(Default)]
