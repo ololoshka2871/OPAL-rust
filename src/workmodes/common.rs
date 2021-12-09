@@ -3,9 +3,6 @@ use freertos_rust::{Duration, DurationTicks};
 
 use stm32l4xx_hal::{rcc::PllConfig, time::Hertz};
 
-use crate::threads;
-use freertos_rust::{Task, TaskPriority};
-
 pub trait ClockConfigProvider {
     fn core_frequency() -> Hertz;
     fn apb1_frequency() -> Hertz;
@@ -58,8 +55,12 @@ pub fn print_clock_config(clocks: &Option<stm32l4xx_hal::rcc::Clocks>, usb_state
 }
 
 pub fn create_monitor(_sysclk: Hertz) -> Result<(), freertos_rust::FreeRtosError> {
+    #[cfg(feature = "monitor")]
     #[cfg(debug_assertions)]
     {
+        use crate::threads;
+        use freertos_rust::{Task, TaskPriority};
+
         static MONITOR_STACK_SIZE: u16 = 384;
         pub static MONITOR_MSG_PERIOD: u32 = 1000;
 

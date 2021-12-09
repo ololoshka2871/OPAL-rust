@@ -1,11 +1,12 @@
-pub trait FChProcessor<TSE> {
+use super::TimerEvent;
+
+pub trait FChProcessor {
     fn enable(&mut self);
     fn diasbe(&mut self);
 
-    fn is_initial_result(&mut self) -> bool;
+    fn restart(&mut self);
 
-    fn adaptate(&mut self) -> Result<u32, ()>;
+    fn set_target(&mut self, new_target: u32);
 
-    fn input_captured(&mut self, captured: u32) -> Option<u32>;
-    fn calc_freq(&mut self, target: u32, result: u32) -> Result<f64, TSE>;
+    fn input_captured(&mut self, event: TimerEvent, captured: u32) -> Option<u32>;
 }

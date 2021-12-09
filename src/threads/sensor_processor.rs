@@ -1,17 +1,16 @@
 use core::fmt::Debug;
 
 use alloc::sync::Arc;
-use freertos_rust::{Duration, InterruptContext, Mutex};
+use freertos_rust::{Duration, InterruptContext};
 use stm32l4xx_hal::prelude::OutputPin;
 
 use crate::{
     sensors::freqmeter::{
         master_counter::{MasterCounter, MasterTimerInfo},
-        FChProcessor, FreqmeterController, InCounter, OnCycleFinished,
+        FChProcessor, FreqmeterController, InCounter, OnCycleFinished, TimerEvent,
     },
-    settings::SettingActionError,
     support::interrupt_controller::{IInterruptController, Interrupt},
-    workmodes::output_storage::OutputStorage,
+    workmodes::processing::RawValueProcessor,
 };
 
 pub struct SensorPerith<TIM1, DMA1, TIM2, DMA2, PIN1, PIN2, ENPIN1, ENPIN2>
@@ -55,10 +54,9 @@ pub enum Channel {
 pub enum Command {
     Start(Channel),
     Stop(Channel),
-    ReadyFChannel(FChannel, u32, u32, bool),
+    ReadyFChannel(FChannel, TimerEvent, u32, u32, bool),
     ReadyAChannel(AChannel),
-    EnableAutoAdoptation(FChannel, bool),
-    AdaptateNow(FChannel),
+    SetTarget(FChannel, u32),
 }
 
 struct DMAFinished {
@@ -80,12 +78,12 @@ impl DMAFinished {
 }
 
 impl OnCycleFinished for DMAFinished {
-    fn cycle_finished(&self, captured: u32, target: u32, irq: Interrupt) {
+    fn cycle_finished(&self, event: TimerEvent, captured: u32, target: u32, irq: Interrupt) {
         let mut ctx = InterruptContext::new();
         let (result, wraped) = self.master.update_captured_value(captured);
         if let Err(e) = self.cc.send_from_isr(
             &mut ctx,
-            Command::ReadyFChannel(self.ch, target, result, wraped),
+            Command::ReadyFChannel(self.ch, event, target, result, wraped),
         ) {
             defmt::error!("Sensor command queue error: {}", defmt::Debug2Format(&e));
         }
@@ -93,12 +91,11 @@ impl OnCycleFinished for DMAFinished {
     }
 }
 
-pub fn sensor_processor<PTIM, PDMA, TTIM, TDMA, PPIN, TPIN, ENPIN1, ENPIN2>(
+pub fn sensor_processor<PTIM, PDMA, TTIM, TDMA, PPIN, TPIN, ENPIN1, ENPIN2, TP>(
     mut perith: SensorPerith<PTIM, PDMA, TTIM, TDMA, PPIN, TPIN, ENPIN1, ENPIN2>,
     command_queue: Arc<freertos_rust::Queue<Command>>,
     ic: Arc<dyn IInterruptController>,
-    xtal2master_freq_multiplier: f64,
-    output: Arc<Mutex<OutputStorage>>,
+    mut processor: TP,
 ) -> !
 where
     PTIM: InCounter<PDMA, PPIN>,
@@ -107,16 +104,8 @@ where
     <ENPIN1 as OutputPin>::Error: Debug,
     ENPIN2: OutputPin,
     <ENPIN2 as OutputPin>::Error: Debug,
+    TP: RawValueProcessor,
 {
-    fn fref_getter() -> Result<f64, freertos_rust::FreeRtosError> {
-        crate::settings::settings_action::<_, _, _, ()>(Duration::ms(1), |(ws, _)| Ok(ws.Fref))
-            .map_err(|e| match e {
-                SettingActionError::AccessError(e) => e,
-                SettingActionError::ActionError(_) => unreachable!(),
-            })
-            .map(|fref| fref as f64)
-    }
-
     let master_counter = MasterCounter::allocate().unwrap();
     perith.timer1.configure(
         master_counter.cnt_addr(),
@@ -147,89 +136,41 @@ where
 
     //----------------------------------------------------
 
-    let mut p_controller = FreqmeterController::new(
-        &mut perith.timer1,
-        perith.en_1,
-        xtal2master_freq_multiplier,
-        fref_getter,
-    );
-    let mut t_controller = FreqmeterController::new(
-        &mut perith.timer2,
-        perith.en_2,
-        xtal2master_freq_multiplier,
-        fref_getter,
-    );
+    let mut p_controller = FreqmeterController::new(&mut perith.timer1, perith.en_1);
+    let mut t_controller = FreqmeterController::new(&mut perith.timer2, perith.en_2);
 
-    let mut p_channels: [&mut dyn FChProcessor<_>; 2] = [&mut p_controller, &mut t_controller];
+    let mut p_channels: [&mut dyn FChProcessor; 2] = [&mut p_controller, &mut t_controller];
 
     //----------------------------------------------------
-
-    //------------------ remove after tests --------------
-    crate::settings::settings_action::<_, _, _, ()>(Duration::infinite(), |(ws, _)| {
-        let flags = [ws.P_enabled, ws.T_enabled, ws.TCPUEnabled, ws.VBatEnabled];
-        for (c, f) in p_channels.iter_mut().zip(flags.iter()) {
-            if *f {
-                (*c).enable();
-            }
-        }
-
-        Ok(())
-    })
-    .expect("Failed to read channel enable");
-    //-----------------------------------------------------
 
     loop {
         if let Ok(cmd) = command_queue.receive(Duration::infinite()) {
             match cmd {
                 Command::Start(Channel::FChannel(c)) => p_channels[c as usize].enable(),
                 Command::Stop(Channel::FChannel(c)) => p_channels[c as usize].diasbe(),
-                Command::ReadyFChannel(c, target, captured, wraped) => {
+                Command::ReadyFChannel(c, ev, target, captured, wraped) => {
+                    if wraped {
+                        defmt::warn!("Ch: {}, wrap detected", c);
+                    }
+
                     let ch = &mut p_channels[c as usize];
 
-                    match ch.input_captured(captured) {
-                        Some(result) => {
-                            if let Ok(mut guard) = output.lock(Duration::infinite()) {
-                                guard.targets[c as usize] = target;
-                                guard.results[c as usize] = Some(result);
-                            }
+                    if let Some(result) = ch.input_captured(ev, captured) {
+                        let (continue_work, new_target) =
+                            processor.process_f_result(c, target, result);
 
-                            let f = ch.calc_freq(target, result).unwrap();
-
-                            if let Ok(mut guard) = output.lock(Duration::infinite()) {
-                                guard.frequencys[c as usize] = f;
-                            }
-
-                            /*
-                            if wraped {
-                                defmt::warn!(
-                                    "Sensor result: c={}, target={}, result={}, wraped={}: F = {}",
-                                    c,
-                                    target,
-                                    result,
-                                    wraped,
-                                    f
-                                );
-                            } else {
-                                defmt::trace!(
-                                    "Sensor result: c={}, target={}, result={}, wraped={}: F = {}",
-                                    c,
-                                    target,
-                                    result,
-                                    wraped,
-                                    f
-                                );
-                            }*/
+                        if let Some(nt) = new_target {
+                            ch.set_target(nt);
                         }
-                        None => defmt::trace!("Ch. {}, result not ready", c),
+
+                        if continue_work {
+                            ch.restart();
+                        }
+                    } else {
+                        defmt::trace!("Ch. {}, result not ready", c)
                     }
                 }
-                Command::EnableAutoAdoptation(c, enable) => {}
-                Command::AdaptateNow(c) => match p_channels[c as usize].adaptate() {
-                    Ok(new_target) => {
-                        defmt::info!("Adaptate ch. {}, new target: {}", c, new_target)
-                    }
-                    Err(_) => panic!("Failed to adaptate"),
-                },
+                Command::SetTarget(c, target) => p_channels[c as usize].set_target(target),
                 _ => {}
             }
         }

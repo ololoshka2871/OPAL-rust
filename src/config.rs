@@ -38,10 +38,16 @@ pub const SENS_PROC_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 1;
 
 //-----------------------------------------------------------------------------
 
-pub const INITIAL_FREQMETER_TARGET: u32 = 1000;
+pub const INITIAL_FREQMETER_TARGET: u32 = 50;
 
 //-----------------------------------------------------------------------------
 
 // generator enable/disable lvls
 pub const GENERATOR_ENABLE_LVL: State = State::High;
 pub const GENERATOR_DISABLE_LVL: State = State::Low;
+
+//-----------------------------------------------------------------------------
+
+pub const MINIMUM_ADAPTATION_INTERVAL: u32 = 50;
+
+//-----------------------------------------------------------------------------

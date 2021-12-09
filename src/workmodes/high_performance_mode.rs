@@ -1,5 +1,5 @@
 use alloc::sync::Arc;
-use freertos_rust::{Duration, Mutex, Task, TaskPriority};
+use freertos_rust::{Duration, Mutex, Queue, Task, TaskPriority};
 use stm32l4xx_hal::gpio::{
     Alternate, Floating, Input, Output, PushPull, AF1, AF10, PA0, PA11, PA12, PA8, PD10, PD13,
 };
@@ -13,7 +13,8 @@ use stm32l4xx_hal::{
 use crate::sensors::freqmeter::master_counter;
 use crate::support::{interrupt_controller::IInterruptController, InterruptController};
 use crate::threads;
-use crate::workmodes::common::ClockConfigProvider;
+use crate::threads::sensor_processor::Command;
+use crate::workmodes::{common::ClockConfigProvider, processing::HighPerformanceProcessor};
 
 use super::{output_storage::OutputStorage, WorkMode};
 
@@ -267,20 +268,15 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         };
         let cq = self.sensor_command_queue.clone();
         let ic = self.interrupt_controller.clone();
-        let output = self.output.clone();
+        let processor = HighPerformanceProcessor::new(
+            self.output.clone(),
+            HighPerformanceClockConfigProvider::xtal2master_freq_multiplier(),
+        );
         Task::new()
             .name("SensProc")
             .stack_size(1024)
             .priority(TaskPriority(crate::config::SENS_PROC_TASK_PRIO))
-            .start(move |_| {
-                threads::sensor_processor::sensor_processor(
-                    sp,
-                    cq,
-                    ic,
-                    HighPerformanceClockConfigProvider::xtal2master_freq_multiplier(),
-                    output,
-                )
-            })?;
+            .start(move |_| threads::sensor_processor::sensor_processor(sp, cq, ic, processor))?;
 
         // ---
         crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk())?;
@@ -299,10 +295,39 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 })?;
         }
 
+        enable_selected_channels(&self.sensor_command_queue);
+
         Ok(())
     }
 
     fn print_clock_config(&self) {
         super::common::print_clock_config(&self.clocks, "HSI48");
     }
+}
+
+fn enable_selected_channels(cq: &Arc<Queue<Command>>) {
+    use crate::threads::sensor_processor::{AChannel, Channel, FChannel};
+    use freertos_rust::FreeRtosError;
+
+    let _ = crate::settings::settings_action::<_, _, _, FreeRtosError>(
+        Duration::infinite(),
+        |(ws, _)| {
+            let flags = [
+                (Channel::FChannel(FChannel::Pressure), ws.P_enabled),
+                (Channel::FChannel(FChannel::Temperature), ws.T_enabled),
+                (Channel::AChannel(AChannel::TCPU), ws.TCPUEnabled),
+                (Channel::AChannel(AChannel::Vbat), ws.VBatEnabled),
+            ];
+            for (c, f) in flags.iter() {
+                if *f {
+                    cq.send(Command::Start(*c), Duration::infinite())
+                } else {
+                    cq.send(Command::Stop(*c), Duration::infinite())
+                }?;
+            }
+
+            Ok(())
+        },
+    )
+    .map_err(|e| panic!("Failed to read channel enable: {:?}", e));
 }

@@ -259,7 +259,7 @@ impl BlockDevice for EMfatStorage {
     }
 
     fn max_lba(&self) -> u32 {
-        defmt::trace!("SCSI: Get max LBA {}", self.ctx.disk_sectors);
+        //defmt::trace!("SCSI: Get max LBA {}", self.ctx.disk_sectors);
         self.ctx.disk_sectors // Это не размер а максимальный номер блока по 512 байт
     }
 

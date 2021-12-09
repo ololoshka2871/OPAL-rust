@@ -10,3 +10,4 @@ mod freqmeter_controller;
 
 pub use f_ch_processor::FChProcessor;
 pub use freqmeter_controller::FreqmeterController;
+pub use hw_in_counters::TimerEvent;

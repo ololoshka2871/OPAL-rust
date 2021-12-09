@@ -15,7 +15,7 @@ use vcell::VolatileCell;
 
 use crate::support::interrupt_controller::{IInterruptController, Interrupt};
 
-use super::{InCounter, OnCycleFinished};
+use super::{InCounter, OnCycleFinished, TimerEvent};
 
 pub type DmaCb = Box<dyn OnCycleFinished>;
 
@@ -28,6 +28,9 @@ trait Utils<T, DMA> {
 
     fn set_prescaler(psc: u32);
     fn set_reload(reload: u32);
+
+    fn opm() -> bool;
+    fn set_opm();
 
     #[cfg(debug_assertions)]
     fn configure_debug_freeze();
@@ -77,7 +80,7 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
                 .opm()
                 .clear_bit()
                 .urs()
-                .clear_bit() // update event generation
+                .set_bit() // update event generation disable
                 .udis()
                 .clear_bit()
         });
@@ -175,9 +178,16 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
     }
 
     fn cold_start(&mut self) {
+        /*
         self.cnt
             .write(|w| unsafe { w.bits(self.arr.read().bits() - 1) });
         self.cr1.modify(|_, w| w.cen().set_bit());
+        */
+        if self.cr1.read().cen().bit_is_clear() {
+            self.cnt
+                .write(|w| unsafe { w.bits(self.arr.read().bits() - 1) });
+            self.cr1.modify(|_, w| w.opm().clear_bit().cen().set_bit());
+        }
     }
 
     fn stop(&mut self) -> bool {
@@ -233,6 +243,14 @@ impl Utils<tim1::RegisterBlock, dma1::C6> for TIM1 {
     fn prescaler() -> u32 {
         unsafe { (*Self::ptr()).psc.read().bits() }
     }
+
+    fn opm() -> bool {
+        unsafe { (*Self::ptr()).cr1.read().opm().bit_is_set() }
+    }
+
+    fn set_opm() {
+        unsafe { (*Self::ptr()).cr1.modify(|_, w| w.opm().set_bit()) }
+    }
 }
 
 impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
@@ -279,7 +297,7 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
                 .opm()
                 .clear_bit()
                 .urs()
-                .clear_bit() // update event generation
+                .set_bit() // update event generation disable
                 .udis()
                 .clear_bit()
         });
@@ -377,9 +395,16 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
     }
 
     fn cold_start(&mut self) {
+        /*
         self.cnt
             .write(|w| unsafe { w.bits(self.arr.read().bits() - 1) });
         self.cr1.modify(|_, w| w.cen().set_bit());
+        */
+        if self.cr1.read().cen().bit_is_clear() {
+            self.cnt
+                .write(|w| unsafe { w.bits(self.arr.read().bits() - 1) });
+            self.cr1.modify(|_, w| w.opm().clear_bit().cen().set_bit());
+        }
     }
 
     fn stop(&mut self) -> bool {
@@ -433,6 +458,14 @@ impl Utils<tim2::RegisterBlock, dma1::C2> for TIM2 {
     fn set_reload(reload: u32) {
         unsafe { (*Self::ptr()).arr.write(|w| w.bits(reload)) }
     }
+
+    fn opm() -> bool {
+        unsafe { (*Self::ptr()).cr1.read().opm().bit_is_set() }
+    }
+
+    fn set_opm() {
+        unsafe { (*Self::ptr()).cr1.modify(|_, w| w.opm().set_bit()) }
+    }
 }
 
 static mut TIM1_DMA_BUF: VolatileCell<u32> = VolatileCell::new(0);
@@ -464,6 +497,7 @@ fn transform_target32(mut target: u32) -> (u32, u32) {
 
 unsafe fn call_dma_cb(
     cb: &Option<DmaCb>,
+    opm_val: bool,
     captured: u32,
     prescaler: u32,
     reload: u32,
@@ -471,7 +505,17 @@ unsafe fn call_dma_cb(
 ) {
     if let Some(f) = cb {
         // reload | prescaler -> 32 bit target
-        f.cycle_finished(captured, as_target32(prescaler, reload), irq);
+        // f.cycle_finished(captured, as_target32(prescaler, reload), irq);
+        f.cycle_finished(
+            if opm_val {
+                TimerEvent::Stop
+            } else {
+                TimerEvent::Start
+            },
+            captured,
+            as_target32(prescaler, reload),
+            irq,
+        );
     }
 }
 
@@ -490,8 +534,14 @@ unsafe fn DMA1_CH2() {
     // reset interrupt flag
     dma.ifcr.write(|w| w.cgif2().set_bit());
 
+    let opm = TIM2::opm();
+    if !opm {
+        TIM2::set_opm()
+    }
+
     call_dma_cb(
         &DMA1_CH2_CB,
+        opm,
         TIM2_DMA_BUF.get(),
         TIM2::prescaler(),
         TIM2::target(),
@@ -514,8 +564,14 @@ unsafe fn DMA1_CH6() {
     // reset interrupt flag
     dma.ifcr.write(|w| w.cgif6().set_bit());
 
+    let opm = TIM1::opm();
+    if !opm {
+        TIM1::set_opm()
+    }
+
     call_dma_cb(
         &DMA1_CH6_CB,
+        opm,
         TIM1_DMA_BUF.get(),
         TIM1::prescaler(),
         TIM1::target(),

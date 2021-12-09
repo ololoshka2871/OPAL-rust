@@ -3,26 +3,20 @@ use core::marker::PhantomData;
 
 use stm32l4xx_hal::{gpio::State, prelude::OutputPin};
 
-use super::{f_ch_processor::FChProcessor, hw_in_counters::InCounter};
+use super::{f_ch_processor::FChProcessor, hw_in_counters::InCounter, TimerEvent};
 
-pub type FrefGetter<T> = fn() -> Result<f64, T>;
-
-pub struct FreqmeterController<'a, TIM, DMA, INPIN, ENPIN, TSE>
+pub struct FreqmeterController<'a, TIM, DMA, INPIN, ENPIN>
 where
     TIM: InCounter<DMA, INPIN>,
 {
     freqmeter: &'a mut TIM,
     gpio_pin: ENPIN,
-    fref_multiplier: f64,
-    ferf_getter: FrefGetter<TSE>,
     prev: u32,
-    startup: bool,
     _phantomdata1: PhantomData<DMA>,
     _phantomdata2: PhantomData<INPIN>,
 }
 
-impl<'a, TIM, DMA, INPIN, ENPIN, TSE> FChProcessor<TSE>
-    for FreqmeterController<'a, TIM, DMA, INPIN, ENPIN, TSE>
+impl<'a, TIM, DMA, INPIN, ENPIN> FChProcessor for FreqmeterController<'a, TIM, DMA, INPIN, ENPIN>
 where
     TIM: InCounter<DMA, INPIN>,
     ENPIN: OutputPin,
@@ -30,7 +24,7 @@ where
 {
     fn enable(&mut self) {
         self.set_lvl(crate::config::GENERATOR_ENABLE_LVL);
-        self.startup = true;
+        //freertos_rust::CurrentTask::delay(freertos_rust::Duration::ms(10));
         self.freqmeter.cold_start();
     }
 
@@ -39,61 +33,47 @@ where
         self.set_lvl(crate::config::GENERATOR_DISABLE_LVL);
     }
 
-    fn is_initial_result(&mut self) -> bool {
-        if self.startup {
-            self.startup = false;
-            true
-        } else {
-            false
+    fn restart(&mut self) {
+        self.freqmeter.cold_start();
+    }
+
+    fn set_target(&mut self, new_target: u32) {
+        self.freqmeter.stop();
+        self.freqmeter.set_target32(new_target);
+        self.freqmeter.cold_start();
+    }
+
+    fn input_captured(&mut self, event: TimerEvent, captured: u32) -> Option<u32> {
+        match event {
+            TimerEvent::Start => {
+                self.prev = captured;
+                None
+            }
+            TimerEvent::Stop => {
+                let diff = if self.prev <= captured {
+                    captured - self.prev
+                } else {
+                    u32::MAX - self.prev + captured
+                };
+                self.prev = captured;
+
+                Some(diff)
+            }
         }
-    }
-
-    fn adaptate(&mut self) -> Result<u32, ()> {
-        todo!()
-    }
-
-    fn input_captured(&mut self, captured: u32) -> Option<u32> {
-        if self.is_initial_result() {
-            None
-        } else {
-            let diff = if self.prev <= captured {
-                captured - self.prev
-            } else {
-                u32::MAX - self.prev + captured
-            };
-            self.prev = captured;
-
-            Some(diff)
-        }
-    }
-
-    fn calc_freq(&mut self, target: u32, diff: u32) -> Result<f64, TSE> {
-        let fref = self.fref_multiplier * (self.ferf_getter)()?;
-        let f = fref * target as f64 / diff as f64;
-
-        Ok(f)
     }
 }
 
-impl<'a, TIM, DMA, INPIN, ENPIN, TSE> FreqmeterController<'a, TIM, DMA, INPIN, ENPIN, TSE>
+impl<'a, TIM, DMA, INPIN, ENPIN> FreqmeterController<'a, TIM, DMA, INPIN, ENPIN>
 where
     TIM: InCounter<DMA, INPIN>,
     ENPIN: OutputPin,
     <ENPIN as OutputPin>::Error: Debug,
 {
-    pub fn new(
-        freqmeter: &'a mut TIM,
-        gpio_pin: ENPIN,
-        fref_multiplier: f64,
-        ferf_getter: FrefGetter<TSE>,
-    ) -> Self {
+    pub fn new(freqmeter: &'a mut TIM, gpio_pin: ENPIN) -> Self {
         Self {
             freqmeter,
             gpio_pin,
-            fref_multiplier,
-            ferf_getter,
             prev: 0,
-            startup: false,
             _phantomdata1: PhantomData,
             _phantomdata2: PhantomData,
         }
