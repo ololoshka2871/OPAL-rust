@@ -3,17 +3,19 @@ use freertos_rust::{Duration, Mutex, Task, TaskPriority};
 use stm32l4xx_hal::gpio::{
     Alternate, Floating, Input, Output, PushPull, AF1, AF10, PA0, PA11, PA12, PA8, PD10, PD13,
 };
-use stm32l4xx_hal::rcc::{PllConfig, PllDivider};
-use stm32l4xx_hal::time::*;
-use stm32l4xx_hal::{prelude::*, stm32};
+use stm32l4xx_hal::{
+    prelude::*,
+    rcc::{PllConfig, PllDivider},
+    stm32,
+    time::Hertz,
+};
 
 use crate::sensors::freqmeter::master_counter;
 use crate::support::{interrupt_controller::IInterruptController, InterruptController};
 use crate::threads;
 use crate::workmodes::common::ClockConfigProvider;
 
-use super::output_storage::OutputStorage;
-use super::WorkMode;
+use super::{output_storage::OutputStorage, WorkMode};
 
 const PLL_CFG: (u32, u32, u32) = (3, 40, 2);
 const APB1_DEVIDER: u32 = 8;
