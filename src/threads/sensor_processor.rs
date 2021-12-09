@@ -164,7 +164,10 @@ where
                         }
 
                         if continue_work {
+                            #[cfg(feature = "freqmeter-start-stop")]
                             ch.restart();
+                        } else {
+                            ch.diasbe();
                         }
                     } else {
                         defmt::trace!("Ch. {}, result not ready", c)

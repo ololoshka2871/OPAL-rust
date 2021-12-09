@@ -64,12 +64,14 @@ default = [
    "defmt-default", # отключить когда собираешь релиз
    "monitor-heap",
    "stm32l433",
+   "freqmeter-start-stop",
    #"monitor",
  ]
 
- monitor-heap = []
- stm32l433 = [ "stm32l4xx-hal/stm32l4x2" ]
- monitor = []
+monitor-heap = []
+stm32l433 = [ "stm32l4xx-hal/stm32l4x2" ]
+monitor = []
+freqmeter-start-stop = []
 
  # do NOT modify these features
 defmt-default = []

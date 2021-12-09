@@ -178,16 +178,11 @@ impl InCounter<dma1::C6, PA8<Alternate<AF1, Input<Floating>>>> for TIM1 {
     }
 
     fn cold_start(&mut self) {
-        /*
+        self.cr1
+            .modify(|_, w| w.cen().clear_bit().opm().clear_bit());
         self.cnt
             .write(|w| unsafe { w.bits(self.arr.read().bits() - 1) });
         self.cr1.modify(|_, w| w.cen().set_bit());
-        */
-        if self.cr1.read().cen().bit_is_clear() {
-            self.cnt
-                .write(|w| unsafe { w.bits(self.arr.read().bits() - 1) });
-            self.cr1.modify(|_, w| w.opm().clear_bit().cen().set_bit());
-        }
     }
 
     fn stop(&mut self) -> bool {
@@ -395,16 +390,11 @@ impl InCounter<dma1::C2, PA0<Alternate<AF1, Input<Floating>>>> for TIM2 {
     }
 
     fn cold_start(&mut self) {
-        /*
+        self.cr1
+            .modify(|_, w| w.cen().clear_bit().opm().clear_bit());
         self.cnt
             .write(|w| unsafe { w.bits(self.arr.read().bits() - 1) });
         self.cr1.modify(|_, w| w.cen().set_bit());
-        */
-        if self.cr1.read().cen().bit_is_clear() {
-            self.cnt
-                .write(|w| unsafe { w.bits(self.arr.read().bits() - 1) });
-            self.cr1.modify(|_, w| w.opm().clear_bit().cen().set_bit());
-        }
     }
 
     fn stop(&mut self) -> bool {
@@ -535,6 +525,8 @@ unsafe fn DMA1_CH2() {
     dma.ifcr.write(|w| w.cgif2().set_bit());
 
     let opm = TIM2::opm();
+
+    #[cfg(feature = "freqmeter-start-stop")]
     if !opm {
         TIM2::set_opm()
     }
@@ -565,6 +557,7 @@ unsafe fn DMA1_CH6() {
     dma.ifcr.write(|w| w.cgif6().set_bit());
 
     let opm = TIM1::opm();
+    #[cfg(feature = "freqmeter-start-stop")]
     if !opm {
         TIM1::set_opm()
     }

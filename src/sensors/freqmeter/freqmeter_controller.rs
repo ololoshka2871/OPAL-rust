@@ -12,6 +12,7 @@ where
     freqmeter: &'a mut TIM,
     gpio_pin: ENPIN,
     prev: u32,
+    start: bool,
     _phantomdata1: PhantomData<DMA>,
     _phantomdata2: PhantomData<INPIN>,
 }
@@ -24,6 +25,7 @@ where
 {
     fn enable(&mut self) {
         self.set_lvl(crate::config::GENERATOR_ENABLE_LVL);
+        self.start = true;
         //freertos_rust::CurrentTask::delay(freertos_rust::Duration::ms(10));
         self.freqmeter.cold_start();
     }
@@ -34,16 +36,29 @@ where
     }
 
     fn restart(&mut self) {
+        self.start = true;
         self.freqmeter.cold_start();
     }
 
     fn set_target(&mut self, new_target: u32) {
         self.freqmeter.stop();
         self.freqmeter.set_target32(new_target);
-        self.freqmeter.cold_start();
+        self.restart();
     }
 
-    fn input_captured(&mut self, event: TimerEvent, captured: u32) -> Option<u32> {
+    #[allow(unused_mut)]
+    #[allow(unused_assignments)]
+    fn input_captured(&mut self, mut event: TimerEvent, captured: u32) -> Option<u32> {
+        #[cfg(not(feature = "freqmeter-start-stop"))]
+        {
+            event = if self.start {
+                self.start = false;
+                TimerEvent::Start
+            } else {
+                TimerEvent::Stop
+            };
+        }
+
         match event {
             TimerEvent::Start => {
                 self.prev = captured;
@@ -74,6 +89,7 @@ where
             freqmeter,
             gpio_pin,
             prev: 0,
+            start: false,
             _phantomdata1: PhantomData,
             _phantomdata2: PhantomData,
         }
