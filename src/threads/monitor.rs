@@ -1,8 +1,8 @@
-use alloc::{format, string::ToString};
-use defmt::Display2Format;
-use freertos_rust::{CriticalRegion, DurationTicks, FreeRtosSchedulerState, FreeRtosUtils};
+pub fn monitord<D: freertos_rust::DurationTicks>(period: D) -> ! {
+    use alloc::{format, string::ToString};
+    use defmt::Display2Format;
+    use freertos_rust::{CriticalRegion, FreeRtosSchedulerState, FreeRtosUtils};
 
-pub fn monitord<D: DurationTicks>(period: D) -> ! {
     static HEADER: &str = "FreeRTOS threadinfo:\n   ID | Name       | State     | Priority | Stack left | CPU Abs.   |  %\n";
 
     loop {

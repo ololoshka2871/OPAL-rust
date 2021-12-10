@@ -31,7 +31,7 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
         Fp0: 0.0,
         Ft0: 0.0,
         A: [
-            0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         ],
     },
     T_Coefficients: app_settings::T5Coeffs {

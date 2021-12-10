@@ -277,9 +277,14 @@ pub struct _ru_sktbelpa_pressure_self_writer_InfoResponse {
     pub SW_Version: u64,
     pub PressureChannelFailed: bool,
     pub TemperatureChannelFailed: bool,
+    pub PressureOutOfrange: bool,
+    pub TemperatureOutOfrange: bool,
+    pub CPUTemperatureOutOfrange: bool,
+    pub VbatOutOfrange: bool,
     pub OverpressDetected: bool,
     pub OverheatDetected: bool,
     pub OverheatCPUDetected: bool,
+    pub OverVbatDetected: bool,
 }
 pub type ru_sktbelpa_pressure_self_writer_InfoResponse =
     _ru_sktbelpa_pressure_self_writer_InfoResponse;

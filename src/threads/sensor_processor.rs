@@ -170,6 +170,7 @@ where
                             ch.diasbe();
                         }
                     } else {
+                        #[cfg(not(feature = "freqmeter-start-stop"))]
                         defmt::trace!("Ch. {}, result not ready", c)
                     }
                 }

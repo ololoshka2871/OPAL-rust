@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use alloc::sync::Arc;
 use freertos_rust::{Duration, FreeRtosError, Mutex};
 
-use crate::workmodes::output_storage::OutputStorage;
+use crate::{threads::sensor_processor::FChannel, workmodes::output_storage::OutputStorage};
 
 use super::messages::{
     ru_sktbelpa_pressure_self_writer_OutputReq, ru_sktbelpa_pressure_self_writer_OutputResponse,
@@ -25,9 +25,22 @@ pub fn fill_output(
         output.has_temperature = true;
         output.has_TCPU = true;
         output.has_Vbat = true;
+
+        match output_storage.lock(*OUT_STORAGE_LOCK_WAIT) {
+            Ok(guard) => {
+                output.pressure =
+                    guard.values[FChannel::Pressure as usize].unwrap_or(f64::NAN) as f32;
+                output.temperature =
+                    guard.values[FChannel::Temperature as usize].unwrap_or(f64::NAN) as f32;
+            }
+            Err(e) => {
+                output.pressure = f32::NAN;
+                output.temperature = f32::NAN;
+                err = Some(e);
+            }
+        }
+
         // TODO: values
-        output.pressure = 1.1e-1;
-        output.temperature = 1.2e-2;
         output.TCPU = 1.3e-3;
         output.Vbat = 1.4e-4;
     }
@@ -38,8 +51,10 @@ pub fn fill_output(
 
         match output_storage.lock(*OUT_STORAGE_LOCK_WAIT) {
             Ok(guard) => {
-                output.FP = guard.frequencys[0] as f32;
-                output.FT = guard.frequencys[1] as f32;
+                output.FP =
+                    guard.frequencys[FChannel::Pressure as usize].unwrap_or(f64::NAN) as f32;
+                output.FT =
+                    guard.frequencys[FChannel::Temperature as usize].unwrap_or(f64::NAN) as f32;
             }
             Err(e) => {
                 output.FP = f32::NAN;
@@ -57,10 +72,12 @@ pub fn fill_output(
 
         match output_storage.lock(*OUT_STORAGE_LOCK_WAIT) {
             Ok(guard) => {
-                output.P_result.Target = guard.targets[0];
-                output.P_result.Result = guard.results[0].unwrap_or_default();
-                output.T_result.Target = guard.targets[1];
-                output.T_result.Result = guard.results[1].unwrap_or_default();
+                output.P_result.Target = guard.targets[FChannel::Pressure as usize];
+                output.P_result.Result =
+                    guard.results[FChannel::Pressure as usize].unwrap_or_default();
+                output.T_result.Target = guard.targets[FChannel::Temperature as usize];
+                output.T_result.Result =
+                    guard.results[FChannel::Temperature as usize].unwrap_or_default();
             }
             Err(e) => {
                 output.P_result.Target = 0;

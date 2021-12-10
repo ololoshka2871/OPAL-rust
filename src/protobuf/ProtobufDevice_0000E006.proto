@@ -289,9 +289,16 @@ message InfoResponse {
     required bool               TemperatureChannelFailed = 11;
 
     // Флаги выхода за границы рабочего диопазона
-    required bool               OverpressDetected = 20;
-    required bool               OverheatDetected = 21;
-    required bool               OverheatCPUDetected = 22;
+    required bool               PressureOutOfrange = 20;
+    required bool               TemperatureOutOfrange = 21;
+    required bool               CPUTemperatureOutOfrange = 22;
+    required bool               VbatOutOfrange = 23;
+
+    // Флаги выхода критического превышения рабочего диопазона
+    required bool               OverpressDetected = 30;
+    required bool               OverheatDetected = 31;
+    required bool               OverheatCPUDetected = 32;
+    required bool               OverVbatDetected = 33;
 }
 
 //----------------------------------------------------------------------------

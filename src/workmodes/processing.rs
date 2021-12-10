@@ -14,7 +14,9 @@ pub trait RawValueProcessor {
 }
 
 mod common;
-pub use common::{abs_difference, calc_freq, calc_new_target};
+pub use common::{
+    abs_difference, calc_freq, calc_new_target, calc_pressure, calc_temperature, channel_config,
+};
 
 mod high_performance;
 pub use high_performance::HighPerformanceProcessor;

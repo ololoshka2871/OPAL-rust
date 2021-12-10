@@ -51,3 +51,5 @@ pub const GENERATOR_DISABLE_LVL: State = State::Low;
 pub const MINIMUM_ADAPTATION_INTERVAL: u32 = 50;
 
 //-----------------------------------------------------------------------------
+
+pub const OVER_LIMIT_COUNT: u32 = 5;
