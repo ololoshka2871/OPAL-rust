@@ -3,6 +3,7 @@ use core::fmt::Debug;
 use alloc::sync::Arc;
 use freertos_rust::{Duration, InterruptContext};
 use stm32l4xx_hal::prelude::OutputPin;
+use strum::IntoStaticStr;
 
 use crate::{
     sensors::freqmeter::{
@@ -32,7 +33,7 @@ where
     pub en_2: ENPIN2,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, defmt::Format)]
+#[derive(Clone, Copy, Debug, PartialEq, defmt::Format, IntoStaticStr)]
 pub enum FChannel {
     Pressure = 0,
     Temperature = 1,
@@ -56,7 +57,8 @@ pub enum Command {
     Stop(Channel),
     ReadyFChannel(FChannel, TimerEvent, u32, u32, bool),
     ReadyAChannel(AChannel),
-    SetTarget(FChannel, u32),
+    SetTarget(FChannel, u32, u32),
+    TimeoutFChannel(FChannel),
 }
 
 struct DMAFinished {
@@ -135,9 +137,43 @@ where
     );
 
     //----------------------------------------------------
+    let mut initial_target = |ch| {
+        processor
+            .process_f_signal_lost(ch, crate::config::INITIAL_FREQMETER_TARGET)
+            .1
+            .unwrap()
+            .1
+    };
 
-    let mut p_controller = FreqmeterController::new(&mut perith.timer1, perith.en_1);
-    let mut t_controller = FreqmeterController::new(&mut perith.timer2, perith.en_2);
+    let cc = command_queue.clone();
+    let mut p_controller = FreqmeterController::new(
+        &mut perith.timer1,
+        perith.en_1,
+        FChannel::Pressure,
+        initial_target(FChannel::Pressure),
+        move || {
+            cc.send(
+                Command::TimeoutFChannel(FChannel::Pressure),
+                Duration::infinite(),
+            )
+            .unwrap();
+        },
+    );
+
+    let cc = command_queue.clone();
+    let mut t_controller = FreqmeterController::new(
+        &mut perith.timer2,
+        perith.en_2,
+        FChannel::Temperature,
+        initial_target(FChannel::Temperature),
+        move || {
+            cc.send(
+                Command::TimeoutFChannel(FChannel::Temperature),
+                Duration::infinite(),
+            )
+            .unwrap();
+        },
+    );
 
     let mut p_channels: [&mut dyn FChProcessor; 2] = [&mut p_controller, &mut t_controller];
 
@@ -147,7 +183,7 @@ where
         if let Ok(cmd) = command_queue.receive(Duration::infinite()) {
             match cmd {
                 Command::Start(Channel::FChannel(c)) => p_channels[c as usize].enable(),
-                Command::Stop(Channel::FChannel(c)) => p_channels[c as usize].diasbe(),
+                Command::Stop(Channel::FChannel(c)) => p_channels[c as usize].diasble(),
                 Command::ReadyFChannel(c, ev, target, captured, wraped) => {
                     if wraped {
                         defmt::warn!("Ch: {}, wrap detected", c);
@@ -159,22 +195,40 @@ where
                         let (continue_work, new_target) =
                             processor.process_f_result(c, target, result);
 
-                        if let Some(nt) = new_target {
-                            ch.set_target(nt);
+                        if let Some((nt, mt)) = new_target {
+                            ch.set_target(nt, mt);
                         }
 
                         if continue_work {
-                            #[cfg(feature = "freqmeter-start-stop")]
-                            ch.restart();
+                            if cfg!(feature = "freqmeter-start-stop") {
+                                ch.restart();
+                            } else {
+                                ch.reset_guard();
+                            }
                         } else {
-                            ch.diasbe();
+                            ch.diasble();
                         }
                     } else {
                         #[cfg(not(feature = "freqmeter-start-stop"))]
                         defmt::trace!("Ch. {}, result not ready", c)
                     }
                 }
-                Command::SetTarget(c, target) => p_channels[c as usize].set_target(target),
+                Command::SetTarget(c, target, mt) => p_channels[c as usize].set_target(target, mt),
+                Command::TimeoutFChannel(c) => {
+                    defmt::warn!("ch. {} signal lost.", c);
+                    let ch = &mut p_channels[c as usize];
+
+                    ch.diasble();
+
+                    let (continue_work, new_target) =
+                        processor.process_f_signal_lost(c, ch.target());
+                    if continue_work {
+                        if let Some((nt, mt)) = new_target {
+                            ch.set_target(nt, mt);
+                        }
+                        ch.enable();
+                    }
+                }
                 _ => {}
             }
         }

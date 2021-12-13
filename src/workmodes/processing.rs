@@ -8,7 +8,14 @@ pub trait RawValueProcessor {
     /// г. вычисляет выходные занчения, если нужно
     /// д. если нужно, вычисляет новое значение для адаптации
     /// е. возвращет: разрешение продолжения работы, новое значение для адаптации
-    fn process_f_result(&mut self, ch: FChannel, target: u32, result: u32) -> (bool, Option<u32>);
+    fn process_f_result(
+        &mut self,
+        ch: FChannel,
+        target: u32,
+        result: u32,
+    ) -> (bool, Option<(u32, u32)>);
+
+    fn process_f_signal_lost(&mut self, ch: FChannel, target: u32) -> (bool, Option<(u32, u32)>);
 
     fn process_adc_result(&mut self, ch: AChannel, result: u32) -> bool;
 }
@@ -16,6 +23,7 @@ pub trait RawValueProcessor {
 mod common;
 pub use common::{
     abs_difference, calc_freq, calc_new_target, calc_pressure, calc_temperature, channel_config,
+    guard_ticks,
 };
 
 mod high_performance;

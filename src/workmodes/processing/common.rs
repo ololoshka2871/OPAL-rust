@@ -1,11 +1,12 @@
 use core::ops::Sub;
 
 use freertos_rust::{Duration, Mutex};
+use stm32l4xx_hal::time::Hertz;
 
 use crate::{
     settings::{app_settings::NonStoreSettings, AppSettings, SettingActionError},
     threads::sensor_processor::FChannel,
-    workmodes::output_storage::OutputStorage,
+    workmodes::{common::HertzExt, output_storage::OutputStorage},
 };
 
 pub struct ChannelConfig {
@@ -87,14 +88,28 @@ pub fn calc_freq(
     Ok(f)
 }
 
-pub fn calc_new_target(ch: FChannel, f: f64) -> Result<u32, freertos_rust::FreeRtosError> {
+fn mt2guard_ticks(mt: f64, sysclk: &Hertz) -> u32 {
+    (sysclk.duration_ms(mt as u32).to_ms() as f32 * crate::config::MEASURE_TIME_TO_GUARD_MULTIPLIER)
+        as u32
+}
+
+pub fn guard_ticks(ch: FChannel, sysclk: &Hertz) -> Result<u32, freertos_rust::FreeRtosError> {
+    let mt = mt_getter(ch)?;
+    Ok(mt2guard_ticks(mt, sysclk))
+}
+
+pub fn calc_new_target(
+    ch: FChannel,
+    f: f64,
+    sysclk: &Hertz,
+) -> Result<(u32, u32), freertos_rust::FreeRtosError> {
     let mt = mt_getter(ch)?;
     let mut new_target = (f * mt / 1000.0f64) as u32;
     if new_target < 1 {
         new_target = 1;
     }
 
-    Ok(new_target)
+    Ok((new_target, mt2guard_ticks(mt, sysclk)))
 }
 
 //---------------------------------------------------------------------------------------

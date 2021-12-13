@@ -49,6 +49,7 @@ pub const GENERATOR_DISABLE_LVL: State = State::Low;
 //-----------------------------------------------------------------------------
 
 pub const MINIMUM_ADAPTATION_INTERVAL: u32 = 50;
+pub const MEASURE_TIME_TO_GUARD_MULTIPLIER: f32 = 1.5;
 
 //-----------------------------------------------------------------------------
 

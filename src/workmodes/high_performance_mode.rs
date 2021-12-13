@@ -271,6 +271,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         let processor = HighPerformanceProcessor::new(
             self.output.clone(),
             HighPerformanceClockConfigProvider::xtal2master_freq_multiplier(),
+            self.clocks.unwrap().sysclk(),
         );
         Task::new()
             .name("SensProc")
