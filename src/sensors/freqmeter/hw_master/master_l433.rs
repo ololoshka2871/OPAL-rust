@@ -1,7 +1,7 @@
 use stm32l4xx_hal::{
     device::{tim6, RCC},
     interrupt,
-    stm32l4::stm32l4x2::Interrupt as IRQ,
+    stm32l4::stm32l4x3::Interrupt as IRQ,
 };
 
 use crate::support::interrupt_controller::{IInterruptController, Interrupt};
@@ -25,7 +25,7 @@ impl Tim6_7MasterCounter {
 
     fn interrupt_n(&self) -> Interrupt {
         match self.id {
-            6 => IRQ::TIM6_DACUNDER.into(),
+            6 => IRQ::TIM6_DAC.into(),
             7 => IRQ::TIM7.into(),
             _ => panic!(),
         }
@@ -127,7 +127,7 @@ pub(crate) static MASTER_LIST: [&dyn MasterCounterInfo; 2] = [
 ];
 
 #[interrupt]
-unsafe fn TIM6_DACUNDER() {
+unsafe fn TIM6_DAC() {
     crate::sensors::freqmeter::master_counter::master_ovf(6);
 }
 

@@ -2,7 +2,7 @@ use core::fmt::Debug;
 
 use alloc::sync::Arc;
 use freertos_rust::{Duration, InterruptContext};
-use stm32l4xx_hal::prelude::OutputPin;
+use stm32l4xx_hal::{adc::ADC, prelude::OutputPin};
 use strum::IntoStaticStr;
 
 use crate::{
@@ -14,13 +14,12 @@ use crate::{
     workmodes::processing::RawValueProcessor,
 };
 
-pub struct SensorPerith<TIM1, DMA1, TIM2, DMA2, PIN1, PIN2, ENPIN1, ENPIN2>
+pub struct SensorPerith<TIM1, DMA1, TIM2, DMA2, PIN1, PIN2, ENPIN1, ENPIN2, VBATPIN, TCPU>
 // Суть в том, что мы напишем КОНКРЕТНУЮ имплементацию InCounter<DMA> для
 // конкретного счетчика рандомная пара не соберется.
 where
     TIM1: InCounter<DMA1, PIN1>,
     TIM2: InCounter<DMA2, PIN2>,
-    ENPIN1: ,
 {
     pub timer1: TIM1,
     pub timer1_dma_ch: DMA1,
@@ -31,6 +30,10 @@ where
     pub timer2_dma_ch: DMA2,
     pub timer2_pin: PIN2,
     pub en_2: ENPIN2,
+
+    pub adc: ADC,
+    pub vbat_pin: VBATPIN,
+    pub tcpu_ch: TCPU,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, defmt::Format, IntoStaticStr)]
@@ -93,8 +96,8 @@ impl OnCycleFinished for DMAFinished {
     }
 }
 
-pub fn sensor_processor<PTIM, PDMA, TTIM, TDMA, PPIN, TPIN, ENPIN1, ENPIN2, TP>(
-    mut perith: SensorPerith<PTIM, PDMA, TTIM, TDMA, PPIN, TPIN, ENPIN1, ENPIN2>,
+pub fn sensor_processor<PTIM, PDMA, TTIM, TDMA, PPIN, TPIN, ENPIN1, ENPIN2, TP, VBATPIN, TCPU>(
+    mut perith: SensorPerith<PTIM, PDMA, TTIM, TDMA, PPIN, TPIN, ENPIN1, ENPIN2, VBATPIN, TCPU>,
     command_queue: Arc<freertos_rust::Queue<Command>>,
     ic: Arc<dyn IInterruptController>,
     mut processor: TP,
@@ -137,6 +140,7 @@ where
     );
 
     //----------------------------------------------------
+
     let mut initial_target = |ch| {
         processor
             .process_f_signal_lost(ch, crate::config::INITIAL_FREQMETER_TARGET)

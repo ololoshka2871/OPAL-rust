@@ -1,12 +1,12 @@
 use stm32_usbd::UsbPeripheral;
 use stm32l4xx_hal::device::RCC;
-use stm32l4xx_hal::gpio::{Alternate, Floating, Input, AF10, PA11, PA12};
+use stm32l4xx_hal::gpio::{Alternate, PushPull, PA11, PA12};
 use stm32l4xx_hal::stm32;
 
 pub struct UsbPeriph {
     pub usb: stm32::USB,
-    pub pin_dm: PA11<Alternate<AF10, Input<Floating>>>,
-    pub pin_dp: PA12<Alternate<AF10, Input<Floating>>>,
+    pub pin_dm: PA11<Alternate<PushPull, 10>>,
+    pub pin_dp: PA12<Alternate<PushPull, 10>>,
 }
 
 unsafe impl Sync for UsbPeriph {}

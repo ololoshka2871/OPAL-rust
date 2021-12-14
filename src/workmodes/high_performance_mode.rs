@@ -1,9 +1,11 @@
 use alloc::sync::Arc;
 use freertos_rust::{Duration, Mutex, Queue, Task, TaskPriority};
+use stm32l4xx_hal::adc;
 use stm32l4xx_hal::gpio::{
-    Alternate, Floating, Input, Output, PushPull, AF1, AF10, PA0, PA11, PA12, PA8, PD10, PD13,
+    Alternate, Analog, Floating, Input, Output, PushPull, PA0, PA1, PA11, PA12, PA8, PD10, PD13,
 };
 use stm32l4xx_hal::{
+    adc::{Temperature, ADC},
     prelude::*,
     rcc::{PllConfig, PllDivider},
     stm32,
@@ -13,6 +15,7 @@ use stm32l4xx_hal::{
 use crate::sensors::freqmeter::master_counter;
 use crate::support::{interrupt_controller::IInterruptController, InterruptController};
 use crate::threads;
+use crate::threads::free_rtos_delay::FreeRtosDelay;
 use crate::threads::sensor_processor::Command;
 use crate::workmodes::{common::ClockConfigProvider, processing::HighPerformanceProcessor};
 
@@ -76,21 +79,26 @@ pub struct HighPerformanceMode {
 
     usb: stm32l4xx_hal::stm32::USB,
 
-    usb_dm: PA11<Alternate<AF10, Input<Floating>>>,
-    usb_dp: PA12<Alternate<AF10, Input<Floating>>>,
+    usb_dm: PA11<Alternate<PushPull, 10>>,
+    usb_dp: PA12<Alternate<PushPull, 10>>,
 
     interrupt_controller: Arc<dyn IInterruptController>,
 
     crc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>,
 
-    in_p: PA8<Alternate<AF1, Input<Floating>>>,
-    in_t: PA0<Alternate<AF1, Input<Floating>>>,
+    in_p: PA8<Input<Floating>>,
+    in_t: PA0<Input<Floating>>,
     en_p: PD13<Output<PushPull>>,
     en_t: PD10<Output<PushPull>>,
     dma1_ch2: stm32l4xx_hal::dma::dma1::C2,
     dma1_ch6: stm32l4xx_hal::dma::dma1::C6,
-    timer1: stm32l4xx_hal::stm32l4::stm32l4x2::TIM1,
-    timer2: stm32l4xx_hal::stm32l4::stm32l4x2::TIM2,
+    timer1: stm32l4xx_hal::stm32l4::stm32l4x3::TIM1,
+    timer2: stm32l4xx_hal::stm32l4::stm32l4x3::TIM2,
+
+    adc: stm32l4xx_hal::stm32::ADC1,
+    adc_common: stm32l4xx_hal::device::ADC_COMMON,
+    vbat_pin: PA1<Analog>,
+    tcpu_ch: Temperature,
 
     sensor_command_queue: Arc<freertos_rust::Queue<threads::sensor_processor::Command>>,
 
@@ -98,7 +106,7 @@ pub struct HighPerformanceMode {
 }
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
-    fn new(p: cortex_m::Peripherals, dp: stm32l4xx_hal::stm32l4::stm32l4x2::Peripherals) -> Self {
+    fn new(p: cortex_m::Peripherals, dp: stm32l4xx_hal::stm32l4::stm32l4x3::Peripherals) -> Self {
         use crate::config::GENERATOR_DISABLE_LVL;
 
         let mut rcc = dp.RCC.constrain();
@@ -116,8 +124,12 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             usb: dp.USB,
 
-            usb_dm: gpioa.pa11.into_af10(&mut gpioa.moder, &mut gpioa.afrh),
-            usb_dp: gpioa.pa12.into_af10(&mut gpioa.moder, &mut gpioa.afrh),
+            usb_dm: gpioa
+                .pa11
+                .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrh),
+            usb_dp: gpioa
+                .pa12
+                .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrh),
 
             pwr: dp.PWR.constrain(&mut rcc.apb1r1),
             clocks: None,
@@ -126,15 +138,19 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             rcc,
 
-            in_p: gpioa.pa8.into_af1(&mut gpioa.moder, &mut gpioa.afrh),
-            in_t: gpioa.pa0.into_af1(&mut gpioa.moder, &mut gpioa.afrl),
+            in_p: gpioa
+                .pa8
+                .into_floating_input(&mut gpioa.moder, &mut gpioa.pupdr),
+            in_t: gpioa
+                .pa0
+                .into_floating_input(&mut gpioa.moder, &mut gpioa.pupdr),
 
-            en_p: gpiod.pd13.into_push_pull_output_with_state(
+            en_p: gpiod.pd13.into_push_pull_output_in_state(
                 &mut gpiod.moder,
                 &mut gpiod.otyper,
                 GENERATOR_DISABLE_LVL,
             ),
-            en_t: gpiod.pd10.into_push_pull_output_with_state(
+            en_t: gpiod.pd10.into_push_pull_output_in_state(
                 &mut gpiod.moder,
                 &mut gpiod.otyper,
                 GENERATOR_DISABLE_LVL,
@@ -145,7 +161,12 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             timer1: dp.TIM1,
             timer2: dp.TIM2,
 
-            sensor_command_queue: Arc::new(freertos_rust::Queue::new(5).unwrap()),
+            adc: dp.ADC1,
+            adc_common: dp.ADC_COMMON,
+            vbat_pin: gpioa.pa1.into_analog(&mut gpioa.moder, &mut gpioa.pupdr),
+            tcpu_ch: adc::Temperature {},
+
+            sensor_command_queue: Arc::new(freertos_rust::Queue::new(7).unwrap()),
 
             output: Arc::new(Mutex::new(OutputStorage::default()).unwrap()),
         }
@@ -237,7 +258,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         self.clocks = Some(clocks);
     }
 
-    fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
+    fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
         defmt::trace!("Creating usb thread...");
         let usbperith = threads::usbd::UsbdPeriph {
             usb: self.usb,
@@ -254,6 +275,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 threads::usbd::usbd(usbperith, ic, crate::config::USB_INTERRUPT_PRIO, output)
             })?;
 
+        // --------------------------------------------------------------------
+
         defmt::trace!("Creating Sensors Processor thread...");
         let sp = threads::sensor_processor::SensorPerith {
             timer1: self.timer1,
@@ -265,6 +288,16 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             timer2_dma_ch: self.dma1_ch2,
             timer2_pin: self.in_t,
             en_2: self.en_t,
+
+            adc: ADC::new(
+                self.adc,
+                self.adc_common,
+                &mut self.rcc.ahb2,
+                &mut self.rcc.ccipr,
+                &mut FreeRtosDelay {},
+            ),
+            vbat_pin: self.vbat_pin,
+            tcpu_ch: self.tcpu_ch,
         };
         let cq = self.sensor_command_queue.clone();
         let ic = self.interrupt_controller.clone();
@@ -279,7 +312,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             .priority(TaskPriority(crate::config::SENS_PROC_TASK_PRIO))
             .start(move |_| threads::sensor_processor::sensor_processor(sp, cq, ic, processor))?;
 
-        // ---
+        // --------------------------------------------------------------------
+
         crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk())?;
 
         #[cfg(debug_assertions)]
@@ -319,8 +353,8 @@ fn enable_selected_channels(cq: &Arc<Queue<Command>>) {
                 (Channel::AChannel(AChannel::TCPU), ws.TCPUEnabled),
                 (Channel::AChannel(AChannel::Vbat), ws.VBatEnabled),
             ];
-            for (c, f) in flags.iter() {
-                if *f {
+            for (c, enabled) in flags.iter() {
+                if *enabled {
                     cq.send(Command::Start(*c), Duration::infinite())
                 } else {
                     cq.send(Command::Stop(*c), Duration::infinite())

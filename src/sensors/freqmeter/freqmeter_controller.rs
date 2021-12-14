@@ -2,7 +2,7 @@ use core::fmt::Debug;
 use core::marker::PhantomData;
 
 use freertos_rust::{Duration, Timer};
-use stm32l4xx_hal::{gpio::State, prelude::OutputPin};
+use stm32l4xx_hal::{gpio::PinState, prelude::OutputPin};
 
 use crate::threads::sensor_processor::FChannel;
 
@@ -135,10 +135,10 @@ where
         }
     }
 
-    fn set_lvl(&mut self, lvl: State) {
+    fn set_lvl(&mut self, lvl: PinState) {
         match lvl {
-            State::High => self.gpio_pin.set_high().unwrap(),
-            State::Low => self.gpio_pin.set_low().unwrap(),
+            PinState::High => self.gpio_pin.set_high().unwrap(),
+            PinState::Low => self.gpio_pin.set_low().unwrap(),
         }
     }
 }

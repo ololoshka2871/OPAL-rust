@@ -4,6 +4,7 @@ edition = "2018"
 readme = "README.md"
 name = "stm32-usb-self-writer"
 version = "0.2.0"
+resolver = "2"
 
 [dependencies]
 num = { version = "0.4", default-features = false, features = ["alloc"] }
@@ -13,13 +14,9 @@ static_assertions = "1.1.0"
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 vcell = "0.1.3"
 
-embedded-hal = "0.2.4"
+embedded-hal = { version = "0.2.4", features = ["unproven"] }
 cortex-m = "0.7.3"
 cortex-m-rt = "0.6.11" # need by stm32l4 == 0.13.0
-#freertos-rust = "0.1.2"
-freertos-rust = { git = "https://github.com/lobaro/FreeRTOS-rust.git" }
-
-stm32l4xx-hal = { version= "0.6.0", features = ["rt"] }
 
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
@@ -37,6 +34,9 @@ defmt = "0.2"
 defmt-rtt = "0.2"
 panic-probe = { version = "0.2", features = ["print-defmt"] }
 
+stm32l4xx-hal = { git = "https://github.com/stm32-rs/stm32l4xx-hal.git", features = ["rt", "unproven", "stm32-usbd"] }
+freertos-rust = { git = "https://github.com/lobaro/FreeRTOS-rust.git" }
+
 heatshrink-rust = { path = "lib/heatshrink-rust" }
 emfat-rust = { path = "lib/emfat" }
 nanopb-rs = { path = "lib/nanopb.rs/nanopb-rs" }
@@ -47,6 +47,9 @@ my-proc-macro = { path = "lib/my-proc-macro" }
 cc = "1.0.52"
 freertos-cargo-build = "0.1.1"
 nanopb-rs-generator = { path = "lib/nanopb.rs/nanopb-rs-generator" }
+
+#[patch.crates-io]
+#getrandom = {version="0.2.3", default-features = false}
 
 [profile.dev.package."*"]
 opt-level = "z"
@@ -71,7 +74,7 @@ default = [
  ]
 
 monitor-heap = []
-stm32l433 = [ "stm32l4xx-hal/stm32l4x2" ]
+stm32l433 = [ "stm32l4xx-hal/stm32l433" ]
 monitor = []
 freqmeter-start-stop = []
 

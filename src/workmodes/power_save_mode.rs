@@ -3,7 +3,7 @@ use freertos_rust::{Duration, Mutex, Task, TaskPriority};
 use stm32l4xx_hal::{
     prelude::*,
     rcc::{PllConfig, PllDivider},
-    stm32l4::stm32l4x2::Peripherals,
+    stm32l4::stm32l4x3::Peripherals,
 };
 
 use heatshrink_rust::decoder::HeatshrinkDecoder;

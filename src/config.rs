@@ -1,4 +1,4 @@
-use stm32l4xx_hal::gpio::State;
+use stm32l4xx_hal::gpio::PinState;
 
 //-----------------------------------------------------------------------------
 
@@ -43,8 +43,8 @@ pub const INITIAL_FREQMETER_TARGET: u32 = 50;
 //-----------------------------------------------------------------------------
 
 // generator enable/disable lvls
-pub const GENERATOR_ENABLE_LVL: State = State::High;
-pub const GENERATOR_DISABLE_LVL: State = State::Low;
+pub const GENERATOR_ENABLE_LVL: PinState = PinState::High;
+pub const GENERATOR_DISABLE_LVL: PinState = PinState::Low;
 
 //-----------------------------------------------------------------------------
 

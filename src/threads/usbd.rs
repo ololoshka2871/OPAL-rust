@@ -5,10 +5,10 @@ use freertos_rust::{Duration, InterruptContext, Mutex, Task, TaskPriority};
 use my_proc_macro::c_str;
 use stm32_usbd::UsbBus;
 
-use stm32l4xx_hal::gpio::{Alternate, Floating};
-use stm32l4xx_hal::{gpio::Input, interrupt};
+use stm32l4xx_hal::gpio::{Alternate, PushPull};
+use stm32l4xx_hal::interrupt;
 
-use stm32l4xx_hal::stm32l4::stm32l4x2::Interrupt;
+use stm32l4xx_hal::stm32l4::stm32l4x3::Interrupt;
 
 use usb_device::{class_prelude::UsbBusAllocator, prelude::*};
 use usbd_scsi::Scsi;
@@ -24,8 +24,8 @@ static mut USB_BUS: Option<UsbBusAllocator<UsbBus<UsbPeriph>>> = None;
 
 pub struct UsbdPeriph {
     pub usb: stm32l4xx_hal::device::USB,
-    pub pin_dm: stm32l4xx_hal::gpio::PA11<Alternate<stm32l4xx_hal::gpio::AF10, Input<Floating>>>,
-    pub pin_dp: stm32l4xx_hal::gpio::PA12<Alternate<stm32l4xx_hal::gpio::AF10, Input<Floating>>>,
+    pub pin_dm: stm32l4xx_hal::gpio::PA11<Alternate<PushPull, 10>>,
+    pub pin_dp: stm32l4xx_hal::gpio::PA12<Alternate<PushPull, 10>>,
 }
 
 pub fn usbd(
@@ -78,7 +78,7 @@ pub fn usbd(
         .build();
 
     defmt::trace!("Set usb interrupt prio = {}", interrupt_prio);
-    interrupt_controller.set_priority(Interrupt::USB.into(), interrupt_prio);
+    interrupt_controller.set_priority(Interrupt::USB_FS.into(), interrupt_prio);
 
     defmt::info!("USB ready!");
 
@@ -103,15 +103,15 @@ pub fn usbd(
 
         if !res {
             // block until usb interrupt
-            interrupt_controller.unpend(Interrupt::USB.into());
-            interrupt_controller.unmask(Interrupt::USB.into());
+            interrupt_controller.unpend(Interrupt::USB_FS.into());
+            interrupt_controller.unmask(Interrupt::USB_FS.into());
 
             let _ = freertos_rust::Task::current()
                 .unwrap()
                 // ожидаем, что нотификационное значение будет > 0
                 .take_notification(true, Duration::infinite());
 
-            interrupt_controller.mask(Interrupt::USB.into());
+            interrupt_controller.mask(Interrupt::USB_FS.into());
         } else {
             protobuf_srv.notify(freertos_rust::TaskNotification::Increment);
         }
@@ -122,7 +122,7 @@ pub fn usbd(
 
 // ucCurrentPriority >= ucMaxSysCallPriority (80)
 #[interrupt]
-unsafe fn USB() {
+unsafe fn USB_FS() {
     let interrupt_ctx = InterruptContext::new();
     if let Some(usbd) = USBD_THREAD.as_ref() {
         // Результат не особо важен
@@ -135,6 +135,6 @@ unsafe fn USB() {
     // бесконечно в него заходить по кругу, нужно запретить пока что это
     // прерывание
     // TODO: device independent layer
-    cortex_m::peripheral::NVIC::mask(Interrupt::USB);
-    cortex_m::peripheral::NVIC::unpend(Interrupt::USB);
+    cortex_m::peripheral::NVIC::mask(Interrupt::USB_FS);
+    cortex_m::peripheral::NVIC::unpend(Interrupt::USB_FS);
 }
