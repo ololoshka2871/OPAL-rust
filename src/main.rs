@@ -3,6 +3,8 @@
 // For allocator
 #![feature(lang_items)]
 #![feature(alloc_error_handler)]
+#![allow(incomplete_features)]
+#![feature(adt_const_params)]
 
 extern crate alloc;
 

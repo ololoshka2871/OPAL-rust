@@ -54,3 +54,8 @@ pub const MEASURE_TIME_TO_GUARD_MULTIPLIER: f32 = 1.5;
 //-----------------------------------------------------------------------------
 
 pub const OVER_LIMIT_COUNT: u32 = 5;
+
+//-----------------------------------------------------------------------------
+
+pub const VBAT_DEVIDER_R1: f64 = 100.0;
+pub const VBAT_DEVIDER_R2: f64 = 91.0;

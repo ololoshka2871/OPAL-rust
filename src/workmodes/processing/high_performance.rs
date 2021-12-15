@@ -1,8 +1,9 @@
 use alloc::sync::Arc;
 use freertos_rust::{Duration, Mutex};
-use stm32l4xx_hal::time::Hertz;
+use stm32l4xx_hal::{adc::ADC, time::Hertz};
 
 use crate::{
+    sensors::analog::AController,
     threads::sensor_processor::{AChannel, FChannel},
     workmodes::output_storage::OutputStorage,
 };
@@ -105,7 +106,25 @@ impl RawValueProcessor for HighPerformanceProcessor {
         (false, None)
     }
 
-    fn process_adc_result(&mut self, _ch: AChannel, _result: u32) -> bool {
-        todo!()
+    fn process_adc_result(
+        &mut self,
+        ch: AChannel,
+        adc: &mut ADC,
+        controller: &mut dyn AController,
+    ) -> (bool, Option<u32>) {
+        let raw_adc_value = controller.read(adc);
+
+        match ch {
+            AChannel::TCPU => super::process_t_cpu(
+                self.output.as_ref(),
+                adc.to_degrees_centigrade(raw_adc_value),
+                raw_adc_value,
+            ),
+            AChannel::Vbat => super::process_vbat(
+                self.output.as_ref(),
+                adc.to_millivolts(raw_adc_value),
+                raw_adc_value,
+            ),
+        }
     }
 }

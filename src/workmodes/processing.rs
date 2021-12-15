@@ -1,4 +1,7 @@
-use crate::threads::sensor_processor::{AChannel, FChannel};
+use crate::{
+    sensors::analog::AController,
+    threads::sensor_processor::{AChannel, FChannel},
+};
 
 pub trait RawValueProcessor {
     /// Процессинг:
@@ -17,14 +20,20 @@ pub trait RawValueProcessor {
 
     fn process_f_signal_lost(&mut self, ch: FChannel, target: u32) -> (bool, Option<(u32, u32)>);
 
-    fn process_adc_result(&mut self, ch: AChannel, result: u32) -> bool;
+    fn process_adc_result(
+        &mut self,
+        ch: AChannel,
+        adc: &mut ADC,
+        controller: &mut dyn AController,
+    ) -> (bool, Option<u32>);
 }
 
 mod common;
 pub use common::{
     abs_difference, calc_freq, calc_new_target, calc_pressure, calc_temperature, channel_config,
-    guard_ticks,
+    guard_ticks, process_t_cpu, process_vbat,
 };
 
 mod high_performance;
 pub use high_performance::HighPerformanceProcessor;
+use stm32l4xx_hal::adc::ADC;

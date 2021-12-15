@@ -3,6 +3,12 @@ pub struct OutputStorage {
     pub results: [Option<u32>; 2],
     pub frequencys: [Option<f64>; 2],
     pub values: [Option<f64>; 2],
+
+    pub t_cpu: f32,
+    pub t_cpu_adc: u16,
+
+    pub vbat_mv: f64,
+    pub vbat_mv_adc: u16,
 }
 
 impl Default for OutputStorage {
@@ -12,6 +18,11 @@ impl Default for OutputStorage {
             results: [None; 2],
             frequencys: [None; 2],
             values: [None; 2],
+
+            t_cpu: 0.0,
+            t_cpu_adc: 0,
+            vbat_mv: 0.0,
+            vbat_mv_adc: 0,
         }
     }
 }

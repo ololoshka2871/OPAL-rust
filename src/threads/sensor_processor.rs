@@ -1,14 +1,21 @@
 use core::fmt::Debug;
 
 use alloc::sync::Arc;
-use freertos_rust::{Duration, InterruptContext};
-use stm32l4xx_hal::{adc::ADC, prelude::OutputPin};
+use freertos_rust::{Duration, InterruptContext, Queue};
+use stm32l4xx_hal::{
+    adc::{self, Vref, ADC},
+    prelude::OutputPin,
+};
 use strum::IntoStaticStr;
 
 use crate::{
-    sensors::freqmeter::{
-        master_counter::{MasterCounter, MasterTimerInfo},
-        FChProcessor, FreqmeterController, InCounter, OnCycleFinished, TimerEvent,
+    sensors::analog::AnalogChannel,
+    sensors::{
+        analog::AController,
+        freqmeter::{
+            master_counter::{MasterCounter, MasterTimerInfo},
+            FChProcessor, FreqmeterController, InCounter, OnCycleFinished, TimerEvent,
+        },
     },
     support::interrupt_controller::{IInterruptController, Interrupt},
     workmodes::processing::RawValueProcessor,
@@ -20,6 +27,8 @@ pub struct SensorPerith<TIM1, DMA1, TIM2, DMA2, PIN1, PIN2, ENPIN1, ENPIN2, VBAT
 where
     TIM1: InCounter<DMA1, PIN1>,
     TIM2: InCounter<DMA2, PIN2>,
+    TCPU: Send,
+    VBATPIN: Send,
 {
     pub timer1: TIM1,
     pub timer1_dma_ch: DMA1,
@@ -34,6 +43,7 @@ where
     pub adc: ADC,
     pub vbat_pin: VBATPIN,
     pub tcpu_ch: TCPU,
+    pub v_ref: Vref,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, defmt::Format, IntoStaticStr)]
@@ -42,7 +52,7 @@ pub enum FChannel {
     Temperature = 1,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, defmt::Format)]
+#[derive(Clone, Copy, Debug, PartialEq, defmt::Format, IntoStaticStr)]
 pub enum AChannel {
     TCPU = 0,
     Vbat = 1,
@@ -54,13 +64,12 @@ pub enum Channel {
     AChannel(AChannel),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, defmt::Format)]
 pub enum Command {
     Start(Channel),
     Stop(Channel),
     ReadyFChannel(FChannel, TimerEvent, u32, u32, bool),
-    ReadyAChannel(AChannel),
-    SetTarget(FChannel, u32, u32),
+    ReadAChannel(AChannel),
     TimeoutFChannel(FChannel),
 }
 
@@ -110,7 +119,19 @@ where
     ENPIN2: OutputPin,
     <ENPIN2 as OutputPin>::Error: Debug,
     TP: RawValueProcessor,
+    TCPU: Send + adc::Channel,
+    VBATPIN: Send + adc::Channel,
 {
+    fn send_command(cc: &Queue<Command>, cmd: Command) {
+        let _ = cc.send(cmd, Duration::infinite()).map_err(|e| {
+            defmt::error!(
+                "Failed to send {} to command queue: {}",
+                cmd,
+                defmt::Debug2Format(&e)
+            )
+        });
+    }
+
     let master_counter = MasterCounter::allocate().unwrap();
     perith.timer1.configure(
         master_counter.cnt_addr(),
@@ -155,13 +176,7 @@ where
         perith.en_1,
         FChannel::Pressure,
         initial_target(FChannel::Pressure),
-        move || {
-            cc.send(
-                Command::TimeoutFChannel(FChannel::Pressure),
-                Duration::infinite(),
-            )
-            .unwrap();
-        },
+        move || send_command(cc.as_ref(), Command::TimeoutFChannel(FChannel::Pressure)),
     );
 
     let cc = command_queue.clone();
@@ -170,16 +185,26 @@ where
         perith.en_2,
         FChannel::Temperature,
         initial_target(FChannel::Temperature),
-        move || {
-            cc.send(
-                Command::TimeoutFChannel(FChannel::Temperature),
-                Duration::infinite(),
-            )
-            .unwrap();
-        },
+        move || send_command(cc.as_ref(), Command::TimeoutFChannel(FChannel::Temperature)),
     );
 
     let mut p_channels: [&mut dyn FChProcessor; 2] = [&mut p_controller, &mut t_controller];
+    let mut vref = perith.v_ref;
+
+    //----------------------------------------------------
+
+    let cc = command_queue.clone();
+    let mut t_cpu = AnalogChannel::new(AChannel::TCPU, perith.tcpu_ch, 100, move || {
+        send_command(cc.as_ref(), Command::ReadAChannel(AChannel::TCPU))
+    });
+
+    let cc = command_queue.clone();
+    let mut vbat = AnalogChannel::new(AChannel::Vbat, perith.vbat_pin, 100, move || {
+        send_command(cc.as_ref(), Command::ReadAChannel(AChannel::Vbat))
+    });
+
+    let mut a_channels: [&mut dyn AController; 2] = [&mut t_cpu, &mut vbat];
+    let mut adc = perith.adc;
 
     //----------------------------------------------------
 
@@ -187,7 +212,9 @@ where
         if let Ok(cmd) = command_queue.receive(Duration::infinite()) {
             match cmd {
                 Command::Start(Channel::FChannel(c)) => p_channels[c as usize].enable(),
+                Command::Start(Channel::AChannel(c)) => a_channels[c as usize].init_cycle(),
                 Command::Stop(Channel::FChannel(c)) => p_channels[c as usize].diasble(),
+                Command::Stop(Channel::AChannel(c)) => a_channels[c as usize].stop(),
                 Command::ReadyFChannel(c, ev, target, captured, wraped) => {
                     if wraped {
                         defmt::warn!("Ch: {}, wrap detected", c);
@@ -217,7 +244,19 @@ where
                         defmt::trace!("Ch. {}, result not ready", c)
                     }
                 }
-                Command::SetTarget(c, target, mt) => p_channels[c as usize].set_target(target, mt),
+                Command::ReadAChannel(c) => {
+                    let ch = &mut a_channels[c as usize];
+
+                    adc.calibrate(&mut vref);
+                    let (continue_work, new_dalay) = processor.process_adc_result(c, &mut adc, *ch);
+
+                    if let Some(nd) = new_dalay {
+                        ch.set_period(nd);
+                    }
+                    if continue_work {
+                        ch.init_cycle();
+                    }
+                }
                 Command::TimeoutFChannel(c) => {
                     defmt::warn!("ch. {} signal lost.", c);
                     let ch = &mut p_channels[c as usize];
@@ -233,7 +272,6 @@ where
                         ch.enable();
                     }
                 }
-                _ => {}
             }
         }
     }

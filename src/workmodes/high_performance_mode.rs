@@ -1,11 +1,10 @@
 use alloc::sync::Arc;
 use freertos_rust::{Duration, Mutex, Queue, Task, TaskPriority};
-use stm32l4xx_hal::adc;
 use stm32l4xx_hal::gpio::{
     Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA11, PA12, PA8, PD10, PD13,
 };
 use stm32l4xx_hal::{
-    adc::{Temperature, ADC},
+    adc::ADC,
     prelude::*,
     rcc::{PllConfig, PllDivider},
     stm32,
@@ -98,7 +97,6 @@ pub struct HighPerformanceMode {
     adc: stm32l4xx_hal::stm32::ADC1,
     adc_common: stm32l4xx_hal::device::ADC_COMMON,
     vbat_pin: PA1<Analog>,
-    tcpu_ch: Temperature,
 
     sensor_command_queue: Arc<freertos_rust::Queue<threads::sensor_processor::Command>>,
 
@@ -174,7 +172,6 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             adc: dp.ADC1,
             adc_common: dp.ADC_COMMON,
             vbat_pin: gpioa.pa1.into_analog(&mut gpioa.moder, &mut gpioa.pupdr),
-            tcpu_ch: adc::Temperature {},
 
             sensor_command_queue: Arc::new(freertos_rust::Queue::new(7).unwrap()),
 
@@ -269,59 +266,68 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     }
 
     fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
-        defmt::trace!("Creating usb thread...");
-        let usbperith = threads::usbd::UsbdPeriph {
-            usb: self.usb,
-            pin_dp: self.usb_dp,
-            pin_dm: self.usb_dm,
-        };
-        let ic = self.interrupt_controller.clone();
-        let output = self.output.clone();
-        Task::new()
-            .name("Usbd")
-            .stack_size(1024)
-            .priority(TaskPriority(crate::config::USBD_TASK_PRIO))
-            .start(move |_| {
-                threads::usbd::usbd(usbperith, ic, crate::config::USB_INTERRUPT_PRIO, output)
-            })?;
-
+        {
+            defmt::trace!("Creating usb thread...");
+            let usbperith = threads::usbd::UsbdPeriph {
+                usb: self.usb,
+                pin_dp: self.usb_dp,
+                pin_dm: self.usb_dm,
+            };
+            let ic = self.interrupt_controller.clone();
+            let output = self.output.clone();
+            Task::new()
+                .name("Usbd")
+                .stack_size(1024)
+                .priority(TaskPriority(crate::config::USBD_TASK_PRIO))
+                .start(move |_| {
+                    threads::usbd::usbd(usbperith, ic, crate::config::USB_INTERRUPT_PRIO, output)
+                })?;
+        }
         // --------------------------------------------------------------------
-
-        defmt::trace!("Creating Sensors Processor thread...");
-        let sp = threads::sensor_processor::SensorPerith {
-            timer1: self.timer1,
-            timer1_dma_ch: self.dma1_ch6,
-            timer1_pin: self.in_p,
-            en_1: self.en_p,
-
-            timer2: self.timer2,
-            timer2_dma_ch: self.dma1_ch2,
-            timer2_pin: self.in_t,
-            en_2: self.en_t,
-
-            adc: ADC::new(
+        {
+            defmt::trace!("Creating Sensors Processor thread...");
+            let mut delay = FreeRtosDelay {};
+            let mut adc = ADC::new(
                 self.adc,
                 self.adc_common,
                 &mut self.rcc.ahb2,
                 &mut self.rcc.ccipr,
-                &mut FreeRtosDelay {},
-            ),
-            vbat_pin: self.vbat_pin,
-            tcpu_ch: self.tcpu_ch,
-        };
-        let cq = self.sensor_command_queue.clone();
-        let ic = self.interrupt_controller.clone();
-        let processor = HighPerformanceProcessor::new(
-            self.output.clone(),
-            HighPerformanceClockConfigProvider::xtal2master_freq_multiplier(),
-            self.clocks.unwrap().sysclk(),
-        );
-        Task::new()
-            .name("SensProc")
-            .stack_size(1024)
-            .priority(TaskPriority(crate::config::SENS_PROC_TASK_PRIO))
-            .start(move |_| threads::sensor_processor::sensor_processor(sp, cq, ic, processor))?;
+                &mut delay,
+            );
+            adc.set_sample_time(stm32l4xx_hal::adc::SampleTime::Cycles92_5);
+            adc.set_resolution(stm32l4xx_hal::adc::Resolution::Bits10);
+            let sp = threads::sensor_processor::SensorPerith {
+                timer1: self.timer1,
+                timer1_dma_ch: self.dma1_ch6,
+                timer1_pin: self.in_p,
+                en_1: self.en_p,
 
+                timer2: self.timer2,
+                timer2_dma_ch: self.dma1_ch2,
+                timer2_pin: self.in_t,
+                en_2: self.en_t,
+
+                vbat_pin: self.vbat_pin,
+                tcpu_ch: adc.enable_temperature(&mut delay),
+                v_ref: adc.enable_vref(&mut delay),
+
+                adc: adc,
+            };
+            let cq = self.sensor_command_queue.clone();
+            let ic = self.interrupt_controller.clone();
+            let processor = HighPerformanceProcessor::new(
+                self.output.clone(),
+                HighPerformanceClockConfigProvider::xtal2master_freq_multiplier(),
+                self.clocks.unwrap().sysclk(),
+            );
+            Task::new()
+                .name("SensProc")
+                .stack_size(1024)
+                .priority(TaskPriority(crate::config::SENS_PROC_TASK_PRIO))
+                .start(move |_| {
+                    threads::sensor_processor::sensor_processor(sp, cq, ic, processor)
+                })?;
+        }
         // --------------------------------------------------------------------
 
         crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk())?;

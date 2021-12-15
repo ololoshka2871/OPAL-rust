@@ -1,6 +1,6 @@
 use crate::support::interrupt_controller::{IInterruptController, Interrupt};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, defmt::Format)]
 pub enum TimerEvent {
     Start,
     Stop,

@@ -13,11 +13,23 @@ pub struct ChannelConfig {
     pub enabled: bool,
 }
 
-pub struct OverMonitor(u32);
+#[derive(PartialEq, Eq)]
+pub enum Ordering {
+    Greater,
+    Less,
+}
 
-impl OverMonitor {
+pub struct OverMonitor<const O: Ordering>(u32);
+
+impl<const O: Ordering> OverMonitor<O> {
     pub fn check(&mut self, current: f64, limit: f32) -> bool {
-        if current > limit as f64 {
+        let cmp = if O == Ordering::Greater {
+            current > limit as f64
+        } else {
+            current > limit as f64
+        };
+
+        if cmp {
             if self.0 > crate::config::OVER_LIMIT_COUNT {
                 false
             } else if self.0 == crate::config::OVER_LIMIT_COUNT {
@@ -115,7 +127,7 @@ pub fn calc_new_target(
 //---------------------------------------------------------------------------------------
 
 pub fn calc_pressure(fp: f64, output: &Mutex<OutputStorage>) {
-    static mut P_OVER_MONITOR: OverMonitor = OverMonitor(0);
+    static mut P_OVER_MONITOR: OverMonitor<{ Ordering::Greater }> = OverMonitor(0);
 
     let ft = output
         .lock(Duration::infinite())
@@ -152,7 +164,7 @@ pub fn calc_pressure(fp: f64, output: &Mutex<OutputStorage>) {
 }
 
 pub fn calc_temperature(f: f64, output: &Mutex<OutputStorage>) {
-    static mut T_OVER_MONITOR: OverMonitor = OverMonitor(0);
+    static mut T_OVER_MONITOR: OverMonitor<{ Ordering::Greater }> = OverMonitor(0);
 
     if let Ok((t, overheat_rised)) = read_settings(|(ws, _)| {
         let temperature = calc_t(f, &ws.T_Coefficients);
@@ -233,4 +245,91 @@ fn calc_p(
             * (a[10] as f64 + ft_minus_ft0 * (a[11] as f64 + ft_minus_ft0 * a[15] as f64));
 
     k0 + presf_minus_fp0 * (k1 + presf_minus_fp0 * (k2 + presf_minus_fp0 * k3))
+}
+
+pub fn process_t_cpu(
+    output: &Mutex<OutputStorage>,
+    celsius_degree: f32,
+    raw: u16,
+) -> (bool, Option<u32>) {
+    static mut TCPU_OVER_MONITOR: OverMonitor<{ Ordering::Greater }> = OverMonitor(0);
+
+    defmt::trace!("CPU Temperature {} ({})", celsius_degree, raw);
+
+    if let Ok(overheat_rised) = read_settings(|(ws, _)| {
+        let overheat = unsafe {
+            TCPU_OVER_MONITOR.check(celsius_degree as f64, ws.TCPUWorkRange.absolute_maximum)
+        };
+
+        let overheat_rised = overheat && !ws.monitoring.CPUOvarheat;
+        if overheat {
+            ws.monitoring.CPUOvarheat = true;
+        }
+
+        Ok(overheat_rised)
+    }) {
+        output
+            .lock(Duration::infinite())
+            .map(|mut guard| {
+                guard.t_cpu = celsius_degree;
+                guard.t_cpu_adc = raw;
+            })
+            .unwrap();
+
+        if overheat_rised {
+            defmt::error!("CPU Temperature: Overheat detected!");
+            /*
+            let _ = crate::settings::settings_save(Duration::ms(50))
+                .map_err(|_| unsafe { TCPU_OVER_MONITOR.mast_retry() });
+            */
+        }
+
+        return (true, None);
+    }
+    return (true, None);
+}
+
+pub fn process_vbat(
+    output: &Mutex<OutputStorage>,
+    vbat_input_mv: u16,
+    raw: u16,
+) -> (bool, Option<u32>) {
+    static mut VBAT_OVER_MONITOR: OverMonitor<{ Ordering::Greater }> = OverMonitor(0);
+    static mut VBAT_UNDER_MONITOR: OverMonitor<{ Ordering::Less }> = OverMonitor(0);
+
+    defmt::trace!("Vbat {} mv ({} mv / {})", vbat_input_mv, vbat_input_mv, raw);
+
+    if let Ok((vbat, overvoltage_raised, undervoltage_detected)) = read_settings(|(ws, _)| {
+        let v_bat = vbat_input_mv as f64 * crate::config::VBAT_DEVIDER_R2
+            / (crate::config::VBAT_DEVIDER_R1 + crate::config::VBAT_DEVIDER_R2);
+
+        let overvoltage =
+            unsafe { VBAT_OVER_MONITOR.check(v_bat, ws.VbatWorkRange.absolute_maximum) };
+        let overvoltage_raised = overvoltage && !ws.monitoring.OverPower;
+        if overvoltage {
+            ws.monitoring.OverPower = true;
+        }
+
+        let undervoltage = unsafe { VBAT_UNDER_MONITOR.check(v_bat, ws.VbatWorkRange.minimum) };
+
+        Ok((v_bat, overvoltage_raised, undervoltage))
+    }) {
+        output
+            .lock(Duration::infinite())
+            .map(|mut guard| {
+                guard.vbat_mv = vbat;
+                guard.vbat_mv_adc = raw;
+            })
+            .unwrap();
+
+        if overvoltage_raised {
+            defmt::error!("Vbat overvoltage detected!");
+            /*
+            let _ = crate::settings::settings_save(Duration::ms(50))
+                .map_err(|_| unsafe { VBAT_OVER_MONITOR.mast_retry() });
+            */
+        }
+        return (!undervoltage_detected, None);
+    }
+    return (true, None);
 }
