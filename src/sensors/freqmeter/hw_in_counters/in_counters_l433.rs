@@ -7,7 +7,7 @@ use alloc::boxed::Box;
 use stm32l4xx_hal::{
     device::{tim1, tim2, DMA1, RCC},
     dma::{dma1, Event},
-    gpio::{Floating, Input, PA0, PA8},
+    gpio::{Alternate, PushPull, PA0, PA8},
     interrupt,
     stm32l4::stm32l4x3::{Interrupt as IRQ, TIM1, TIM2},
 };
@@ -36,12 +36,12 @@ trait Utils<T, DMA> {
     fn configure_debug_freeze();
 }
 
-impl InCounter<dma1::C6, PA8<Input<Floating>>> for TIM1 {
+impl InCounter<dma1::C6, PA8<Alternate<PushPull, 1>>> for TIM1 {
     fn configure<CB: 'static + OnCycleFinished>(
         &mut self,
         master_cnt_addr: usize,
         dma: &mut dma1::C6,
-        _input: PA8<Input<Floating>>,
+        _input: PA8<Alternate<PushPull, 1>>,
         ic: &dyn IInterruptController,
         dma_complead: CB,
     ) {
@@ -248,12 +248,12 @@ impl Utils<tim1::RegisterBlock, dma1::C6> for TIM1 {
     }
 }
 
-impl InCounter<dma1::C2, PA0<Input<Floating>>> for TIM2 {
+impl InCounter<dma1::C2, PA0<Alternate<PushPull, 1>>> for TIM2 {
     fn configure<CB: 'static + OnCycleFinished>(
         &mut self,
         master_cnt_addr: usize,
         dma: &mut dma1::C2,
-        _input: PA0<Input<Floating>>,
+        _input: PA0<Alternate<PushPull, 1>>,
         ic: &dyn IInterruptController,
         dma_complead: CB,
     ) {

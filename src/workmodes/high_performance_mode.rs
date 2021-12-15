@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 use freertos_rust::{Duration, Mutex, Queue, Task, TaskPriority};
 use stm32l4xx_hal::adc;
 use stm32l4xx_hal::gpio::{
-    Alternate, Analog, Floating, Input, Output, PushPull, PA0, PA1, PA11, PA12, PA8, PD10, PD13,
+    Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA11, PA12, PA8, PD10, PD13,
 };
 use stm32l4xx_hal::{
     adc::{Temperature, ADC},
@@ -86,8 +86,8 @@ pub struct HighPerformanceMode {
 
     crc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>,
 
-    in_p: PA8<Input<Floating>>,
-    in_t: PA0<Input<Floating>>,
+    in_p: PA8<Alternate<PushPull, 1>>,
+    in_t: PA0<Alternate<PushPull, 1>>,
     en_p: PD13<Output<PushPull>>,
     en_t: PD10<Output<PushPull>>,
     dma1_ch2: stm32l4xx_hal::dma::dma1::C2,
@@ -126,10 +126,12 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             usb_dm: gpioa
                 .pa11
-                .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrh),
+                .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrh)
+                .set_speed(Speed::VeryHigh),
             usb_dp: gpioa
                 .pa12
-                .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrh),
+                .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrh)
+                .set_speed(Speed::VeryHigh),
 
             pwr: dp.PWR.constrain(&mut rcc.apb1r1),
             clocks: None,
@@ -140,21 +142,29 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             in_p: gpioa
                 .pa8
-                .into_floating_input(&mut gpioa.moder, &mut gpioa.pupdr),
+                .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrh)
+                .set_speed(Speed::Low),
             in_t: gpioa
                 .pa0
-                .into_floating_input(&mut gpioa.moder, &mut gpioa.pupdr),
+                .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl)
+                .set_speed(Speed::Low),
 
-            en_p: gpiod.pd13.into_push_pull_output_in_state(
-                &mut gpiod.moder,
-                &mut gpiod.otyper,
-                GENERATOR_DISABLE_LVL,
-            ),
-            en_t: gpiod.pd10.into_push_pull_output_in_state(
-                &mut gpiod.moder,
-                &mut gpiod.otyper,
-                GENERATOR_DISABLE_LVL,
-            ),
+            en_p: gpiod
+                .pd13
+                .into_push_pull_output_in_state(
+                    &mut gpiod.moder,
+                    &mut gpiod.otyper,
+                    GENERATOR_DISABLE_LVL,
+                )
+                .set_speed(Speed::Low),
+            en_t: gpiod
+                .pd10
+                .into_push_pull_output_in_state(
+                    &mut gpiod.moder,
+                    &mut gpiod.otyper,
+                    GENERATOR_DISABLE_LVL,
+                )
+                .set_speed(Speed::Low),
 
             dma1_ch2: dma_channels.2,
             dma1_ch6: dma_channels.6,
