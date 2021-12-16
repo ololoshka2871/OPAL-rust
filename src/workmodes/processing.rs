@@ -23,6 +23,7 @@ pub trait RawValueProcessor {
     fn process_adc_result(
         &mut self,
         ch: AChannel,
+        current_period_ticks: u32,
         adc: &mut ADC,
         controller: &mut dyn AController,
     ) -> (bool, Option<u32>);

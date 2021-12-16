@@ -32,17 +32,17 @@ pub fn fill_output(
                     guard.values[FChannel::Pressure as usize].unwrap_or(f64::NAN) as f32;
                 output.temperature =
                     guard.values[FChannel::Temperature as usize].unwrap_or(f64::NAN) as f32;
+                output.TCPU = guard.t_cpu;
+                output.Vbat = guard.vbat_mv as f32;
             }
             Err(e) => {
                 output.pressure = f32::NAN;
                 output.temperature = f32::NAN;
+                output.TCPU = f32::NAN;
+                output.Vbat = f32::NAN;
                 err = Some(e);
             }
         }
-
-        // TODO: values
-        output.TCPU = 1.3e-3;
-        output.Vbat = 1.4e-4;
     }
 
     if get_output_values.has_getF {
@@ -78,19 +78,21 @@ pub fn fill_output(
                 output.T_result.Target = guard.targets[FChannel::Temperature as usize];
                 output.T_result.Result =
                     guard.results[FChannel::Temperature as usize].unwrap_or_default();
+
+                output.ADC_TCPU = guard.t_cpu_adc as u32;
+                output.ADC_Vbat = guard.vbat_mv_adc as u32;
             }
             Err(e) => {
                 output.P_result.Target = 0;
                 output.P_result.Result = 0;
                 output.T_result.Target = 0;
                 output.T_result.Result = 0;
+
+                output.ADC_TCPU = 0;
+                output.ADC_Vbat = 0;
                 err = Some(e);
             }
         }
-
-        // TODO: values
-        output.ADC_TCPU = 10358;
-        output.ADC_Vbat = 18973;
     }
 
     if err.is_some() {

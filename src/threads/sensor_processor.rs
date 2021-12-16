@@ -248,7 +248,8 @@ where
                     let ch = &mut a_channels[c as usize];
 
                     adc.calibrate(&mut vref);
-                    let (continue_work, new_dalay) = processor.process_adc_result(c, &mut adc, *ch);
+                    let (continue_work, new_dalay) =
+                        processor.process_adc_result(c, ch.period(), &mut adc, *ch);
 
                     if let Some(nd) = new_dalay {
                         ch.set_period(nd);

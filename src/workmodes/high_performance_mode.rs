@@ -288,7 +288,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 &mut self.rcc.ccipr,
                 &mut delay,
             );
-            adc.set_sample_time(SampleTime::Cycles92_5);
+            adc.set_sample_time(SampleTime::Cycles640_5);
             adc.set_resolution(Resolution::Bits12);
 
             let tcpu_ch = adc.enable_temperature(&mut delay);

@@ -109,6 +109,7 @@ impl RawValueProcessor for HighPerformanceProcessor {
     fn process_adc_result(
         &mut self,
         ch: AChannel,
+        current_period_ticks: u32,
         adc: &mut ADC,
         controller: &mut dyn AController,
     ) -> (bool, Option<u32>) {
@@ -117,13 +118,17 @@ impl RawValueProcessor for HighPerformanceProcessor {
         match ch {
             AChannel::TCPU => super::process_t_cpu(
                 self.output.as_ref(),
+                current_period_ticks,
                 adc.to_degrees_centigrade(raw_adc_value),
                 raw_adc_value,
+                self.sysclk,
             ),
             AChannel::Vbat => super::process_vbat(
                 self.output.as_ref(),
+                current_period_ticks,
                 adc.to_millivolts(raw_adc_value),
                 raw_adc_value,
+                self.sysclk,
             ),
         }
     }

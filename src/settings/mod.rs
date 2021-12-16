@@ -43,25 +43,25 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
     PWorkRange: app_settings::WorkRange {
         minimum: 0.0,
         maximum: 100.0,
-        absolute_maximum: 120.0,
+        absolute_maximum: f32::NAN,
     },
 
     TWorkRange: app_settings::WorkRange {
         minimum: -50.0,
         maximum: 120.0,
-        absolute_maximum: 125.0,
+        absolute_maximum: f32::NAN,
     },
 
     TCPUWorkRange: app_settings::WorkRange {
         minimum: -50.0,
         maximum: 120.0,
-        absolute_maximum: 127.0,
+        absolute_maximum: f32::NAN,
     },
 
     VbatWorkRange: app_settings::WorkRange {
         minimum: 1.5,
-        maximum: 10.0,
-        absolute_maximum: 12.0,
+        maximum: 3.6,
+        absolute_maximum: f32::NAN,
     },
 
     calibration_date: app_settings::CalibrationDate {

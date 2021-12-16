@@ -8,6 +8,7 @@ pub trait AController {
     fn init_cycle(&mut self);
     fn stop(&mut self);
     fn set_period(&mut self, ticks: u32);
+    fn period(&self) -> u32;
 
     fn read(&mut self, adc: &mut ADC) -> u16;
 }
@@ -15,6 +16,7 @@ pub trait AController {
 pub struct AnalogChannel<ADCCH: Channel> {
     timer: Timer,
     adc_ch: ADCCH,
+    period: u32,
 }
 
 impl<ADCCH: Channel> AnalogChannel<ADCCH> {
@@ -31,7 +33,11 @@ impl<ADCCH: Channel> AnalogChannel<ADCCH> {
 
         timer.stop(Duration::infinite()).unwrap();
 
-        Self { timer, adc_ch }
+        Self {
+            timer,
+            adc_ch,
+            period: analog_ticks,
+        }
     }
 }
 
@@ -48,6 +54,11 @@ impl<ADCCH: Channel> AController for AnalogChannel<ADCCH> {
         self.timer
             .change_period(Duration::infinite(), Duration::ticks(ticks))
             .unwrap();
+        self.period = ticks;
+    }
+
+    fn period(&self) -> u32 {
+        self.period
     }
 
     fn read(&mut self, adc: &mut ADC) -> u16 {

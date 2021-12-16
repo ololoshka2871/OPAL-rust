@@ -1,4 +1,4 @@
-use core::ops::Sub;
+use core::{cmp::min, ops::Sub};
 
 use freertos_rust::{Duration, Mutex};
 use stm32l4xx_hal::time::Hertz;
@@ -23,6 +23,10 @@ pub struct OverMonitor<const O: Ordering>(u32);
 
 impl<const O: Ordering> OverMonitor<O> {
     pub fn check<T: Into<f32>>(&mut self, current: T, limit: f32) -> bool {
+        if limit.is_nan() {
+            return false;
+        }
+
         let cmp = if O == Ordering::Greater {
             current.into() > limit
         } else {
@@ -156,10 +160,8 @@ pub fn calc_pressure(fp: f64, output: &Mutex<OutputStorage>) {
 
         if overpress_rised {
             defmt::error!("Pressure: Overpress detected!");
-            /*
             let _ = crate::settings::settings_save(Duration::ms(50))
                 .map_err(|_| unsafe { P_OVER_MONITOR.mast_retry() });
-            */
         }
     }
 }
@@ -188,21 +190,9 @@ pub fn calc_temperature(f: f64, output: &Mutex<OutputStorage>) {
 
         if overheat_rised {
             defmt::error!("Temperature: Overheat detected!");
-            /*
             let _ = crate::settings::settings_save(Duration::ms(50))
                 .map_err(|_| unsafe { T_OVER_MONITOR.mast_retry() });
-            */
         }
-    }
-}
-
-//-----------------------------------------------------------------------------
-
-pub fn abs_difference<T: Sub<Output = T> + Ord>(x: T, y: T) -> T {
-    if x < y {
-        y - x
-    } else {
-        x - y
     }
 }
 
@@ -251,14 +241,16 @@ fn calc_p(
 
 pub fn process_t_cpu(
     output: &Mutex<OutputStorage>,
+    current_period_ticks: u32,
     celsius_degree: f32,
     raw: u16,
+    sys_clk: Hertz,
 ) -> (bool, Option<u32>) {
     static mut TCPU_OVER_MONITOR: OverMonitor<{ Ordering::Greater }> = OverMonitor(0);
 
-    defmt::trace!("CPU Temperature {} ({})", celsius_degree, raw);
+    //defmt::trace!("CPU Temperature {} ({})", celsius_degree, raw);
 
-    if let Ok(overheat_rised) = read_settings(|(ws, _)| {
+    if let Ok((overheat_rised, t_mt)) = read_settings(|(ws, _)| {
         let overheat =
             unsafe { TCPU_OVER_MONITOR.check(celsius_degree, ws.TCPUWorkRange.absolute_maximum) };
 
@@ -267,7 +259,7 @@ pub fn process_t_cpu(
             ws.monitoring.CPUOvarheat = true;
         }
 
-        Ok(overheat_rised)
+        Ok((overheat_rised, ws.TMesureTime_ms))
     }) {
         output
             .lock(Duration::infinite())
@@ -279,26 +271,27 @@ pub fn process_t_cpu(
 
         if overheat_rised {
             defmt::error!("CPU Temperature: Overheat detected!");
-            /*
+
             let _ = crate::settings::settings_save(Duration::ms(50))
                 .map_err(|_| unsafe { TCPU_OVER_MONITOR.mast_retry() });
-            */
         }
 
-        return (true, None);
+        return (true, analog_period(current_period_ticks, t_mt, sys_clk));
     }
     return (true, None);
 }
 
 pub fn process_vbat(
     output: &Mutex<OutputStorage>,
+    current_period_ticks: u32,
     vbat_input_mv: u16,
     raw: u16,
+    sys_clk: Hertz,
 ) -> (bool, Option<u32>) {
     static mut VBAT_OVER_MONITOR: OverMonitor<{ Ordering::Greater }> = OverMonitor(0);
     static mut VBAT_UNDER_MONITOR: OverMonitor<{ Ordering::Less }> = OverMonitor(0);
 
-    if let Ok((vbat, overvoltage_raised, undervoltage_detected)) = read_settings(|(ws, _)| {
+    if let Ok((vbat, overvoltage_raised, undervoltage_detected, mt)) = read_settings(|(ws, _)| {
         let v_bat = vbat_input_mv as u32
             * (crate::config::VBAT_DEVIDER_R1 + crate::config::VBAT_DEVIDER_R2)
             / crate::config::VBAT_DEVIDER_R2;
@@ -313,9 +306,14 @@ pub fn process_vbat(
         let undervoltage =
             unsafe { VBAT_UNDER_MONITOR.check(v_bat as f32, ws.VbatWorkRange.minimum) };
 
-        Ok((v_bat as u32, overvoltage_raised, undervoltage))
+        Ok((
+            v_bat as u32,
+            overvoltage_raised,
+            undervoltage,
+            min(ws.PMesureTime_ms, ws.TMesureTime_ms),
+        ))
     }) {
-        defmt::trace!("Vbat {} mv ({} mv / {})", vbat, vbat_input_mv, raw);
+        //defmt::trace!("Vbat {} mv ({} mv / {})", vbat, vbat_input_mv, raw);
 
         output
             .lock(Duration::infinite())
@@ -327,12 +325,35 @@ pub fn process_vbat(
 
         if overvoltage_raised {
             defmt::error!("Vbat overvoltage detected!");
-            /*
+
             let _ = crate::settings::settings_save(Duration::ms(50))
                 .map_err(|_| unsafe { VBAT_OVER_MONITOR.mast_retry() });
-            */
         }
-        return (!undervoltage_detected, None);
+        return (
+            !undervoltage_detected,
+            analog_period(current_period_ticks, mt, sys_clk),
+        );
     }
     return (true, None);
+}
+
+fn analog_period(cutternt_t: u32, t: u32, sys_clk: Hertz) -> Option<u32> {
+    let new_period_ticks =
+        crate::workmodes::common::to_real_period(Duration::ms(t), sys_clk).to_ms();
+
+    if new_period_ticks != cutternt_t {
+        Some(new_period_ticks)
+    } else {
+        None
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+pub fn abs_difference<T: Sub<Output = T> + Ord>(x: T, y: T) -> T {
+    if x < y {
+        y - x
+    } else {
+        x - y
+    }
 }
