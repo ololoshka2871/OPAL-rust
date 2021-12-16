@@ -7,7 +7,7 @@ pub struct OutputStorage {
     pub t_cpu: f32,
     pub t_cpu_adc: u16,
 
-    pub vbat_mv: f64,
+    pub vbat_mv: u32,
     pub vbat_mv_adc: u16,
 }
 
@@ -21,7 +21,7 @@ impl Default for OutputStorage {
 
             t_cpu: 0.0,
             t_cpu_adc: 0,
-            vbat_mv: 0.0,
+            vbat_mv: 0,
             vbat_mv_adc: 0,
         }
     }

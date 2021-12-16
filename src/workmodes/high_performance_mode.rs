@@ -179,14 +179,6 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         }
     }
 
-    fn flash(&mut self) -> Arc<Mutex<stm32l4xx_hal::flash::Parts>> {
-        self.flash.clone()
-    }
-
-    fn crc(&mut self) -> Arc<Mutex<stm32l4xx_hal::crc::Crc>> {
-        self.crc.clone()
-    }
-
     fn ini_static(&mut self) {
         crate::settings::init(self.flash(), self.crc());
     }
@@ -285,6 +277,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         }
         // --------------------------------------------------------------------
         {
+            use stm32l4xx_hal::adc::{Resolution, SampleTime};
+
             defmt::trace!("Creating Sensors Processor thread...");
             let mut delay = FreeRtosDelay {};
             let mut adc = ADC::new(
@@ -294,8 +288,12 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 &mut self.rcc.ccipr,
                 &mut delay,
             );
-            adc.set_sample_time(stm32l4xx_hal::adc::SampleTime::Cycles92_5);
-            adc.set_resolution(stm32l4xx_hal::adc::Resolution::Bits10);
+            adc.set_sample_time(SampleTime::Cycles92_5);
+            adc.set_resolution(Resolution::Bits12);
+
+            let tcpu_ch = adc.enable_temperature(&mut delay);
+            let v_ref = adc.enable_vref(&mut delay);
+
             let sp = threads::sensor_processor::SensorPerith {
                 timer1: self.timer1,
                 timer1_dma_ch: self.dma1_ch6,
@@ -308,8 +306,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 en_2: self.en_t,
 
                 vbat_pin: self.vbat_pin,
-                tcpu_ch: adc.enable_temperature(&mut delay),
-                v_ref: adc.enable_vref(&mut delay),
+                tcpu_ch: tcpu_ch,
+                v_ref: v_ref,
 
                 adc: adc,
             };
@@ -353,6 +351,14 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
     fn print_clock_config(&self) {
         super::common::print_clock_config(&self.clocks, "HSI48");
+    }
+
+    fn flash(&mut self) -> Arc<Mutex<stm32l4xx_hal::flash::Parts>> {
+        self.flash.clone()
+    }
+
+    fn crc(&mut self) -> Arc<Mutex<stm32l4xx_hal::crc::Crc>> {
+        self.crc.clone()
     }
 }
 

@@ -22,11 +22,11 @@ pub enum Ordering {
 pub struct OverMonitor<const O: Ordering>(u32);
 
 impl<const O: Ordering> OverMonitor<O> {
-    pub fn check(&mut self, current: f64, limit: f32) -> bool {
+    pub fn check<T: Into<f32>>(&mut self, current: T, limit: f32) -> bool {
         let cmp = if O == Ordering::Greater {
-            current > limit as f64
+            current.into() > limit
         } else {
-            current > limit as f64
+            current.into() > limit
         };
 
         if cmp {
@@ -137,7 +137,8 @@ pub fn calc_pressure(fp: f64, output: &Mutex<OutputStorage>) {
     if let Ok((t, overpress_rised)) = read_settings(|(ws, _)| {
         let pressure = calc_p(fp, ft, &ws.P_Coefficients, ws.T_enabled);
 
-        let overpress = unsafe { P_OVER_MONITOR.check(pressure, ws.PWorkRange.absolute_maximum) };
+        let overpress =
+            unsafe { P_OVER_MONITOR.check(pressure as f32, ws.PWorkRange.absolute_maximum) };
 
         let overpress_rised = overpress && !ws.monitoring.Ovarpress;
         if overpress {
@@ -168,7 +169,8 @@ pub fn calc_temperature(f: f64, output: &Mutex<OutputStorage>) {
 
     if let Ok((t, overheat_rised)) = read_settings(|(ws, _)| {
         let temperature = calc_t(f, &ws.T_Coefficients);
-        let overheat = unsafe { T_OVER_MONITOR.check(temperature, ws.TWorkRange.absolute_maximum) };
+        let overheat =
+            unsafe { T_OVER_MONITOR.check(temperature as f32, ws.TWorkRange.absolute_maximum) };
 
         let overheat_rised = overheat && !ws.monitoring.Ovarheat;
         if overheat {
@@ -257,9 +259,8 @@ pub fn process_t_cpu(
     defmt::trace!("CPU Temperature {} ({})", celsius_degree, raw);
 
     if let Ok(overheat_rised) = read_settings(|(ws, _)| {
-        let overheat = unsafe {
-            TCPU_OVER_MONITOR.check(celsius_degree as f64, ws.TCPUWorkRange.absolute_maximum)
-        };
+        let overheat =
+            unsafe { TCPU_OVER_MONITOR.check(celsius_degree, ws.TCPUWorkRange.absolute_maximum) };
 
         let overheat_rised = overheat && !ws.monitoring.CPUOvarheat;
         if overheat {
@@ -297,23 +298,25 @@ pub fn process_vbat(
     static mut VBAT_OVER_MONITOR: OverMonitor<{ Ordering::Greater }> = OverMonitor(0);
     static mut VBAT_UNDER_MONITOR: OverMonitor<{ Ordering::Less }> = OverMonitor(0);
 
-    defmt::trace!("Vbat {} mv ({} mv / {})", vbat_input_mv, vbat_input_mv, raw);
-
     if let Ok((vbat, overvoltage_raised, undervoltage_detected)) = read_settings(|(ws, _)| {
-        let v_bat = vbat_input_mv as f64 * crate::config::VBAT_DEVIDER_R2
-            / (crate::config::VBAT_DEVIDER_R1 + crate::config::VBAT_DEVIDER_R2);
+        let v_bat = vbat_input_mv as u32
+            * (crate::config::VBAT_DEVIDER_R1 + crate::config::VBAT_DEVIDER_R2)
+            / crate::config::VBAT_DEVIDER_R2;
 
         let overvoltage =
-            unsafe { VBAT_OVER_MONITOR.check(v_bat, ws.VbatWorkRange.absolute_maximum) };
+            unsafe { VBAT_OVER_MONITOR.check(v_bat as f32, ws.VbatWorkRange.absolute_maximum) };
         let overvoltage_raised = overvoltage && !ws.monitoring.OverPower;
         if overvoltage {
             ws.monitoring.OverPower = true;
         }
 
-        let undervoltage = unsafe { VBAT_UNDER_MONITOR.check(v_bat, ws.VbatWorkRange.minimum) };
+        let undervoltage =
+            unsafe { VBAT_UNDER_MONITOR.check(v_bat as f32, ws.VbatWorkRange.minimum) };
 
-        Ok((v_bat, overvoltage_raised, undervoltage))
+        Ok((v_bat as u32, overvoltage_raised, undervoltage))
     }) {
+        defmt::trace!("Vbat {} mv ({} mv / {})", vbat, vbat_input_mv, raw);
+
         output
             .lock(Duration::infinite())
             .map(|mut guard| {

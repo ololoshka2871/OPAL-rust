@@ -57,5 +57,5 @@ pub const OVER_LIMIT_COUNT: u32 = 5;
 
 //-----------------------------------------------------------------------------
 
-pub const VBAT_DEVIDER_R1: f64 = 100.0;
-pub const VBAT_DEVIDER_R2: f64 = 91.0;
+pub const VBAT_DEVIDER_R1: u32 = 100_000;
+pub const VBAT_DEVIDER_R2: u32 = 91_000;
