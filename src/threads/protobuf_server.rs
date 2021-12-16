@@ -14,7 +14,7 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
 ) -> ! {
     loop {
         let msg_size =
-            match protobuf::recive_md_header(&mut new_istream(serial_container.clone(), None)) {
+            match protobuf::recive_md_header1(&mut new_istream(serial_container.clone(), None)) {
                 Ok(size) => size,
                 Err(e) => {
                     print_error(e);
@@ -22,7 +22,7 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
                 }
             };
 
-        let request = match protobuf::recive_message_body(new_istream(
+        let request = match protobuf::recive_message_body1(new_istream(
             serial_container.clone(),
             Some(msg_size),
         )) {

@@ -20,8 +20,8 @@ pub use messages::{
 };
 
 pub use encode_md_message::encode_md_message;
-pub use md::{decode_magick, decode_msg_size, recive_md_header};
-pub use message_body::recive_message_body;
+pub use md::recive_md_header1;
+pub use message_body::recive_message_body1;
 pub use new_response::new_response;
 pub use process_requiest::process_requiest;
 pub use reader::Reader;

@@ -44,16 +44,13 @@ flash-settings-rs = { path = "lib/flash-settings.rs" }
 my-proc-macro = { path = "lib/my-proc-macro" }
 
 prost = { version = "0.9", default-features = false, features = ["prost-derive"] }
-prost-types = { version = "0.9", default-features = false }
+# prost-types = { version = "0.9", default-features = false }
 
 [build-dependencies]
 cc = "1.0.52"
 freertos-cargo-build = "0.1.1"
 nanopb-rs-generator = { path = "lib/nanopb.rs/nanopb-rs-generator" }
 prost-build = "0.9"
-
-#[patch.crates-io]
-#getrandom = {version="0.2.3", default-features = false}
 
 [profile.dev.package."*"]
 opt-level = "z"

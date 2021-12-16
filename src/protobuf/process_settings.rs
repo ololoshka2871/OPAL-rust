@@ -1,6 +1,6 @@
 use alloc::{format, string::String};
 use freertos_rust::Duration;
-use my_proc_macro::store_coeff;
+use my_proc_macro::store_coeff_nanopb;
 
 use crate::{protobuf::PASSWORD_SIZE, settings::SettingActionError};
 
@@ -10,7 +10,6 @@ use super::messages::{
     ru_sktbelpa_pressure_self_writer_SettingsResponse,
     ru_sktbelpa_pressure_self_writer_T5Coefficients, ru_sktbelpa_pressure_self_writer_WorkRange,
     ru_sktbelpa_pressure_self_writer_WriteConfig,
-    ru_sktbelpa_pressure_self_writer_WriteSettingsReq,
 };
 
 static MAX_MT: u32 = 5000;
@@ -68,7 +67,7 @@ pub fn fill_settings(
 }
 
 fn verify_parameters(
-    ws: &ru_sktbelpa_pressure_self_writer_WriteSettingsReq,
+    ws: &super::messages::WriteSettingsReq,
 ) -> Result<(), SettingActionError<String>> {
     let password_invalid = crate::settings::settings_action(Duration::ms(1), |(ws, ts)| {
         Ok(ws.password != ts.current_password)
@@ -85,134 +84,165 @@ fn verify_parameters(
         }
     };
 
-    if ws.has_setSerial {
+    if ws.set_serial.is_some() {
         deny_if_password_invalid("Serial")?;
     }
 
-    if ws.has_setPMesureTime_ms && (ws.setPMesureTime_ms > MAX_MT || ws.setPMesureTime_ms < MIN_MT)
-    {
-        return Err(SettingActionError::ActionError(format!(
-            "Pressure measure time {} is out of range {} - {}",
-            ws.setPMesureTime_ms, MIN_MT, MAX_MT
-        )));
+    if let Some(set_p_mesure_time_ms) = ws.set_p_mesure_time_ms {
+        if set_p_mesure_time_ms > MAX_MT || set_p_mesure_time_ms < MIN_MT {
+            return Err(SettingActionError::ActionError(format!(
+                "Pressure measure time {} is out of range {} - {}",
+                set_p_mesure_time_ms, MIN_MT, MAX_MT
+            )));
+        }
     }
 
-    if ws.has_setTMesureTime_ms && (ws.setTMesureTime_ms > MAX_MT || ws.setTMesureTime_ms < MIN_MT)
-    {
-        return Err(SettingActionError::ActionError(format!(
-            "Temperature measure time {} is out of range {} - {}",
-            ws.setPMesureTime_ms, MIN_MT, MAX_MT
-        )));
+    if let Some(set_t_mesure_time_ms) = ws.set_t_mesure_time_ms {
+        if set_t_mesure_time_ms > MAX_MT || set_t_mesure_time_ms < MIN_MT {
+            return Err(SettingActionError::ActionError(format!(
+                "Temperature measure time {} is out of range {} - {}",
+                set_t_mesure_time_ms, MIN_MT, MAX_MT
+            )));
+        }
     }
 
-    if ws.has_setFref
-        && (ws.setFref > F_REF_BASE + F_REF_DELTA || ws.setFref < F_REF_BASE - F_REF_DELTA)
-    {
+    if let Some(set_fref) = ws.set_fref {
         deny_if_password_invalid("Fref")?;
-        return Err(SettingActionError::ActionError(format!(
-            "Reference frequency {} is too different from base {} +/- {}",
-            ws.setFref, F_REF_BASE, F_REF_DELTA
-        )));
+        if set_fref > F_REF_BASE + F_REF_DELTA || set_fref < F_REF_BASE - F_REF_DELTA {
+            return Err(SettingActionError::ActionError(format!(
+                "Reference frequency {} is too different from base {} +/- {}",
+                set_fref, F_REF_BASE, F_REF_DELTA
+            )));
+        }
     }
 
-    if ws.has_setPCoefficients {
-        let s = &ws.setPCoefficients;
-        if s.has_A0
-            || s.has_A1
-            || s.has_A2
-            || s.has_A3
-            || s.has_A4
-            || s.has_A5
-            || s.has_A6
-            || s.has_A7
-            || s.has_A8
-            || s.has_A9
-            || s.has_A10
-            || s.has_A11
-            || s.has_A12
-            || s.has_A13
-            || s.has_A14
-            || s.has_A15
-            || s.has_Fp0
-            || s.has_Ft0
+    if let Some(set_p_coefficients) = &ws.set_p_coefficients {
+        if set_p_coefficients.a0.is_some()
+            || set_p_coefficients.a1.is_some()
+            || set_p_coefficients.a2.is_some()
+            || set_p_coefficients.a3.is_some()
+            || set_p_coefficients.a4.is_some()
+            || set_p_coefficients.a5.is_some()
+            || set_p_coefficients.a6.is_some()
+            || set_p_coefficients.a7.is_some()
+            || set_p_coefficients.a8.is_some()
+            || set_p_coefficients.a9.is_some()
+            || set_p_coefficients.a10.is_some()
+            || set_p_coefficients.a11.is_some()
+            || set_p_coefficients.a12.is_some()
+            || set_p_coefficients.a13.is_some()
+            || set_p_coefficients.a14.is_some()
+            || set_p_coefficients.a15.is_some()
+            || set_p_coefficients.ft0.is_some()
+            || set_p_coefficients.fp0.is_some()
         {
             deny_if_password_invalid("PCoefficients")?;
         }
     }
 
-    if ws.has_setTCoefficients {
-        let s = &ws.setTCoefficients;
-        if s.has_T0 || s.has_C1 || s.has_C2 || s.has_C3 || s.has_C4 || s.has_C5 || s.has_F0 {
+    if let Some(set_t_coefficients) = &ws.set_t_coefficients {
+        if set_t_coefficients.t0.is_some()
+            || set_t_coefficients.c1.is_some()
+            || set_t_coefficients.c2.is_some()
+            || set_t_coefficients.c3.is_some()
+            || set_t_coefficients.c4.is_some()
+            || set_t_coefficients.c5.is_some()
+            || set_t_coefficients.f0.is_some()
+        {
             deny_if_password_invalid("TCoefficients")?;
         }
     }
 
-    if ws.has_setPWorkRange
-        && (ws.setPWorkRange.has_minimum
-            || ws.setPWorkRange.has_maximum
-            || ws.setPWorkRange.has_absolute_maximum)
-    {
-        deny_if_password_invalid("PWorkRange")?;
-        ws.setPWorkRange
-            .validate()
-            .map_err(|e| SettingActionError::ActionError(format!("PWorkRange invalid: {:?}", e)))?;
+    if let Some(set_p_work_range) = &ws.set_p_work_range {
+        if set_p_work_range.minimum.is_some()
+            || set_p_work_range.maximum.is_some()
+            || set_p_work_range.absolute_maximum.is_some()
+        {
+            deny_if_password_invalid("PWorkRange")?;
+            todo!();
+            /*
+            set_p_work_range
+                .validate()
+                .map_err(|e| SettingActionError::ActionError(format!("PWorkRange invalid: {:?}", e)))?;
+                */
+        }
     }
 
-    if ws.has_setTWorkRange
-        && (ws.setTWorkRange.has_minimum
-            || ws.setTWorkRange.has_maximum
-            || ws.setTWorkRange.has_absolute_maximum)
-    {
-        deny_if_password_invalid("TWorkRange")?;
-        ws.setTWorkRange
-            .validate()
-            .map_err(|e| SettingActionError::ActionError(format!("TWorkRange invalid: {:?}", e)))?;
+    if let Some(set_t_work_range) = &ws.set_t_work_range {
+        if set_t_work_range.minimum.is_some()
+            || set_t_work_range.maximum.is_some()
+            || set_t_work_range.absolute_maximum.is_some()
+        {
+            deny_if_password_invalid("TWorkRange")?;
+            todo!();
+            /*
+            ws.setTWorkRange
+                .validate()
+                .map_err(|e| SettingActionError::ActionError(format!("TWorkRange invalid: {:?}", e)))?;
+                */
+        }
     }
 
-    if ws.has_setTCPUWorkRange
-        && (ws.setTCPUWorkRange.has_minimum
-            || ws.setTCPUWorkRange.has_maximum
-            || ws.setTCPUWorkRange.has_absolute_maximum)
-    {
-        deny_if_password_invalid("TCPUWorkRange")?;
-        ws.setTCPUWorkRange.validate().map_err(|e| {
-            SettingActionError::ActionError(format!("TCPUWorkRange invalid: {:?}", e))
-        })?;
+    if let Some(set_tcpu_work_range) = &ws.set_tcpu_work_range {
+        if set_tcpu_work_range.minimum.is_some()
+            || set_tcpu_work_range.maximum.is_some()
+            || set_tcpu_work_range.absolute_maximum.is_some()
+        {
+            deny_if_password_invalid("TWorkRange")?;
+            todo!();
+            /*
+            ws.setTWorkRange
+                .validate()
+                .map_err(|e| SettingActionError::ActionError(format!("TCPUWorkRange invalid: {:?}", e)))?;
+                */
+        }
     }
 
-    if ws.has_setBatWorkRange
-        && (ws.setBatWorkRange.has_minimum
-            || ws.setBatWorkRange.has_maximum
-            || ws.setBatWorkRange.has_absolute_maximum)
-    {
-        deny_if_password_invalid("BatWorkRange")?;
-        ws.setBatWorkRange.validate().map_err(|e| {
-            SettingActionError::ActionError(format!("BatWorkRange invalid: {:?}", e))
-        })?;
+    if let Some(set_bat_work_range) = &ws.set_bat_work_range {
+        if set_bat_work_range.minimum.is_some()
+            || set_bat_work_range.maximum.is_some()
+            || set_bat_work_range.absolute_maximum.is_some()
+        {
+            deny_if_password_invalid("TWorkRange")?;
+            todo!();
+            /*
+            ws.setTWorkRange
+                .validate()
+                .map_err(|e| SettingActionError::ActionError(format!("BatWorkRange invalid: {:?}", e)))?;
+                */
+        }
     }
 
-    if ws.has_setCalibrationDate {
+    if let Some(set_calibration_date) = &ws.set_calibration_date {
+        todo!();
+        /*
         ws.setCalibrationDate.validate().map_err(|e| {
-            SettingActionError::ActionError(format!("Calibration date field {:?} invalid", e))
-        })?;
+                    SettingActionError::ActionError(format!("Calibration date field {:?} invalid", e))
+                })?;
+        */
     }
 
-    if ws.has_setWriteConfig {
-        if ws.setWriteConfig.has_BaseInterval_ms && ws.setWriteConfig.BaseInterval_ms < MIN_MT {
+    if let Some(set_write_config) = &ws.set_write_config {
+        if set_write_config.base_interval_ms.is_some()
+            && set_write_config.base_interval_ms.unwrap() < MIN_MT
+        {
+            todo!();
+            /*
             return Err(SettingActionError::ActionError(format!(
                 "Write base period {} too small, min= {}",
                 ws.setWriteConfig.BaseInterval_ms, MIN_MT
             )));
+            */
         }
     }
 
-    if ws.has_setPressureMeassureUnits {
+    if let Some(set_pressure_meassure_units) = ws.set_pressure_meassure_units {
         if let Some(crate::settings::app_settings::PressureMeassureUnits::INVALID_ZERO) | None =
-            num::FromPrimitive::from_u32(ws.setPressureMeassureUnits)
+            num::FromPrimitive::from_i32(set_pressure_meassure_units)
         {
             return Err(SettingActionError::ActionError(format!(
                 "Value {} is not a valid pressure measure unit code.",
-                ws.setPressureMeassureUnits
+                set_pressure_meassure_units
             )));
         }
     }
@@ -221,13 +251,15 @@ fn verify_parameters(
 }
 
 pub fn update_settings(
-    w: &ru_sktbelpa_pressure_self_writer_WriteSettingsReq,
+    w: &super::messages::WriteSettingsReq,
 ) -> Result<bool, SettingActionError<String>> {
     verify_parameters(w)?;
 
     crate::settings::settings_action(Duration::ms(1), |(ws, ts)| {
         let mut need_write = false;
 
+        todo!();
+        /*
         store_coeff!(ws.Serial <= w; setSerial; need_write);
 
         // раскладывается в ->
@@ -314,16 +346,17 @@ pub fn update_settings(
         }
 
         store_coeff!(ws.startDelay <= w; setStartDelay; need_write);
+        */
 
-        if w.has_setPressureMeassureUnits {
+        if let Some(set_pressure_meassure_units) = w.set_pressure_meassure_units {
             ws.pressureMeassureUnits =
-                num::FromPrimitive::from_u32(w.setPressureMeassureUnits).unwrap();
+                num::FromPrimitive::from_i32(set_pressure_meassure_units).unwrap();
             need_write = true;
         }
 
-        if w.has_setPassword {
+        if let Some(set_password) = w.set_password {
             ts.current_password
-                .copy_from_slice(&w.setPassword[..PASSWORD_SIZE]);
+                .copy_from_slice(&set_password[..PASSWORD_SIZE].as_bytes());
         }
 
         Ok(need_write)

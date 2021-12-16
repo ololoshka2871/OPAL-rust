@@ -1,22 +1,9 @@
-use core::mem;
-
 use nanopb_rs::{pb_decode::TIStream, Error};
+use prost::Message;
 
-use super::ru_sktbelpa_pressure_self_writer_Request;
+pub fn recive_message_body1<T: TIStream>(mut is: T) -> Result<super::messages::Request, Error> {
+    let size = is.stream().bytes_left;
+    let data = is.stream().read(size)?;
 
-pub fn recive_message_body<T: TIStream>(
-    mut is: T,
-) -> Result<ru_sktbelpa_pressure_self_writer_Request, Error> {
-    let mut res: ru_sktbelpa_pressure_self_writer_Request =
-        unsafe { mem::MaybeUninit::zeroed().assume_init() };
-    match is
-        .stream()
-        .decode(&mut res, ru_sktbelpa_pressure_self_writer_Request::fields())
-    {
-        Ok(_) => Ok(res),
-        Err(e) => {
-            is.stream().flush();
-            Err(e)
-        }
-    }
+    super::messages::Request::decode(data.as_slice()).map_err(|_| Error::from_str("Decode failed"))
 }

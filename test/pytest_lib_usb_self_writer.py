@@ -6,6 +6,7 @@ import sys
 import pytest
 import lib_usb_self_writer as lib
 import protocol_pb2
+import math
 
 
 def print_help():
@@ -50,6 +51,5 @@ def test_read_settings(device, settings_req):
     resp = device.process_request_sync(settings_req)
     assert resp
     assert resp.getSettings
-    assert len(resp.getSettings.PCoefficients.A) == 16
-    assert resp.getSettings.PCoefficients.A[0]
+    assert not math.isnan(resp.getSettings.PCoefficients.A0)
     assert resp.Global_status == protocol_pb2.STATUS.OK

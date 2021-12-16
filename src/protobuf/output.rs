@@ -5,9 +5,7 @@ use freertos_rust::{Duration, FreeRtosError, Mutex};
 
 use crate::{threads::sensor_processor::FChannel, workmodes::output_storage::OutputStorage};
 
-use super::messages::{
-    ru_sktbelpa_pressure_self_writer_OutputReq, ru_sktbelpa_pressure_self_writer_OutputResponse,
-};
+use super::messages::ru_sktbelpa_pressure_self_writer_OutputResponse;
 
 lazy_static! {
     static ref OUT_STORAGE_LOCK_WAIT: Duration = Duration::ms(5);
@@ -15,12 +13,12 @@ lazy_static! {
 
 pub fn fill_output(
     output: &mut ru_sktbelpa_pressure_self_writer_OutputResponse,
-    get_output_values: &ru_sktbelpa_pressure_self_writer_OutputReq,
+    get_output_values: &super::messages::OutputReq,
     output_storage: &Arc<Mutex<OutputStorage>>,
 ) -> Result<(), FreeRtosError> {
     let mut err = None;
 
-    if get_output_values.has_getMainValues {
+    if get_output_values.get_main_values.is_some() {
         output.has_pressure = true;
         output.has_temperature = true;
         output.has_TCPU = true;
@@ -45,7 +43,7 @@ pub fn fill_output(
         }
     }
 
-    if get_output_values.has_getF {
+    if get_output_values.get_f.is_some() {
         output.has_FP = true;
         output.has_FT = true;
 
@@ -64,7 +62,7 @@ pub fn fill_output(
         }
     }
 
-    if get_output_values.has_getRAW {
+    if get_output_values.get_raw.is_some() {
         output.has_P_result = true;
         output.has_T_result = true;
         output.has_ADC_TCPU = true;
