@@ -3,6 +3,10 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
+pub mod _messages {
+    include!(concat!(env!("OUT_DIR"), "/ru.sktbelpa.pressure_self_writer.rs"));
+}
+
 pub use nanopb_rs::pb_callback_t;
 use nanopb_rs::pb_msgdesc_t;
 pub use nanopb_rs::pb_size_t;

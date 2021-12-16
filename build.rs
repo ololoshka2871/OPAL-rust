@@ -3,9 +3,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
+static PROTOBUF_FILE: &str = "src/protobuf/ProtobufDevice_0000E006.proto";
+static PROTOBUF_DIR: &str = "src/protobuf";
+
 fn build_protobuf(mut cc: cc::Build) {
     let protobuf_src = nanopb_rs_generator::Generator::new()
-        .add_proto_file("src/protobuf/ProtobufDevice_0000E006.proto")
+        .add_proto_file(PROTOBUF_FILE)
         .add_option_file("src/protobuf/ProtobufDevice_0000E006.option")
         .generate();
 
@@ -63,6 +66,8 @@ fn build_freertos(mut b: freertos_cargo_build::Builder) {
 }
 
 fn main() {
+    prost_build::compile_protos(&[PROTOBUF_FILE], &[PROTOBUF_DIR]).unwrap();
+
     let mut b = freertos_cargo_build::Builder::new();
 
     build_protobuf(b.get_cc().clone());
