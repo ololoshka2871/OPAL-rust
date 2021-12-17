@@ -1,9 +1,15 @@
-use nanopb_rs::{pb_decode::TIStream, Error};
-use prost::Message;
+use core::fmt::Debug;
 
-pub fn recive_message_body1<T: TIStream>(mut is: T) -> Result<super::messages::Request, Error> {
-    let size = is.stream().bytes_left;
-    let data = is.stream().read(size)?;
+use prost::{DecodeError, Message};
 
-    super::messages::Request::decode(data.as_slice()).map_err(|_| Error::from_str("Decode failed"))
+use super::Stream;
+
+pub fn recive_message_body<T: Debug, S: Stream<T>>(
+    stream: &mut S,
+) -> Result<super::messages::Request, DecodeError> {
+    let data = stream
+        .read_all()
+        .map_err(|_| DecodeError::new("Failed to read message body"))?;
+
+    super::messages::Request::decode(data.as_slice())
 }

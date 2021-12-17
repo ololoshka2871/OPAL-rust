@@ -1,3 +1,0 @@
-ru.sktbelpa.pressure_self_writer.ChangePassword.newPassword     max_length:10
-ru.sktbelpa.pressure_self_writer.WriteSettingsReq.setPassword   max_length:10
-ru.sktbelpa.pressure_self_writer.SettingsResponse.password      max_length:10 
