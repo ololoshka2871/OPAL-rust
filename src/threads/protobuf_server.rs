@@ -97,8 +97,9 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
             }
         };
 
-        //defmt::info!("Nanopb: Request:\n{}", defmt::Debug2Format(&request));
-        defmt::info!("Nanopb: Request id={}", request.id);
+        let id = request.id;
+
+        //defmt::info!("Protobuf: Request:\n{}", defmt::Debug2Format(&request));
 
         let response = {
             let id = request.id;
@@ -111,12 +112,13 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
             }
         };
 
-        //defmt::info!("Nanopb: Response:\n{}", defmt::Debug2Format(&response));
-        defmt::info!("Nanopb: Response ready");
+        //defmt::info!("Protobuf: Response:\n{}", defmt::Debug2Format(&response));
 
         if let Err(e) = write_responce(serial_container.clone(), response) {
             print_error(e);
         }
+
+        defmt::info!("Protobuf: message id = {} processed succesfully", id);
     }
 }
 

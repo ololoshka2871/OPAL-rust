@@ -1,9 +1,0 @@
-[package]
-authors = ["ololoshka2871"]
-edition = "2018"
-readme = "README.md"
-name = "nanopb-rs-generator"
-version = "0.1.0"
-
-[dependencies]
-tempfile = "3.2.0"
