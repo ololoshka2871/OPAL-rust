@@ -1,17 +1,16 @@
 use my_proc_macro::git_version;
 
-use super::messages::ru_sktbelpa_pressure_self_writer_InfoResponse;
+pub fn fill_info(info: &mut super::messages::InfoResponse) -> Result<(), ()> {
+    info.hw_version = 1; // TODO
+    info.sw_version = git_version!();
 
-pub fn fill_info(info: &mut ru_sktbelpa_pressure_self_writer_InfoResponse) -> Result<(), ()> {
-    info.HW_Version = 1; // TODO
-    info.SW_Version = git_version!();
+    info.pressure_channel_failed = false; // TODO
+    info.temperature_channel_failed = false; // TODO
 
-    info.PressureChannelFailed = false; // TODO
-    info.TemperatureChannelFailed = false; // TODO
-
-    info.OverpressDetected = false; // TODO
-    info.OverheatDetected = false; // TODO
-    info.OverheatCPUDetected = false; // TODO
+    info.overpress_detected = false; // TODO
+    info.overheat_detected = false; // TODO
+    info.overheat_cpu_detected = false; // TODO
+    info.over_vbat_detected = false; // TODO
 
     Ok(())
 }

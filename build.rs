@@ -3,18 +3,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
-static PROTOBUF_FILE: &str = "src/protobuf/ProtobufDevice_0000E006.proto";
+static PROTOBUF_FILE: &str = "ProtobufDevice_0000E006.proto";
 static PROTOBUF_DIR: &str = "src/protobuf";
 
-fn build_protobuf(mut cc: cc::Build) {
-    let protobuf_src = nanopb_rs_generator::Generator::new()
-        .add_proto_file(PROTOBUF_FILE)
-        .add_option_file("src/protobuf/ProtobufDevice_0000E006.option")
-        .generate();
+fn gen_protobuf() {
+    let mut protofile = PathBuf::from(PROTOBUF_DIR);
+    protofile.push(PROTOBUF_FILE);
 
-    cc.file(protobuf_src).include("lib/nanopb.rs/nanopb-dist");
-    cc.try_compile("protobuf-proto")
-        .unwrap_or_else(|e| panic!("{}", e.to_string()));
+    prost_build::compile_protos(&[protofile], &[PROTOBUF_DIR]).unwrap();
 }
 
 fn generate_free_rtos_config<P: AsRef<Path>>(path: P) -> PathBuf {
@@ -66,10 +62,6 @@ fn build_freertos(mut b: freertos_cargo_build::Builder) {
 }
 
 fn main() {
-    prost_build::compile_protos(&[PROTOBUF_FILE], &[PROTOBUF_DIR]).unwrap();
-
-    let mut b = freertos_cargo_build::Builder::new();
-
-    build_protobuf(b.get_cc().clone());
-    build_freertos(b);
+    gen_protobuf();
+    build_freertos(freertos_cargo_build::Builder::new());
 }

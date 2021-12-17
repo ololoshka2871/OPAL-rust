@@ -1,16 +1,11 @@
-use alloc::{format, string::String};
+use alloc::{
+    format,
+    string::{String, ToString},
+};
 use freertos_rust::Duration;
-use my_proc_macro::store_coeff_nanopb;
+use my_proc_macro::store_coeff;
 
 use crate::{protobuf::PASSWORD_SIZE, settings::SettingActionError};
-
-use super::messages::{
-    ru_sktbelpa_pressure_self_writer_CalibrationDate,
-    ru_sktbelpa_pressure_self_writer_PCoefficients,
-    ru_sktbelpa_pressure_self_writer_SettingsResponse,
-    ru_sktbelpa_pressure_self_writer_T5Coefficients, ru_sktbelpa_pressure_self_writer_WorkRange,
-    ru_sktbelpa_pressure_self_writer_WriteConfig,
-};
 
 static MAX_MT: u32 = 5000;
 static MIN_MT: u32 = 10;
@@ -18,48 +13,41 @@ static MIN_MT: u32 = 10;
 static F_REF_BASE: u32 = 16000000;
 static F_REF_DELTA: u32 = 500;
 
-pub fn fill_settings(
-    settings_resp: &mut ru_sktbelpa_pressure_self_writer_SettingsResponse,
-) -> Result<(), ()> {
+pub fn fill_settings(settings_resp: &mut super::messages::SettingsResponse) -> Result<(), ()> {
     crate::settings::settings_action(Duration::ms(1), |(ws, ts)| {
-        settings_resp.Serial = ws.Serial;
+        settings_resp.serial = ws.Serial;
 
-        settings_resp.PMesureTime_ms = ws.PMesureTime_ms;
-        settings_resp.TMesureTime_ms = ws.TMesureTime_ms;
+        settings_resp.p_mesure_time_ms = ws.PMesureTime_ms;
+        settings_resp.t_mesure_time_ms = ws.TMesureTime_ms;
 
-        settings_resp.Fref = ws.Fref;
+        settings_resp.fref = ws.Fref;
 
-        settings_resp.PEnabled = ws.P_enabled;
-        settings_resp.TEnabled = ws.T_enabled;
-        settings_resp.TCPUEnabled = ws.TCPUEnabled;
-        settings_resp.VBatEnable = ws.VBatEnabled;
+        settings_resp.p_enabled = ws.P_enabled;
+        settings_resp.t_enabled = ws.T_enabled;
+        settings_resp.tcpu_enabled = ws.TCPUEnabled;
+        settings_resp.v_bat_enable = ws.VBatEnabled;
 
-        settings_resp.PCoefficients =
-            ru_sktbelpa_pressure_self_writer_PCoefficients::from(&ws.P_Coefficients);
-        settings_resp.TCoefficients =
-            ru_sktbelpa_pressure_self_writer_T5Coefficients::from(&ws.T_Coefficients);
+        settings_resp.p_coefficients = super::messages::PCoefficients::from(&ws.P_Coefficients);
+        settings_resp.t_coefficients = super::messages::T5Coefficients::from(&ws.T_Coefficients);
 
-        settings_resp.PWorkRange = ru_sktbelpa_pressure_self_writer_WorkRange::from(&ws.PWorkRange);
-        settings_resp.TWorkRange = ru_sktbelpa_pressure_self_writer_WorkRange::from(&ws.TWorkRange);
-        settings_resp.TCPUWorkRange =
-            ru_sktbelpa_pressure_self_writer_WorkRange::from(&ws.TCPUWorkRange);
-        settings_resp.BatWorkRange =
-            ru_sktbelpa_pressure_self_writer_WorkRange::from(&ws.VbatWorkRange);
+        settings_resp.p_work_range = super::messages::WorkRange::from(&ws.PWorkRange);
+        settings_resp.t_work_range = super::messages::WorkRange::from(&ws.TWorkRange);
+        settings_resp.tcpu_work_range = super::messages::WorkRange::from(&ws.TCPUWorkRange);
+        settings_resp.bat_work_range = super::messages::WorkRange::from(&ws.VbatWorkRange);
 
-        settings_resp.CalibrationDate =
-            ru_sktbelpa_pressure_self_writer_CalibrationDate::from(&ws.calibration_date);
+        settings_resp.calibration_date =
+            super::messages::CalibrationDate::from(&ws.calibration_date);
 
-        settings_resp.PZeroCorrection = ws.PZeroCorrection;
-        settings_resp.TZeroCorrection = ws.TZeroCorrection;
+        settings_resp.p_zero_correction = ws.PZeroCorrection;
+        settings_resp.t_zero_correction = ws.TZeroCorrection;
 
-        settings_resp.writeConfig =
-            ru_sktbelpa_pressure_self_writer_WriteConfig::from(&ws.writeConfig);
+        settings_resp.write_config = super::messages::WriteConfig::from(&ws.writeConfig);
 
-        settings_resp.startDelay = ws.startDelay;
+        settings_resp.start_delay = ws.startDelay;
 
-        settings_resp.pressureMeassureUnits = ws.pressureMeassureUnits as u32;
+        settings_resp.pressure_meassure_units = ws.pressureMeassureUnits as i32;
 
-        settings_resp.password[..PASSWORD_SIZE].copy_from_slice(&ts.current_password);
+        settings_resp.password = String::from_utf8_lossy(&ts.current_password).to_string();
 
         Ok(())
     })
@@ -159,12 +147,10 @@ fn verify_parameters(
             || set_p_work_range.absolute_maximum.is_some()
         {
             deny_if_password_invalid("PWorkRange")?;
-            todo!();
-            /*
-            set_p_work_range
-                .validate()
-                .map_err(|e| SettingActionError::ActionError(format!("PWorkRange invalid: {:?}", e)))?;
-                */
+
+            set_p_work_range.validate().map_err(|e| {
+                SettingActionError::ActionError(format!("PWorkRange invalid: {:?}", e))
+            })?;
         }
     }
 
@@ -174,12 +160,10 @@ fn verify_parameters(
             || set_t_work_range.absolute_maximum.is_some()
         {
             deny_if_password_invalid("TWorkRange")?;
-            todo!();
-            /*
-            ws.setTWorkRange
-                .validate()
-                .map_err(|e| SettingActionError::ActionError(format!("TWorkRange invalid: {:?}", e)))?;
-                */
+
+            set_t_work_range.validate().map_err(|e| {
+                SettingActionError::ActionError(format!("TWorkRange invalid: {:?}", e))
+            })?;
         }
     }
 
@@ -189,12 +173,10 @@ fn verify_parameters(
             || set_tcpu_work_range.absolute_maximum.is_some()
         {
             deny_if_password_invalid("TWorkRange")?;
-            todo!();
-            /*
-            ws.setTWorkRange
-                .validate()
-                .map_err(|e| SettingActionError::ActionError(format!("TCPUWorkRange invalid: {:?}", e)))?;
-                */
+
+            set_tcpu_work_range.validate().map_err(|e| {
+                SettingActionError::ActionError(format!("TCPUWorkRange invalid: {:?}", e))
+            })?;
         }
     }
 
@@ -204,35 +186,27 @@ fn verify_parameters(
             || set_bat_work_range.absolute_maximum.is_some()
         {
             deny_if_password_invalid("TWorkRange")?;
-            todo!();
-            /*
-            ws.setTWorkRange
-                .validate()
-                .map_err(|e| SettingActionError::ActionError(format!("BatWorkRange invalid: {:?}", e)))?;
-                */
+
+            set_bat_work_range.validate().map_err(|e| {
+                SettingActionError::ActionError(format!("BatWorkRange invalid: {:?}", e))
+            })?;
         }
     }
 
     if let Some(set_calibration_date) = &ws.set_calibration_date {
-        todo!();
-        /*
-        ws.setCalibrationDate.validate().map_err(|e| {
-                    SettingActionError::ActionError(format!("Calibration date field {:?} invalid", e))
-                })?;
-        */
+        set_calibration_date.validate().map_err(|e| {
+            SettingActionError::ActionError(format!("Calibration date field {:?} invalid", e))
+        })?;
     }
 
     if let Some(set_write_config) = &ws.set_write_config {
-        if set_write_config.base_interval_ms.is_some()
-            && set_write_config.base_interval_ms.unwrap() < MIN_MT
-        {
-            todo!();
-            /*
-            return Err(SettingActionError::ActionError(format!(
-                "Write base period {} too small, min= {}",
-                ws.setWriteConfig.BaseInterval_ms, MIN_MT
-            )));
-            */
+        if let Some(base_interval_ms) = set_write_config.base_interval_ms {
+            if base_interval_ms < MIN_MT {
+                return Err(SettingActionError::ActionError(format!(
+                    "Write base period {} too small, min= {}",
+                    base_interval_ms, MIN_MT
+                )));
+            }
         }
     }
 
@@ -258,95 +232,93 @@ pub fn update_settings(
     crate::settings::settings_action(Duration::ms(1), |(ws, ts)| {
         let mut need_write = false;
 
-        todo!();
-        /*
-        store_coeff!(ws.Serial <= w; setSerial; need_write);
-
         // раскладывается в ->
         /*
-        if w.has_setPMesureTime_ms {
-            ws.PMesureTime_ms = w.setPMesureTime_ms;
+        w.set_serial.map(|v| {
+            ws.Serial = v;
             need_write = true;
-        }*/
-        store_coeff!(ws.PMesureTime_ms <= w; setPMesureTime_ms; need_write);
-        store_coeff!(ws.TMesureTime_ms <= w; setTMesureTime_ms; need_write);
-
-        store_coeff!(ws.Fref <= w; setFref; need_write);
-
-        store_coeff!(ws.P_enabled <= w; setPEnabled; need_write);
-        store_coeff!(ws.T_enabled <= w; setTEnabled; need_write);
-        store_coeff!(ws.TCPUEnabled <= w; setTCPUEnabled; need_write);
-        store_coeff!(ws.VBatEnabled <= w; setVBatEnable; need_write);
-
-        if w.has_setPCoefficients {
-            store_coeff!(ws.P_Coefficients.Fp0 <= w.setPCoefficients; Fp0; need_write);
-            store_coeff!(ws.P_Coefficients.Ft0 <= w.setPCoefficients; Ft0; need_write);
-            store_coeff!(ws.P_Coefficients.A[0] <= w.setPCoefficients; A0; need_write);
-            store_coeff!(ws.P_Coefficients.A[1] <= w.setPCoefficients; A1; need_write);
-            store_coeff!(ws.P_Coefficients.A[2] <= w.setPCoefficients; A2; need_write);
-            store_coeff!(ws.P_Coefficients.A[3] <= w.setPCoefficients; A3; need_write);
-            store_coeff!(ws.P_Coefficients.A[4] <= w.setPCoefficients; A4; need_write);
-            store_coeff!(ws.P_Coefficients.A[5] <= w.setPCoefficients; A5; need_write);
-            store_coeff!(ws.P_Coefficients.A[6] <= w.setPCoefficients; A6; need_write);
-            store_coeff!(ws.P_Coefficients.A[7] <= w.setPCoefficients; A7; need_write);
-            store_coeff!(ws.P_Coefficients.A[8] <= w.setPCoefficients; A8; need_write);
-            store_coeff!(ws.P_Coefficients.A[9] <= w.setPCoefficients; A9; need_write);
-            store_coeff!(ws.P_Coefficients.A[10] <= w.setPCoefficients; A10; need_write);
-            store_coeff!(ws.P_Coefficients.A[11] <= w.setPCoefficients; A11; need_write);
-            store_coeff!(ws.P_Coefficients.A[12] <= w.setPCoefficients; A12; need_write);
-            store_coeff!(ws.P_Coefficients.A[13] <= w.setPCoefficients; A13; need_write);
-            store_coeff!(ws.P_Coefficients.A[14] <= w.setPCoefficients; A14; need_write);
-            store_coeff!(ws.P_Coefficients.A[15] <= w.setPCoefficients; A15; need_write);
-        }
-
-        if w.has_setTCoefficients {
-            store_coeff!(ws.T_Coefficients.F0 <= w.setTCoefficients; F0; need_write);
-            store_coeff!(ws.T_Coefficients.C[0] <= w.setTCoefficients; C1; need_write);
-            store_coeff!(ws.T_Coefficients.C[1] <= w.setTCoefficients; C2; need_write);
-            store_coeff!(ws.T_Coefficients.C[2] <= w.setTCoefficients; C3; need_write);
-            store_coeff!(ws.T_Coefficients.C[3] <= w.setTCoefficients; C4; need_write);
-            store_coeff!(ws.T_Coefficients.C[4] <= w.setTCoefficients; C5; need_write);
-            store_coeff!(ws.T_Coefficients.T0 <= w.setTCoefficients; T0; need_write);
-        }
-
-        if w.has_setPWorkRange {
-            store_coeff!(ws.PWorkRange.minimum <= w.setPWorkRange; minimum; need_write);
-            store_coeff!(ws.PWorkRange.maximum <= w.setPWorkRange; maximum; need_write);
-            store_coeff!(ws.PWorkRange.absolute_maximum <= w.setPWorkRange; absolute_maximum; need_write);
-        }
-        if w.has_setTWorkRange {
-            store_coeff!(ws.TWorkRange.minimum <= w.setTWorkRange; minimum; need_write);
-            store_coeff!(ws.TWorkRange.maximum <= w.setTWorkRange; maximum; need_write);
-            store_coeff!(ws.TWorkRange.absolute_maximum <= w.setTWorkRange; absolute_maximum; need_write);
-        }
-        if w.has_setTCPUWorkRange {
-            store_coeff!(ws.TCPUWorkRange.minimum <= w.setTCPUWorkRange; minimum; need_write);
-            store_coeff!(ws.TCPUWorkRange.maximum <= w.setTCPUWorkRange; maximum; need_write);
-            store_coeff!(ws.TCPUWorkRange.absolute_maximum <= w.setTCPUWorkRange; absolute_maximum; need_write);
-        }
-        if w.has_setBatWorkRange {
-            store_coeff!(ws.VbatWorkRange.minimum <= w.setBatWorkRange; minimum; need_write);
-            store_coeff!(ws.VbatWorkRange.maximum <= w.setBatWorkRange; maximum; need_write);
-            store_coeff!(ws.VbatWorkRange.absolute_maximum <= w.setBatWorkRange; absolute_maximum; need_write);
-        }
-
-        if w.has_setCalibrationDate {
-            store_coeff!(ws.calibration_date.Day <= w.setCalibrationDate; Day; need_write);
-            store_coeff!(ws.calibration_date.Month <= w.setCalibrationDate; Month; need_write);
-            store_coeff!(ws.calibration_date.Year <= w.setCalibrationDate; Year; need_write);
-        }
-
-        store_coeff!(ws.PZeroCorrection <= w; setPZeroCorrection; need_write);
-        store_coeff!(ws.TZeroCorrection <= w; setTZeroCorrection; need_write);
-
-        if w.has_setWriteConfig {
-            store_coeff!(ws.writeConfig.BaseInterval_ms <= w.setWriteConfig; BaseInterval_ms; need_write);
-            store_coeff!(ws.writeConfig.PWriteDevider <= w.setWriteConfig; PWriteDevider; need_write);
-            store_coeff!(ws.writeConfig.TWriteDevider <= w.setWriteConfig; TWriteDevider; need_write);
-        }
-
-        store_coeff!(ws.startDelay <= w; setStartDelay; need_write);
+        });
         */
+        store_coeff!(ws.Serial <= w; set_serial; need_write);
+
+        store_coeff!(ws.PMesureTime_ms <= w; set_p_mesure_time_ms; need_write);
+        store_coeff!(ws.TMesureTime_ms <= w; set_t_mesure_time_ms; need_write);
+
+        store_coeff!(ws.Fref <= w; set_fref; need_write);
+
+        store_coeff!(ws.P_enabled <= w; set_p_enabled; need_write);
+        store_coeff!(ws.T_enabled <= w; set_t_enabled; need_write);
+        store_coeff!(ws.TCPUEnabled <= w; set_tcpu_enabled; need_write);
+        store_coeff!(ws.VBatEnabled <= w; set_v_bat_enable; need_write);
+
+        if let Some(set_p_coefficients) = &w.set_p_coefficients {
+            store_coeff!(ws.P_Coefficients.Fp0 <= set_p_coefficients; fp0; need_write);
+            store_coeff!(ws.P_Coefficients.Ft0 <= set_p_coefficients; ft0; need_write);
+            store_coeff!(ws.P_Coefficients.A[0] <= set_p_coefficients; a0; need_write);
+            store_coeff!(ws.P_Coefficients.A[1] <= set_p_coefficients; a1; need_write);
+            store_coeff!(ws.P_Coefficients.A[2] <= set_p_coefficients; a2; need_write);
+            store_coeff!(ws.P_Coefficients.A[3] <= set_p_coefficients; a3; need_write);
+            store_coeff!(ws.P_Coefficients.A[4] <= set_p_coefficients; a4; need_write);
+            store_coeff!(ws.P_Coefficients.A[5] <= set_p_coefficients; a5; need_write);
+            store_coeff!(ws.P_Coefficients.A[6] <= set_p_coefficients; a6; need_write);
+            store_coeff!(ws.P_Coefficients.A[7] <= set_p_coefficients; a7; need_write);
+            store_coeff!(ws.P_Coefficients.A[8] <= set_p_coefficients; a8; need_write);
+            store_coeff!(ws.P_Coefficients.A[9] <= set_p_coefficients; a9; need_write);
+            store_coeff!(ws.P_Coefficients.A[10] <= set_p_coefficients; a10; need_write);
+            store_coeff!(ws.P_Coefficients.A[11] <= set_p_coefficients; a11; need_write);
+            store_coeff!(ws.P_Coefficients.A[12] <= set_p_coefficients; a12; need_write);
+            store_coeff!(ws.P_Coefficients.A[13] <= set_p_coefficients; a13; need_write);
+            store_coeff!(ws.P_Coefficients.A[14] <= set_p_coefficients; a14; need_write);
+            store_coeff!(ws.P_Coefficients.A[15] <= set_p_coefficients; a15; need_write);
+        }
+
+        if let Some(set_t_coefficients) = &w.set_t_coefficients {
+            store_coeff!(ws.T_Coefficients.F0 <= set_t_coefficients; f0; need_write);
+            store_coeff!(ws.T_Coefficients.C[0] <= set_t_coefficients; c1; need_write);
+            store_coeff!(ws.T_Coefficients.C[1] <= set_t_coefficients; c2; need_write);
+            store_coeff!(ws.T_Coefficients.C[2] <= set_t_coefficients; c3; need_write);
+            store_coeff!(ws.T_Coefficients.C[3] <= set_t_coefficients; c4; need_write);
+            store_coeff!(ws.T_Coefficients.C[4] <= set_t_coefficients; c5; need_write);
+            store_coeff!(ws.T_Coefficients.T0 <= set_t_coefficients; t0; need_write);
+        }
+
+        if let Some(set_p_work_range) = &w.set_p_work_range {
+            store_coeff!(ws.PWorkRange.minimum <= set_p_work_range; minimum; need_write);
+            store_coeff!(ws.PWorkRange.maximum <= set_p_work_range; maximum; need_write);
+            store_coeff!(ws.PWorkRange.absolute_maximum <= set_p_work_range; absolute_maximum; need_write);
+        }
+        if let Some(set_t_work_range) = &w.set_t_work_range {
+            store_coeff!(ws.TWorkRange.minimum <= set_t_work_range; minimum; need_write);
+            store_coeff!(ws.TWorkRange.maximum <= set_t_work_range; maximum; need_write);
+            store_coeff!(ws.TWorkRange.absolute_maximum <= set_t_work_range; absolute_maximum; need_write);
+        }
+        if let Some(set_tcpu_work_range) = &w.set_tcpu_work_range {
+            store_coeff!(ws.TCPUWorkRange.minimum <= set_tcpu_work_range; minimum; need_write);
+            store_coeff!(ws.TCPUWorkRange.maximum <= set_tcpu_work_range; maximum; need_write);
+            store_coeff!(ws.TCPUWorkRange.absolute_maximum <= set_tcpu_work_range; absolute_maximum; need_write);
+        }
+        if let Some(set_bat_work_range) = &w.set_bat_work_range {
+            store_coeff!(ws.VbatWorkRange.minimum <= set_bat_work_range; minimum; need_write);
+            store_coeff!(ws.VbatWorkRange.maximum <= set_bat_work_range; maximum; need_write);
+            store_coeff!(ws.VbatWorkRange.absolute_maximum <= set_bat_work_range; absolute_maximum; need_write);
+        }
+
+        if let Some(set_calibration_date) = &w.set_calibration_date {
+            store_coeff!(ws.calibration_date.Day <= set_calibration_date; day; need_write);
+            store_coeff!(ws.calibration_date.Month <= set_calibration_date; month; need_write);
+            store_coeff!(ws.calibration_date.Year <= set_calibration_date; year; need_write);
+        }
+
+        store_coeff!(ws.PZeroCorrection <= w; set_p_zero_correction; need_write);
+        store_coeff!(ws.TZeroCorrection <= w; set_t_zero_correction; need_write);
+
+        if let Some(set_write_config) = &w.set_write_config {
+            store_coeff!(ws.writeConfig.BaseInterval_ms <= set_write_config; base_interval_ms; need_write);
+            store_coeff!(ws.writeConfig.PWriteDevider <= set_write_config; p_write_devider; need_write);
+            store_coeff!(ws.writeConfig.TWriteDevider <= set_write_config; t_write_devider; need_write);
+        }
+
+        store_coeff!(ws.startDelay <= w; set_start_delay; need_write);
 
         if let Some(set_pressure_meassure_units) = w.set_pressure_meassure_units {
             ws.pressureMeassureUnits =
@@ -354,7 +326,7 @@ pub fn update_settings(
             need_write = true;
         }
 
-        if let Some(set_password) = w.set_password {
+        if let Some(set_password) = &w.set_password {
             ts.current_password
                 .copy_from_slice(&set_password[..PASSWORD_SIZE].as_bytes());
         }

@@ -76,12 +76,12 @@ pub fn store_coeff(cfg: TokenStream) -> TokenStream {
     assert!(matches!(s.ex.op, syn::BinOp::Le(_)));
 
     format!(
-        r##"if let Some(v) = {src}.has_{condition_var} {{
-            {destination} = {src}.{condition_var};
+        r##"{src}.{field}.map(|v| {{
+            {destination} = v;
             {flag} = true;
-        }}"##,
+        }})"##,
         src = s.ex.right.to_token_stream().to_string(),
-        condition_var = s.src_field.to_token_stream().to_string(),
+        field = s.src_field.to_token_stream().to_string(),
         destination = s.ex.left.into_token_stream().to_string(),
         flag = s.flag_name.to_token_stream().to_string()
     )

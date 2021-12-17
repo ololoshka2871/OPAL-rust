@@ -62,9 +62,9 @@ fn print_error(e: Error) {
 
 fn write_responce<B: usb_device::bus::UsbBus>(
     serial_container: Arc<Mutex<SerialPort<B>>>,
-    response: protobuf::ru_sktbelpa_pressure_self_writer_Response,
+    response: protobuf::Response,
 ) -> Result<(), Error> {
-    let data = protobuf::encode_md_message(response)?;
+    let data = protobuf::encode_md_message1(response)?;
     let mut buf = data.as_slice();
 
     loop {

@@ -3,94 +3,79 @@ use freertos_rust::{FreeRtosError, Mutex};
 
 use crate::workmodes::output_storage::OutputStorage;
 
-use super::{
-    messages::ru_sktbelpa_pressure_self_writer_FlashStatus,
-    ru_sktbelpa_pressure_self_writer_Response,
-};
-
 pub fn process_requiest(
     req: super::messages::Request,
-    mut resp: ru_sktbelpa_pressure_self_writer_Response,
+    mut resp: super::messages::Response,
     output: &Arc<Mutex<OutputStorage>>,
-) -> Result<ru_sktbelpa_pressure_self_writer_Response, ()> {
-    use super::messages::{
-        ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER,
-        ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID,
-        ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION,
-        ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS,
-        ru_sktbelpa_pressure_self_writer_STATUS_PROTOCOL_ERROR,
-    };
-
-    if !(req.device_id == ru_sktbelpa_pressure_self_writer_INFO_PRESSURE_SELF_WRITER_ID
-        || req.device_id == ru_sktbelpa_pressure_self_writer_INFO_ID_DISCOVER)
+) -> Result<super::messages::Response, ()> {
+    if !(req.device_id == super::messages::Info::PressureSelfWriterId as u32
+        || req.device_id == super::messages::Info::IdDiscover as u32)
     {
         defmt::error!("Protobuf: unknown target device id: 0x{:X}", req.device_id);
 
-        resp.Global_status = ru_sktbelpa_pressure_self_writer_STATUS_PROTOCOL_ERROR;
+        resp.global_status = super::messages::Status::ProtocolError as i32;
         return Ok(resp);
     }
 
-    if req.protocol_version != ru_sktbelpa_pressure_self_writer_INFO_PROTOCOL_VERSION {
+    if req.protocol_version != super::messages::Info::ProtocolVersion as u32 {
         defmt::warn!(
             "Protobuf: unsupported protocol version {}",
             req.protocol_version
         );
-        resp.Global_status = ru_sktbelpa_pressure_self_writer_STATUS_PROTOCOL_ERROR;
-
+        resp.global_status = super::messages::Status::ProtocolError as i32;
         return Ok(resp);
     }
 
-    if let Some(writeSettings) = req.write_settings {
-        resp.has_getSettings = true;
-        match super::process_settings::update_settings(&writeSettings) {
+    if let Some(write_settings) = req.write_settings {
+        match super::process_settings::update_settings(&write_settings) {
             Ok(need_to_write) => {
                 if let Err(e) = super::start_writing_settings(need_to_write) {
                     free_rtos_error(e);
-                    resp.Global_status =
-                        ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS;
+                    resp.global_status = super::messages::Status::ErrorsInSubcommands as i32;
                 }
             }
             Err(e) => {
                 defmt::error!("Set settings error: {}", defmt::Debug2Format(&e));
-                resp.Global_status = ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS;
+                resp.global_status = super::messages::Status::ErrorsInSubcommands as i32;
             }
         }
-        super::process_settings::fill_settings(&mut resp.getSettings)?;
+        let mut get_settings = super::messages::SettingsResponse::default();
+        super::process_settings::fill_settings(&mut get_settings)?;
+        resp.get_settings = Some(get_settings);
     }
 
-    if let Some(get_info) = req.get_info {
-        resp.has_info = true;
-        super::device_info::fill_info(&mut resp.info)?;
+    if req.get_info.is_some() {
+        let mut info = super::messages::InfoResponse::default();
+        super::device_info::fill_info(&mut info)?;
+        resp.info = Some(info);
     }
 
     if let Some(change_password) = req.change_password {
-        resp.has_changePasswordStatus = true;
-        resp.changePasswordStatus.passwordChanged =
-            match super::change_password::change_password(&change_password) {
+        resp.change_password_status = Some(super::messages::ChangePasswordStatus {
+            password_changed: match super::change_password::change_password(&change_password) {
                 Err(e) => {
                     defmt::error!("Failed to change password: {}", defmt::Debug2Format(&e));
-                    resp.Global_status =
-                        ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS;
+                    resp.global_status = super::messages::Status::ErrorsInSubcommands as i32;
                     false
                 }
                 Ok(need_save) => {
                     if let Err(e) = super::start_writing_settings(need_save) {
                         free_rtos_error(e);
-                        resp.Global_status =
-                            ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS;
+                        resp.global_status = super::messages::Status::ErrorsInSubcommands as i32;
                         false
                     } else {
                         true
                     }
                 }
-            };
+            },
+        });
     }
 
     if let Some(flash_command) = req.flash_command {
-        resp.has_flashStatus = true;
+        let mut flash_status = super::messages::FlashStatus::default();
 
         let mut reset_monitoring_failed = None;
-        if let Some(reset_monitoring) = flash_command.reset_monitoring {
+        if flash_command.reset_monitoring.is_some() {
             defmt::warn!("Reseting monitoring flags!");
             reset_monitoring_failed = if let Err(e) =
                 crate::protobuf::monitoring_over_conditions::reset_monitoring_flags()
@@ -99,7 +84,7 @@ pub fn process_requiest(
                     "Failed to perform flash operation: {}",
                     defmt::Debug2Format(&e)
                 );
-                resp.Global_status = ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS;
+                resp.global_status = super::messages::Status::ErrorsInSubcommands as i32;
                 Some(true)
             } else {
                 Some(false)
@@ -110,37 +95,37 @@ pub fn process_requiest(
                 defmt::warn!("Start clearing memory!");
                 if let Err(e) = crate::main_data_storage::flash_erease() {
                     defmt::error!("Failed to start clear memory: {}", defmt::Debug2Format(&e));
-                    resp.Global_status =
-                        ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS;
+                    resp.global_status = super::messages::Status::ErrorsInSubcommands as i32;
                 }
             }
         }
-        fill_flash_state(&mut resp.flashStatus, reset_monitoring_failed)?;
+        fill_flash_state(&mut flash_status, reset_monitoring_failed)?;
+
+        resp.flash_status = Some(flash_status);
     }
 
     if let Some(get_output_values) = req.get_output_values {
-        resp.has_output = true;
-        if let Err(_) = super::output::fill_output(&mut resp.output, &get_output_values, output) {
-            resp.Global_status = ru_sktbelpa_pressure_self_writer_STATUS_ERRORS_IN_SUBCOMMANDS;
+        let mut out = super::messages::OutputResponse::default();
+        if let Err(_) = super::output::fill_output(&mut out, &get_output_values, output) {
+            resp.global_status = super::messages::Status::ErrorsInSubcommands as i32;
         }
+        resp.output = Some(out);
     }
 
     Ok(resp)
 }
 
 fn fill_flash_state(
-    flash_status: &mut ru_sktbelpa_pressure_self_writer_FlashStatus,
+    flash_status: &mut super::messages::FlashStatus,
     reset_monitoring_failed: Option<bool>,
 ) -> Result<(), ()> {
-    use super::messages as m;
-
-    flash_status.FlashPageSize = crate::main_data_storage::flash_page_size();
+    flash_status.flash_page_size = crate::main_data_storage::flash_page_size();
 
     flash_status.status = if let Some(true) = reset_monitoring_failed {
-        m::_ru_sktbelpa_pressure_self_writer_FlashStatus_Status_ru_sktbelpa_pressure_self_writer_FlashStatus_Status_ResetMonitoringFailed
+        super::messages::flash_status::Status::ResetMonitoringFailed
     } else {
-        m::_ru_sktbelpa_pressure_self_writer_FlashStatus_Status_ru_sktbelpa_pressure_self_writer_FlashStatus_Status_OK
-    };
+        super::messages::flash_status::Status::Ok
+    } as i32;
 
     Ok(())
 }
