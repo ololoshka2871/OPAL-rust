@@ -1,7 +1,20 @@
 use defmt::{write, Format};
 use freertos_rust::{Duration, DurationTicks};
 
-use stm32l4xx_hal::{rcc::PllConfig, time::Hertz};
+use stm32l4xx_hal::{
+    rcc::{PllConfig, PllDivider},
+    time::Hertz,
+};
+
+pub fn to_pll_devider(v: u32) -> PllDivider {
+    match v {
+        2 => PllDivider::Div2,
+        4 => PllDivider::Div4,
+        6 => PllDivider::Div6,
+        8 => PllDivider::Div8,
+        _ => panic!(),
+    }
+}
 
 pub trait ClockConfigProvider {
     fn core_frequency() -> Hertz;

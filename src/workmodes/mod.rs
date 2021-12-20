@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 use freertos_rust::{FreeRtosError, Mutex};
 
 pub mod high_performance_mode;
-pub mod power_save_mode;
+pub mod recorder_mode;
 
 pub(crate) mod common;
 //mod my_clock_freeze;

@@ -4,13 +4,7 @@ use stm32l4xx_hal::gpio::{
     Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA11, PA12, PA8, PD10, PD13,
 };
 use stm32l4xx_hal::rcc::{Enable, Reset};
-use stm32l4xx_hal::{
-    adc::ADC,
-    prelude::*,
-    rcc::{PllConfig, PllDivider},
-    stm32,
-    time::Hertz,
-};
+use stm32l4xx_hal::{adc::ADC, prelude::*, rcc::PllConfig, stm32, time::Hertz};
 
 use crate::sensors::freqmeter::master_counter;
 use crate::support::{interrupt_controller::IInterruptController, InterruptController};
@@ -51,14 +45,11 @@ impl ClockConfigProvider for HighPerformanceClockConfigProvider {
     }
 
     fn pll_config() -> PllConfig {
-        let div = match PLL_CFG.2 {
-            2 => PllDivider::Div2,
-            4 => PllDivider::Div4,
-            6 => PllDivider::Div6,
-            8 => PllDivider::Div8,
-            _ => panic!(),
-        };
-        PllConfig::new(PLL_CFG.0 as u8, PLL_CFG.1 as u8, div)
+        PllConfig::new(
+            PLL_CFG.0 as u8,
+            PLL_CFG.1 as u8,
+            super::common::to_pll_devider(PLL_CFG.2),
+        )
     }
 
     fn xtal2master_freq_multiplier() -> f64 {
@@ -232,7 +223,6 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                     HighPerformanceClockConfigProvider::pll_config(),
                 )
                 .pll_source(stm32l4xx_hal::rcc::PllSource::HSE)
-                // if apb prescaler > 1 tomer clock = apb * 2
                 .pclk1(HighPerformanceClockConfigProvider::apb1_frequency())
                 .pclk2(HighPerformanceClockConfigProvider::apb2_frequency());
 

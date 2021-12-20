@@ -28,7 +28,7 @@ use support::{usb_connection_checker::UsbConnectionChecker, vusb_monitor::VUsbMo
 use crate::{
     support::free_rtos_error_ext::FreeRtosErrorContainer,
     workmodes::{
-        high_performance_mode::HighPerformanceMode, power_save_mode::PowerSaveMode, WorkMode,
+        high_performance_mode::HighPerformanceMode, recorder_mode::RecorderMode, WorkMode,
     },
 };
 
@@ -53,7 +53,7 @@ fn main() -> ! {
         start_at_mode::<HighPerformanceMode>(p, dp)
     } else {
         defmt::info!("USB not connected, self-writer mode");
-        start_at_mode::<PowerSaveMode>(p, dp)
+        start_at_mode::<RecorderMode>(p, dp)
     };
 
     start_res
