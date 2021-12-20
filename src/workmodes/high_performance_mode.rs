@@ -3,6 +3,7 @@ use freertos_rust::{Duration, Mutex, Queue, Task, TaskPriority};
 use stm32l4xx_hal::gpio::{
     Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA11, PA12, PA8, PD10, PD13,
 };
+use stm32l4xx_hal::rcc::{Enable, Reset};
 use stm32l4xx_hal::{
     adc::ADC,
     prelude::*,
@@ -20,9 +21,9 @@ use crate::workmodes::{common::ClockConfigProvider, processing::HighPerformanceP
 
 use super::{output_storage::OutputStorage, WorkMode};
 
-const PLL_CFG: (u32, u32, u32) = (3, 40, 2);
-const APB1_DEVIDER: u32 = 8;
-const APB2_DEVIDER: u32 = 8;
+const PLL_CFG: (u32, u32, u32) = (3, 40, 4);
+const APB1_DEVIDER: u32 = 4;
+const APB2_DEVIDER: u32 = 4;
 
 struct HighPerformanceClockConfigProvider;
 
@@ -220,7 +221,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             core::mem::swap(&mut cfgr, work_cfgr);
 
             let mut cfgr = cfgr
-                .hsi48(true)
+                .hsi48(false)
                 .hse(
                     Hertz(crate::config::XTAL_FREQ), // onboard crystall
                     stm32l4xx_hal::rcc::CrystalBypass::Disable,
@@ -281,6 +282,17 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             defmt::trace!("Creating Sensors Processor thread...");
             let mut delay = FreeRtosDelay {};
+            {
+                // Enable peripheral
+                stm32::ADC1::enable(&mut self.rcc.ahb2);
+
+                // Reset peripheral
+                stm32::ADC1::reset(&mut self.rcc.ahb2);
+
+                self.adc_common
+                    .ccr
+                    .modify(|_, w| unsafe { w.presc().bits(0b0100) });
+            }
             let mut adc = ADC::new(
                 self.adc,
                 self.adc_common,
@@ -288,6 +300,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 &mut self.rcc.ccipr,
                 &mut delay,
             );
+
             adc.set_sample_time(SampleTime::Cycles640_5);
             adc.set_resolution(Resolution::Bits12);
 

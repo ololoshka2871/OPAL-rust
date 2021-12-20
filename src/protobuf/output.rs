@@ -24,7 +24,7 @@ pub fn fill_output(
                 output.temperature =
                     Some(guard.values[FChannel::Temperature as usize].unwrap_or(f64::NAN) as f32);
                 output.tcpu = Some(guard.t_cpu);
-                output.vbat = Some(guard.vbat_mv as f32);
+                output.vbat = Some(guard.vbat as f32);
             }
             Err(e) => {
                 output.pressure = Some(f32::NAN);
@@ -66,7 +66,7 @@ pub fn fill_output(
                 });
 
                 output.adc_tcpu = Some(guard.t_cpu_adc as u32);
-                output.adc_vbat = Some(guard.vbat_mv_adc as u32);
+                output.adc_vbat = Some(guard.vbat_adc as u32);
             }
             Err(e) => {
                 output.p_result = Some(super::messages::FreqmeterResult::default());

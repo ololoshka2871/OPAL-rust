@@ -149,9 +149,13 @@ pub fn calc_pressure(fp: f64, output: &Mutex<OutputStorage>) {
             ws.monitoring.Ovarheat = true;
         }
 
+        let pressure = wrap_mu(pressure, ws.pressureMeassureUnits);
+
+        let pressure_fixed = pressure + ws.PZeroCorrection as f64;
+
         //defmt::trace!("Pressure {} ({}Hz)", pressure, fp);
 
-        Ok((pressure, overpress_rised))
+        Ok((pressure_fixed, overpress_rised))
     }) {
         output
             .lock(Duration::infinite())
@@ -179,9 +183,11 @@ pub fn calc_temperature(f: f64, output: &Mutex<OutputStorage>) {
             ws.monitoring.Ovarheat = true;
         }
 
+        let temperature_fixed = temperature + ws.TZeroCorrection as f64;
+
         //defmt::trace!("Temperature {} ({}Hz)", temperature, f);
 
-        Ok((temperature, overheat_rised))
+        Ok((temperature_fixed, overheat_rised))
     }) {
         output
             .lock(Duration::infinite())
@@ -239,6 +245,23 @@ fn calc_p(
     k0 + presf_minus_fp0 * (k1 + presf_minus_fp0 * (k2 + presf_minus_fp0 * k3))
 }
 
+fn wrap_mu(p: f64, mu: crate::settings::app_settings::PressureMeassureUnits) -> f64 {
+    use crate::settings::app_settings::PressureMeassureUnits;
+
+    let multiplier = match mu {
+        PressureMeassureUnits::INVALID_ZERO => panic!(),
+        PressureMeassureUnits::Pa => 100000.0,
+        PressureMeassureUnits::Bar => 1.0,
+        PressureMeassureUnits::At => 1.0197162,
+        PressureMeassureUnits::mmH20 => 10197.162,
+        PressureMeassureUnits::mHg => 750.06158 / 1000.0,
+        PressureMeassureUnits::Atm => 0.98692327,
+        PressureMeassureUnits::PSI => 14.5,
+    };
+
+    p * multiplier
+}
+
 pub fn process_t_cpu(
     output: &Mutex<OutputStorage>,
     current_period_ticks: u32,
@@ -292,22 +315,21 @@ pub fn process_vbat(
     static mut VBAT_UNDER_MONITOR: OverMonitor<{ Ordering::Less }> = OverMonitor(0);
 
     if let Ok((vbat, overvoltage_raised, undervoltage_detected, mt)) = read_settings(|(ws, _)| {
-        let v_bat = vbat_input_mv as u32
+        let v_bat = vbat_input_mv as f32 / 1000.0
             * (crate::config::VBAT_DEVIDER_R1 + crate::config::VBAT_DEVIDER_R2)
             / crate::config::VBAT_DEVIDER_R2;
 
         let overvoltage =
-            unsafe { VBAT_OVER_MONITOR.check(v_bat as f32, ws.VbatWorkRange.absolute_maximum) };
+            unsafe { VBAT_OVER_MONITOR.check(v_bat, ws.VbatWorkRange.absolute_maximum) };
         let overvoltage_raised = overvoltage && !ws.monitoring.OverPower;
         if overvoltage {
             ws.monitoring.OverPower = true;
         }
 
-        let undervoltage =
-            unsafe { VBAT_UNDER_MONITOR.check(v_bat as f32, ws.VbatWorkRange.minimum) };
+        let undervoltage = unsafe { VBAT_UNDER_MONITOR.check(v_bat, ws.VbatWorkRange.minimum) };
 
         Ok((
-            v_bat as u32,
+            v_bat,
             overvoltage_raised,
             undervoltage,
             min(ws.PMesureTime_ms, ws.TMesureTime_ms),
@@ -318,8 +340,8 @@ pub fn process_vbat(
         output
             .lock(Duration::infinite())
             .map(|mut guard| {
-                guard.vbat_mv = vbat;
-                guard.vbat_mv_adc = raw;
+                guard.vbat = vbat;
+                guard.vbat_adc = raw;
             })
             .unwrap();
 
