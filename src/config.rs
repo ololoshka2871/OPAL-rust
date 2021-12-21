@@ -36,6 +36,9 @@ pub const MONITOR_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 1;
 /// sensor processor task prio
 pub const SENS_PROC_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 1;
 
+// recorder controller task prio
+pub const RECORDER_CTRL_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 2;
+
 //-----------------------------------------------------------------------------
 
 pub const INITIAL_FREQMETER_TARGET: u32 = 50;
@@ -45,6 +48,10 @@ pub const INITIAL_FREQMETER_TARGET: u32 = 50;
 // generator enable/disable lvls
 pub const GENERATOR_ENABLE_LVL: PinState = PinState::High;
 pub const GENERATOR_DISABLE_LVL: PinState = PinState::Low;
+
+// Led
+pub const LED_DISABLE: PinState = PinState::High;
+pub const LED_ENABLE: PinState = PinState::Low;
 
 //-----------------------------------------------------------------------------
 
@@ -59,3 +66,13 @@ pub const OVER_LIMIT_COUNT: u32 = 5;
 
 pub const VBAT_DEVIDER_R1: f32 = 100_000.0;
 pub const VBAT_DEVIDER_R2: f32 = 91_000.0;
+
+//-----------------------------------------------------------------------------
+
+pub const START_BLINK_COUNT: u32 = 5;
+pub const START_BLINK_PERIOD_MS: u32 = 1000;
+
+//-----------------------------------------------------------------------------
+
+// включать счетчики за 2 периода измерения
+pub const PREHEAT_MULTIPLIER: u32 = 2;

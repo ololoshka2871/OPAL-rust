@@ -1,10 +1,13 @@
+use alloc::sync::Arc;
 use defmt::{write, Format};
-use freertos_rust::{Duration, DurationTicks};
+use freertos_rust::{Duration, DurationTicks, Mutex};
 
 use stm32l4xx_hal::{
     rcc::{PllConfig, PllDivider},
     time::Hertz,
 };
+
+use super::output_storage::OutputStorage;
 
 pub fn to_pll_devider(v: u32) -> PllDivider {
     match v {
@@ -67,14 +70,17 @@ pub fn print_clock_config(clocks: &Option<stm32l4xx_hal::rcc::Clocks>, usb_state
     }
 }
 
-pub fn create_monitor(_sysclk: Hertz) -> Result<(), freertos_rust::FreeRtosError> {
+pub fn create_monitor(
+    _sysclk: Hertz,
+    _output: Arc<Mutex<OutputStorage>>,
+) -> Result<(), freertos_rust::FreeRtosError> {
     #[cfg(feature = "monitor")]
     #[cfg(debug_assertions)]
     {
         use crate::threads;
         use freertos_rust::{Task, TaskPriority};
 
-        static MONITOR_STACK_SIZE: u16 = 384;
+        static MONITOR_STACK_SIZE: u16 = 640;
         pub static MONITOR_MSG_PERIOD: u32 = 1000;
 
         defmt::trace!("Creating monitor thread...");
@@ -83,8 +89,26 @@ pub fn create_monitor(_sysclk: Hertz) -> Result<(), freertos_rust::FreeRtosError
             .name("Monitord")
             .stack_size(MONITOR_STACK_SIZE)
             .priority(TaskPriority(crate::config::MONITOR_TASK_PRIO))
-            .start(move |_| threads::monitor::monitord(monitoring_period))?;
+            .start(move |_| threads::monitor::monitord(monitoring_period, _output))?;
     }
 
     Ok(())
+}
+
+pub fn create_pseudo_idle_task() -> Result<freertos_rust::Task, freertos_rust::FreeRtosError> {
+    #[cfg(debug_assertions)]
+    {
+        use freertos_rust::{Task, TaskPriority};
+
+        defmt::trace!("Creating pseudo-idle thread...");
+        Task::new()
+            .name("T_IDLE")
+            .stack_size(48)
+            .priority(TaskPriority(crate::config::PSEOUDO_IDLE_TASK_PRIO))
+            .start(move |_| loop {
+                unsafe {
+                    freertos_rust::freertos_rs_isr_yield();
+                }
+            })
+    }
 }

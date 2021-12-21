@@ -56,7 +56,7 @@ impl<const O: Ordering> OverMonitor<O> {
     }
 }
 
-fn read_settings<F, R>(f: F) -> Result<R, freertos_rust::FreeRtosError>
+pub(crate) fn read_settings<F, R>(f: F) -> Result<R, freertos_rust::FreeRtosError>
 where
     F: FnMut((&mut AppSettings, &mut NonStoreSettings)) -> Result<R, ()>,
 {
@@ -78,6 +78,10 @@ fn mt_getter(ch: FChannel) -> Result<f64, freertos_rust::FreeRtosError> {
         })
     })
     .map(|fref| fref as f64)
+}
+
+pub fn recorder_start_delay() -> Result<u32, freertos_rust::FreeRtosError> {
+    read_settings(|(ws, _)| Ok(ws.startDelay))
 }
 
 pub fn channel_config(ch: FChannel) -> Result<ChannelConfig, freertos_rust::FreeRtosError> {
@@ -130,13 +134,10 @@ pub fn calc_new_target(
 
 //---------------------------------------------------------------------------------------
 
-pub fn calc_pressure(fp: f64, output: &Mutex<OutputStorage>) {
+pub fn calc_pressure(fp: f64, output: &mut OutputStorage) {
     static mut P_OVER_MONITOR: OverMonitor<{ Ordering::Greater }> = OverMonitor(0);
 
-    let ft = output
-        .lock(Duration::infinite())
-        .map(|guard| guard.values[FChannel::Temperature as usize])
-        .unwrap();
+    let ft = output.values[FChannel::Temperature as usize];
 
     if let Ok((t, overpress_rised)) = read_settings(|(ws, _)| {
         let pressure = calc_p(fp, ft, &ws.P_Coefficients, ws.T_enabled);
@@ -157,10 +158,7 @@ pub fn calc_pressure(fp: f64, output: &Mutex<OutputStorage>) {
 
         Ok((pressure_fixed, overpress_rised))
     }) {
-        output
-            .lock(Duration::infinite())
-            .map(|mut guard| guard.values[FChannel::Pressure as usize] = Some(t))
-            .unwrap();
+        output.values[FChannel::Pressure as usize] = Some(t);
 
         if overpress_rised {
             defmt::error!("Pressure: Overpress detected!");
@@ -170,7 +168,7 @@ pub fn calc_pressure(fp: f64, output: &Mutex<OutputStorage>) {
     }
 }
 
-pub fn calc_temperature(f: f64, output: &Mutex<OutputStorage>) {
+pub fn calc_temperature(f: f64, output: &mut OutputStorage) {
     static mut T_OVER_MONITOR: OverMonitor<{ Ordering::Greater }> = OverMonitor(0);
 
     if let Ok((t, overheat_rised)) = read_settings(|(ws, _)| {
@@ -189,10 +187,7 @@ pub fn calc_temperature(f: f64, output: &Mutex<OutputStorage>) {
 
         Ok((temperature_fixed, overheat_rised))
     }) {
-        output
-            .lock(Duration::infinite())
-            .map(|mut guard| guard.values[FChannel::Temperature as usize] = Some(t))
-            .unwrap();
+        output.values[FChannel::Temperature as usize] = Some(t);
 
         if overheat_rised {
             defmt::error!("Temperature: Overheat detected!");
@@ -378,4 +373,10 @@ pub fn abs_difference<T: Sub<Output = T> + Ord>(x: T, y: T) -> T {
     } else {
         x - y
     }
+}
+
+/// Вечный сон
+pub fn halt_cpu() -> ! {
+    cortex_m::interrupt::free(|_| cortex_m::asm::wfi());
+    loop {}
 }

@@ -1,20 +1,25 @@
 use alloc::sync::Arc;
 use freertos_rust::{Duration, Mutex, Task, TaskPriority};
 use stm32l4xx_hal::{
-    gpio::{Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA8, PD10, PD13},
+    adc::ADC,
+    gpio::{Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA8, PD0, PD10, PD13},
     prelude::*,
-    rcc::PllConfig,
+    rcc::{Enable, PllConfig, Reset},
+    stm32,
     stm32l4::stm32l4x3::Peripherals,
     time::Hertz,
 };
 
+/*
 use heatshrink_rust::decoder::HeatshrinkDecoder;
 use heatshrink_rust::encoder::HeatshrinkEncoder;
+*/
 
 use crate::{
     sensors::freqmeter::master_counter,
     support::{interrupt_controller::IInterruptController, InterruptController},
-    threads,
+    threads::{self, free_rtos_delay::FreeRtosDelay},
+    workmodes::processing::RecorderProcessor,
 };
 
 use super::{common::ClockConfigProvider, output_storage::OutputStorage, WorkMode};
@@ -89,9 +94,9 @@ pub struct RecorderMode {
     adc_common: stm32l4xx_hal::device::ADC_COMMON,
     vbat_pin: PA1<Analog>,
 
-    sensor_command_queue: Arc<freertos_rust::Queue<threads::sensor_processor::Command>>,
+    led_pin: PD0<Output<PushPull>>,
 
-    output: Arc<Mutex<OutputStorage>>,
+    sensor_command_queue: Arc<freertos_rust::Queue<threads::sensor_processor::Command>>,
 }
 
 impl WorkMode<RecorderMode> for RecorderMode {
@@ -154,9 +159,16 @@ impl WorkMode<RecorderMode> for RecorderMode {
             adc_common: dp.ADC_COMMON,
             vbat_pin: gpioa.pa1.into_analog(&mut gpioa.moder, &mut gpioa.pupdr),
 
-            sensor_command_queue: Arc::new(freertos_rust::Queue::new(7).unwrap()),
+            led_pin: gpiod
+                .pd0
+                .into_push_pull_output_in_state(
+                    &mut gpiod.moder,
+                    &mut gpiod.otyper,
+                    crate::config::LED_DISABLE,
+                )
+                .set_speed(Speed::Low),
 
-            output: Arc::new(Mutex::new(OutputStorage::default()).unwrap()),
+            sensor_command_queue: Arc::new(freertos_rust::Queue::new(7).unwrap()),
         }
     }
 
@@ -176,7 +188,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
     // Установить частоту CPU = 12 MHz
     // USB не тактируется
     fn configure_clock(&mut self) {
-        fn setut_cfgr(work_cfgr: &mut stm32l4xx_hal::rcc::CFGR) {
+        fn setup_cfgr(work_cfgr: &mut stm32l4xx_hal::rcc::CFGR) {
             let mut cfgr = unsafe {
                 core::mem::MaybeUninit::<stm32l4xx_hal::rcc::CFGR>::zeroed().assume_init()
             };
@@ -202,7 +214,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
             core::mem::swap(&mut cfgr, work_cfgr);
         }
 
-        setut_cfgr(&mut self.rcc.cfgr);
+        setup_cfgr(&mut self.rcc.cfgr);
 
         let clocks = if let Ok(mut flash) = self.flash.lock(Duration::infinite()) {
             self.rcc.cfgr.freeze(&mut flash.acr, &mut self.pwr)
@@ -219,7 +231,85 @@ impl WorkMode<RecorderMode> for RecorderMode {
         self.clocks = Some(clocks);
     }
 
-    fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
+    fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
+        let output = Arc::new(Mutex::new(OutputStorage::default()).unwrap());
+
+        {
+            use stm32l4xx_hal::adc::{Resolution, SampleTime};
+
+            defmt::trace!("Creating Sensors Processor thread...");
+            let mut delay = FreeRtosDelay {};
+            {
+                // Enable peripheral
+                stm32::ADC1::enable(&mut self.rcc.ahb2);
+
+                // Reset peripheral
+                stm32::ADC1::reset(&mut self.rcc.ahb2);
+
+                self.adc_common
+                    .ccr
+                    .modify(|_, w| unsafe { w.presc().bits(0b0100) });
+            }
+            let mut adc = ADC::new(
+                self.adc,
+                self.adc_common,
+                &mut self.rcc.ahb2,
+                &mut self.rcc.ccipr,
+                &mut delay,
+            );
+
+            adc.set_sample_time(SampleTime::Cycles640_5);
+            adc.set_resolution(Resolution::Bits12);
+
+            let tcpu_ch = adc.enable_temperature(&mut delay);
+            let v_ref = adc.enable_vref(&mut delay);
+
+            let sp = threads::sensor_processor::SensorPerith {
+                timer1: self.timer1,
+                timer1_dma_ch: self.dma1_ch6,
+                timer1_pin: self.in_p,
+                en_1: self.en_p,
+
+                timer2: self.timer2,
+                timer2_dma_ch: self.dma1_ch2,
+                timer2_pin: self.in_t,
+                en_2: self.en_t,
+
+                vbat_pin: self.vbat_pin,
+                tcpu_ch: tcpu_ch,
+                v_ref: v_ref,
+
+                adc: adc,
+            };
+            let cq = self.sensor_command_queue.clone();
+            let ic = self.interrupt_controller.clone();
+            let mut processor = RecorderProcessor::new(
+                output.clone(),
+                self.sensor_command_queue.clone(),
+                RecorderClockConfigProvider::xtal2master_freq_multiplier(),
+                self.clocks.unwrap().sysclk(),
+            );
+
+            processor.start(
+                crate::main_data_storage::test_writer::TestWriter {},
+                self.led_pin,
+            )?;
+
+            Task::new()
+                .name("SensProc")
+                .stack_size(1024)
+                .priority(TaskPriority(crate::config::SENS_PROC_TASK_PRIO))
+                .start(move |_| {
+                    threads::sensor_processor::sensor_processor(sp, cq, ic, processor)
+                })?;
+        }
+        // --------------------------------------------------------------------
+
+        crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk(), output.clone())?;
+
+        super::common::create_pseudo_idle_task()?;
+
+        /*
         {
             Task::new()
                 .name("hs-test")
@@ -238,8 +328,8 @@ impl WorkMode<RecorderMode> for RecorderMode {
                     }
                 })?;
         }
-        // ---
-        crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk())?;
+        */
+
         Ok(())
     }
 

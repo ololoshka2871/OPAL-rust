@@ -1,4 +1,12 @@
-pub fn monitord<D: freertos_rust::DurationTicks>(period: D) -> ! {
+use alloc::sync::Arc;
+use freertos_rust::{Duration, Mutex};
+
+use crate::{threads::sensor_processor::FChannel, workmodes::output_storage::OutputStorage};
+
+pub fn monitord<D: freertos_rust::DurationTicks>(
+    period: D,
+    _output: Arc<Mutex<OutputStorage>>,
+) -> ! {
     use alloc::{format, string::ToString};
     use defmt::Display2Format;
     use freertos_rust::{CriticalRegion, FreeRtosSchedulerState, FreeRtosUtils};
@@ -65,6 +73,30 @@ pub fn monitord<D: freertos_rust::DurationTicks>(period: D) -> ! {
                     .as_str(),
                 );
             }
+        }
+
+        #[cfg(feature = "monitor-output")]
+        {
+            // Output: | P   | T (*C) | TCPU (*C) | Vbat (v)
+            // Output: |    0.100 |    1.000 |   32.890 |    3.360
+
+            static M_HEADER: &str = "\nOutput: | P         | T (*C)    | TCPU (*C) | Vbat (v)\n";
+            stat.push_str(M_HEADER);
+            _output
+                .lock(Duration::infinite())
+                .map(|out| {
+                    stat.push_str(
+                        format!(
+                            "Output: | {P:<9.3} | {T:<9.3} | {TCPU:<9.3} | {VBAT:<8.3}\n",
+                            P = out.values[FChannel::Pressure as usize].unwrap_or(f64::NAN),
+                            T = out.values[FChannel::Temperature as usize].unwrap_or(f64::NAN),
+                            TCPU = out.t_cpu,
+                            VBAT = out.vbat,
+                        )
+                        .as_str(),
+                    );
+                })
+                .unwrap();
         }
 
         defmt::info!("{}", Display2Format(&stat));

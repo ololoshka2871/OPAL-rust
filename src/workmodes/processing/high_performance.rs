@@ -1,3 +1,5 @@
+use core::ops::DerefMut;
+
 use alloc::sync::Arc;
 use freertos_rust::{Duration, Mutex};
 use stm32l4xx_hal::{adc::ADC, time::Hertz};
@@ -46,10 +48,16 @@ impl RawValueProcessor for HighPerformanceProcessor {
                         guard.frequencys[ch as usize] = Some(f);
                     }
 
-                    match ch {
-                        FChannel::Pressure => super::calc_pressure(f, self.output.as_ref()),
-                        FChannel::Temperature => super::calc_temperature(f, self.output.as_ref()),
-                    }
+                    self.output
+                        .lock(Duration::infinite())
+                        .map(|mut g| {
+                            let o = g.deref_mut();
+                            match ch {
+                                FChannel::Pressure => super::calc_pressure(f, o),
+                                FChannel::Temperature => super::calc_temperature(f, o),
+                            }
+                        })
+                        .unwrap();
 
                     if let Ok((new_target, guard_ticks)) =
                         super::calc_new_target(ch, f, &self.sysclk)

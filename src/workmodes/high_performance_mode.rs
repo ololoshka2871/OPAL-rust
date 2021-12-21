@@ -3,8 +3,13 @@ use freertos_rust::{Duration, Mutex, Queue, Task, TaskPriority};
 use stm32l4xx_hal::gpio::{
     Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA11, PA12, PA8, PD10, PD13,
 };
-use stm32l4xx_hal::rcc::{Enable, Reset};
-use stm32l4xx_hal::{adc::ADC, prelude::*, rcc::PllConfig, stm32, time::Hertz};
+use stm32l4xx_hal::{
+    adc::ADC,
+    prelude::*,
+    rcc::{Enable, PllConfig, Reset},
+    stm32,
+    time::Hertz,
+};
 
 use crate::sensors::freqmeter::master_counter;
 use crate::support::{interrupt_controller::IInterruptController, InterruptController};
@@ -331,23 +336,14 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         }
         // --------------------------------------------------------------------
 
-        crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk())?;
+        crate::workmodes::common::create_monitor(
+            self.clocks.unwrap().sysclk(),
+            self.output.clone(),
+        )?;
 
-        #[cfg(debug_assertions)]
-        {
-            defmt::trace!("Creating pseudo-idle thread...");
-            Task::new()
-                .name("T_IDLE")
-                .stack_size(48)
-                .priority(TaskPriority(crate::config::PSEOUDO_IDLE_TASK_PRIO))
-                .start(move |_| loop {
-                    unsafe {
-                        freertos_rust::freertos_rs_isr_yield();
-                    }
-                })?;
-        }
+        super::common::create_pseudo_idle_task()?;
 
-        enable_selected_channels(&self.sensor_command_queue);
+        enable_selected_channels(self.sensor_command_queue.as_ref());
 
         Ok(())
     }
@@ -365,7 +361,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     }
 }
 
-fn enable_selected_channels(cq: &Arc<Queue<Command>>) {
+pub fn enable_selected_channels(cq: &Queue<Command>) {
     use crate::threads::sensor_processor::{AChannel, Channel, FChannel};
     use freertos_rust::FreeRtosError;
 

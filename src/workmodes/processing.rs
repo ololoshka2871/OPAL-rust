@@ -3,6 +3,8 @@ use crate::{
     threads::sensor_processor::{AChannel, FChannel},
 };
 
+use stm32l4xx_hal::adc::ADC;
+
 pub trait RawValueProcessor {
     /// Процессинг:
     /// а. кладет результат в выходные значения
@@ -32,9 +34,13 @@ pub trait RawValueProcessor {
 mod common;
 pub use common::{
     abs_difference, calc_freq, calc_new_target, calc_pressure, calc_temperature, channel_config,
-    guard_ticks, process_t_cpu, process_vbat,
+    guard_ticks, halt_cpu, process_t_cpu, process_vbat, recorder_start_delay,
 };
+
+pub(crate) use common::read_settings;
 
 mod high_performance;
 pub use high_performance::HighPerformanceProcessor;
-use stm32l4xx_hal::adc::ADC;
+
+mod recorder_processor;
+pub use recorder_processor::RecorderProcessor;

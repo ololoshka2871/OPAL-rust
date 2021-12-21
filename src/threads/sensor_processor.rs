@@ -194,12 +194,12 @@ where
     //----------------------------------------------------
 
     let cc = command_queue.clone();
-    let mut t_cpu = AnalogChannel::new(AChannel::TCPU, perith.tcpu_ch, 100, move || {
+    let mut t_cpu = AnalogChannel::new(AChannel::TCPU, perith.tcpu_ch, 1, move || {
         send_command(cc.as_ref(), Command::ReadAChannel(AChannel::TCPU))
     });
 
     let cc = command_queue.clone();
-    let mut vbat = AnalogChannel::new(AChannel::Vbat, perith.vbat_pin, 100, move || {
+    let mut vbat = AnalogChannel::new(AChannel::Vbat, perith.vbat_pin, 1, move || {
         send_command(cc.as_ref(), Command::ReadAChannel(AChannel::Vbat))
     });
 
