@@ -80,7 +80,7 @@ pub fn create_monitor(
         use crate::threads;
         use freertos_rust::{Task, TaskPriority};
 
-        static MONITOR_STACK_SIZE: u16 = 640;
+        static MONITOR_STACK_SIZE: u16 = 840;
         pub static MONITOR_MSG_PERIOD: u32 = 1000;
 
         defmt::trace!("Creating monitor thread...");
