@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
-use freertos_rust::{Duration, Mutex};
+use freertos_rust::Mutex;
 
-use crate::{threads::sensor_processor::FChannel, workmodes::output_storage::OutputStorage};
+use crate::workmodes::output_storage::OutputStorage;
 
 pub fn monitord<D: freertos_rust::DurationTicks>(
     period: D,
@@ -77,6 +77,9 @@ pub fn monitord<D: freertos_rust::DurationTicks>(
 
         #[cfg(feature = "monitor-output")]
         {
+            use crate::threads::sensor_processor::FChannel;
+            use freertos_rust::Duration;
+
             // Output: | P   | T (*C) | TCPU (*C) | Vbat (v)
             // Output: |    0.100 |    1.000 |   32.890 |    3.360
 

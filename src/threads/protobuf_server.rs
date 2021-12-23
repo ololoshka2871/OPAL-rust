@@ -118,7 +118,7 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
             print_error(e);
         }
 
-        defmt::info!("Protobuf: message id = {} processed succesfully", id);
+        defmt::trace!("Protobuf: message id = {} processed succesfully", id);
     }
 }
 

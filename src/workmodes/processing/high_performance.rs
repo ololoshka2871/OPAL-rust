@@ -40,6 +40,7 @@ impl RawValueProcessor for HighPerformanceProcessor {
             if config.enabled {
                 if let Ok(mut guard) = self.output.lock(Duration::infinite()) {
                     guard.targets[ch as usize] = target;
+                    //result = super::unwrap_result(wraped, guard.results[ch as usize], result);
                     guard.results[ch as usize] = Some(result);
                 }
 

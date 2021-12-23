@@ -197,6 +197,22 @@ pub fn calc_temperature(f: f64, output: &mut OutputStorage) {
     }
 }
 
+/*
+pub fn unwrap_result(wraped: bool, prev_res: Option<u32>, mut result: u32) -> u32 {
+    if wraped {
+        // анализ результата: Если он меньше чем прошлый на величину около 0x10000 +/- 500
+        // то делаем поправку
+        if let Some(oldres) = prev_res {
+            let diff = (oldres as i64 - result as i64).abs();
+            if diff < 0x10000 + 500 && diff > 0x10000 - 500 {
+                result -= 0x10000;
+            }
+        }
+    }
+    result
+}
+*/
+
 //-----------------------------------------------------------------------------
 
 fn calc_t(f: f64, coeffs: &crate::settings::app_settings::T5Coeffs) -> f64 {

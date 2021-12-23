@@ -1,7 +1,10 @@
+use core::usize;
+
 use alloc::{
     format,
     string::{String, ToString},
 };
+
 use freertos_rust::Duration;
 use my_proc_macro::store_coeff;
 
@@ -12,6 +15,16 @@ static MIN_MT: u32 = 10;
 
 static F_REF_BASE: u32 = 16000000;
 static F_REF_DELTA: u32 = 500;
+
+fn strlenn(str: &[u8], max: usize) -> usize {
+    let max_scan = core::cmp::min(str.len(), max);
+    for i in 0..max_scan {
+        if str[i] == b'\0' {
+            return i;
+        }
+    }
+    max
+}
 
 pub fn fill_settings(settings_resp: &mut super::messages::SettingsResponse) -> Result<(), ()> {
     crate::settings::settings_action(Duration::ms(1), |(ws, ts)| {
@@ -47,7 +60,10 @@ pub fn fill_settings(settings_resp: &mut super::messages::SettingsResponse) -> R
 
         settings_resp.pressure_meassure_units = ws.pressureMeassureUnits as i32;
 
-        settings_resp.password = String::from_utf8_lossy(&ts.current_password).to_string();
+        settings_resp.password = String::from_utf8_lossy(
+            &ts.current_password[..strlenn(&ts.current_password, PASSWORD_SIZE)],
+        )
+        .to_string();
 
         Ok(())
     })
@@ -327,8 +343,11 @@ pub fn update_settings(
         }
 
         if let Some(set_password) = &w.set_password {
-            ts.current_password
-                .copy_from_slice(&set_password[..PASSWORD_SIZE].as_bytes());
+            ts.current_password.copy_from_slice(set_password.as_bytes());
+            let newlen = set_password.len();
+            if newlen < PASSWORD_SIZE {
+                ts.current_password[newlen..].fill(b'\0');
+            }
         }
 
         Ok(need_write)

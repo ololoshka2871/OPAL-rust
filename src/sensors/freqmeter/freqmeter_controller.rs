@@ -86,6 +86,7 @@ where
                 let diff = if self.prev <= captured {
                     captured - self.prev
                 } else {
+                    //defmt::warn!("Master overflow");
                     u32::MAX - self.prev + captured
                 };
                 self.prev = captured;

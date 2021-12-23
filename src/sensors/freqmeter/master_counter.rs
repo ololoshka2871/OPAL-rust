@@ -62,7 +62,7 @@ impl MasterCounter {
         if v == 0 {
             self.counter.start();
             self.counter
-                .enable_interrupt(&*self.interrupt_controller, true);
+                .enable_interrupt(self.interrupt_controller.as_ref(), true);
         }
     }
 
@@ -70,7 +70,7 @@ impl MasterCounter {
         let v = self.want_enable_counter.fetch_sub(1, Ordering::Relaxed);
         if v == 1 {
             self.counter
-                .enable_interrupt(&*self.interrupt_controller, false);
+                .enable_interrupt(self.interrupt_controller.as_ref(), false);
             self.counter.stop();
         }
     }
@@ -85,21 +85,26 @@ impl MasterCounter {
                 // тогда если в захваченном значении был флаг, но "сейчас" уже нет
                 // прерывание было выполнено до конца, а если и был и есть - оно не выполнено
                 // и надо давать +1 к значению расширителя
+                self.counter
+                    .clear_interrupt(self.interrupt_controller.as_ref());
                 self.extander = self.extander.wrapping_add(1);
-                self.counter.clear_interrupt(&*self.interrupt_controller);
             });
         }
     }
 
     fn wrap_result_if_ovf_common(&self, mut value: u32) -> (u32, u32, bool) {
         let mut was_wraped = false;
-        let mut ext = self.extander;
+        let ext = self.extander;
         if let Some(mask) = self.counter.uif_cpy_mask() {
-            if value & mask == mask && self.counter.is_irq_pending(&*self.interrupt_controller) {
-                value &= !mask;
-                ext = ext.wrapping_add(1);
+            if (value & mask != 0)
+                || self
+                    .counter
+                    .is_irq_pending(self.interrupt_controller.as_ref())
+            {
+                //ext = ext.wrapping_add(1);
                 was_wraped = true;
             }
+            value &= !mask;
         }
         (ext, value, was_wraped)
     }

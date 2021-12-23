@@ -11,7 +11,7 @@ pub const XTAL_FREQ: u32 = 12_000_000;
 pub const IRQ_HIGEST_PRIO: u8 = 80;
 
 /// master counter interrupt prio
-pub const MASTER_COUNTER_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 20;
+pub const MASTER_COUNTER_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 10;
 
 /// USB interrupt ptiority
 pub const USB_INTERRUPT_PRIO: u8 = MASTER_COUNTER_INTERRUPT_PRIO + 1;

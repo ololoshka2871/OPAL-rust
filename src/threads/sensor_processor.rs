@@ -216,32 +216,33 @@ where
                 Command::Stop(Channel::FChannel(c)) => p_channels[c as usize].diasble(),
                 Command::Stop(Channel::AChannel(c)) => a_channels[c as usize].stop(),
                 Command::ReadyFChannel(c, ev, target, captured, wraped) => {
-                    if wraped {
-                        defmt::warn!("Ch: {}, wrap detected", c);
-                    }
-
                     let ch = &mut p_channels[c as usize];
+                    if wraped {
+                        // трюки с компенсацией не надежны. Перезапускаем цыкл и все
+                        defmt::warn!("Ch. {}, wraped, restart", c);
+                        ch.restart();
+                    } else {
+                        if let Some(result) = ch.input_captured(ev, captured) {
+                            let (continue_work, new_target) =
+                                processor.process_f_result(c, target, result);
 
-                    if let Some(result) = ch.input_captured(ev, captured) {
-                        let (continue_work, new_target) =
-                            processor.process_f_result(c, target, result);
+                            if let Some((nt, mt)) = new_target {
+                                ch.set_target(nt, mt);
+                            }
 
-                        if let Some((nt, mt)) = new_target {
-                            ch.set_target(nt, mt);
-                        }
-
-                        if continue_work {
-                            if cfg!(feature = "freqmeter-start-stop") {
-                                ch.restart();
+                            if continue_work {
+                                if cfg!(feature = "freqmeter-start-stop") {
+                                    ch.restart();
+                                } else {
+                                    ch.reset_guard();
+                                }
                             } else {
-                                ch.reset_guard();
+                                ch.diasble();
                             }
                         } else {
-                            ch.diasble();
+                            #[cfg(not(feature = "freqmeter-start-stop"))]
+                            defmt::trace!("Ch. {}, result not ready", c)
                         }
-                    } else {
-                        #[cfg(not(feature = "freqmeter-start-stop"))]
-                        defmt::trace!("Ch. {}, result not ready", c)
                     }
                 }
                 Command::ReadAChannel(c) => {
