@@ -1,5 +1,6 @@
 pub(crate) mod app_settings;
 mod flash_rw_polcy;
+mod store_async;
 
 use core::ops::DerefMut;
 
@@ -14,6 +15,8 @@ use freertos_rust::{Duration, DurationTicks, FreeRtosError, Mutex};
 use my_proc_macro::{build_day, build_month, build_year};
 
 use self::{app_settings::NonStoreSettings, flash_rw_polcy::Placeholder};
+
+pub use store_async::start_writing_settings;
 
 static DEFAULT_SETTINGS: AppSettings = AppSettings {
     Serial: 0,
@@ -168,7 +171,7 @@ where
 }
 */
 
-pub(crate) fn settings_save<D>(duration: D) -> Result<(), FreeRtosError>
+fn settings_save<D>(duration: D) -> Result<(), FreeRtosError>
 where
     D: DurationTicks,
 {

@@ -11,10 +11,6 @@ pub struct EMfatStorage {
     fstable: Vec<emfat_entry>,
 }
 
-struct StaticTextData {
-    data: &'static str,
-}
-
 struct StaticBinData {
     data: &'static [u8],
 }
@@ -26,12 +22,14 @@ static README: &str = "# СКТБ \"ЭЛПА\": Автономный регис�
 Этот виртуальный диск предоставляет доступ к содержимому внутреннего накопителя устройства.\n\
 \r\n\
 - Для расшифровки содержимого используйте программу %TODO%.\r\n\
-- Драйвер для виртуального последовательного порта: driver.inf (Windows 7). \n\r
+- Драйвер для виртуального последовательного порта: driver.inf (Windows 7).\r\n
 - Коэффициенты полиномов для рассчета находятся в файле config.var (формат json)\r\n\
 - Информация о занятой памяти в файле storage.var (формат json)\r\n\
 - Для управление функционалом устройства используйте программу KalibratorGUI\r\n";
 
-static README_INFO: StaticTextData = StaticTextData { data: README };
+static README_INFO: StaticBinData = StaticBinData {
+    data: README.as_bytes(),
+};
 
 static DRIVER: &[u8; 1536] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -39,20 +37,6 @@ static DRIVER: &[u8; 1536] = include_bytes!(concat!(
 ));
 
 static DRIVER_INFO: StaticBinData = StaticBinData { data: DRIVER };
-
-unsafe extern "C" fn const_text_reader(dest: *mut u8, size: i32, offset: u32, userdata: usize) {
-    let dptr = &*(userdata as *const StaticTextData);
-    if offset as usize > dptr.data.len() {
-        return;
-    }
-    let to_read = if offset as usize + size as usize > dptr.data.len() {
-        dptr.data.len() - offset as usize
-    } else {
-        size as usize
-    };
-
-    core::ptr::copy_nonoverlapping(dptr.data.as_ptr().add(offset as usize), dest, to_read);
-}
 
 unsafe extern "C" fn const_binary_reader(dest: *mut u8, size: i32, offset: u32, userdata: usize) {
     let dptr = &*(userdata as *const StaticBinData);
@@ -178,8 +162,8 @@ impl EMfatStorage {
                 .offset(0)
                 .size(README.len())
                 .max_size(README.len())
-                .read_cb(const_text_reader)
-                .user_data(&README_INFO as *const StaticTextData as usize)
+                .read_cb(const_binary_reader)
+                .user_data(&README_INFO as *const StaticBinData as usize)
                 .build(),
         );
 

@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
 use freertos_rust::{FreeRtosError, Mutex};
 
-use crate::workmodes::output_storage::OutputStorage;
+use crate::{settings::start_writing_settings, workmodes::output_storage::OutputStorage};
 
 pub fn process_requiest(
     req: super::messages::Request,
@@ -29,7 +29,7 @@ pub fn process_requiest(
     if let Some(write_settings) = req.write_settings {
         match super::process_settings::update_settings(&write_settings) {
             Ok(need_to_write) => {
-                if let Err(e) = super::start_writing_settings(need_to_write) {
+                if let Err(e) = start_writing_settings(need_to_write) {
                     free_rtos_error(e);
                     resp.global_status = super::messages::Status::ErrorsInSubcommands as i32;
                 }
@@ -59,7 +59,7 @@ pub fn process_requiest(
                     false
                 }
                 Ok(need_save) => {
-                    if let Err(e) = super::start_writing_settings(need_save) {
+                    if let Err(e) = start_writing_settings(need_save) {
                         free_rtos_error(e);
                         resp.global_status = super::messages::Status::ErrorsInSubcommands as i32;
                         false

@@ -162,8 +162,7 @@ pub fn calc_pressure(fp: f64, output: &mut OutputStorage) {
 
         if overpress_rised {
             defmt::error!("Pressure: Overpress detected!");
-            let _ = crate::settings::settings_save(Duration::ms(50))
-                .map_err(|_| unsafe { P_OVER_MONITOR.mast_retry() });
+            let _ = crate::settings::start_writing_settings(true);
         }
     }
 }
@@ -191,8 +190,7 @@ pub fn calc_temperature(f: f64, output: &mut OutputStorage) {
 
         if overheat_rised {
             defmt::error!("Temperature: Overheat detected!");
-            let _ = crate::settings::settings_save(Duration::ms(50))
-                .map_err(|_| unsafe { T_OVER_MONITOR.mast_retry() });
+            let _ = crate::settings::start_writing_settings(true);
         }
     }
 }
@@ -305,9 +303,7 @@ pub fn process_t_cpu(
 
         if overheat_rised {
             defmt::error!("CPU Temperature: Overheat detected!");
-
-            let _ = crate::settings::settings_save(Duration::ms(50))
-                .map_err(|_| unsafe { TCPU_OVER_MONITOR.mast_retry() });
+            let _ = crate::settings::start_writing_settings(true);
         }
 
         return (true, analog_period(current_period_ticks, t_mt, sys_clk));
@@ -358,9 +354,7 @@ pub fn process_vbat(
 
         if overvoltage_raised {
             defmt::error!("Vbat overvoltage detected!");
-
-            let _ = crate::settings::settings_save(Duration::ms(50))
-                .map_err(|_| unsafe { VBAT_OVER_MONITOR.mast_retry() });
+            let _ = crate::settings::start_writing_settings(true);
         }
         return (
             !undervoltage_detected,
