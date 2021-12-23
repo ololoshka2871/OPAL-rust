@@ -81,7 +81,7 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
 
     startDelay: 0,
 
-    pressureMeassureUnits: app_settings::PressureMeassureUnits::At,
+    pressureMeassureUnits: app_settings::PressureMeassureUnits::Bar,
 
     password: *b"_PASSWORD_",
 

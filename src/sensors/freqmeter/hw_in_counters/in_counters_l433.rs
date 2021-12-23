@@ -468,8 +468,9 @@ fn set_cb<CB: 'static + OnCycleFinished>(cb: &mut Option<DmaCb>, f: CB) {
     *cb = Some(Box::new(f));
 }
 
+// Обнаружено, что фактически значение должно быть на 1 больше
 fn as_target32(prescaler: u32, reload: u32) -> u32 {
-    (prescaler + 1) * reload
+    (prescaler + 1) * reload + 1
 }
 
 fn transform_target32(mut target: u32) -> (u32, u32) {
