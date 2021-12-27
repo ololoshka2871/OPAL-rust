@@ -1,12 +1,13 @@
+mod callbacks;
+mod static_data;
+
 use core::usize;
 
-use alloc::{string::String, vec::Vec};
+use alloc::vec::Vec;
 
 use emfat_rust::{emfat_entry, emfat_t, EntryBuilder};
 
-use freertos_rust::Duration;
-use heatshrink_rust::{decoder::HeatshrinkDecoder, CompressedData};
-use heatshrink_rust_macro::{packed_file, packed_string};
+use heatshrink_rust::CompressedData;
 use my_proc_macro::c_str;
 use usbd_scsi::{BlockDevice, BlockDeviceError};
 
@@ -15,136 +16,11 @@ pub struct EMfatStorage {
     fstable: Vec<emfat_entry>,
 }
 
-/*
 struct StaticBinData {
     data: &'static [u8],
 }
-*/
 
 // terminate strings with '\0' c_str("text") for strlen() compatible
-
-static README_COMPRESSED: CompressedData = packed_string!(
-    r#"# СКТБ "ЭЛПА": Автономный регистратор давления
-
-Этот виртуальный диск предоставляет доступ к содержимому внутреннего накопителя устройства.
-
-- Для расшифровки содержимого используйте программу %TODO%.
-- Драйвер для виртуального последовательного порта: driver.inf (Windows 7).
-- Коэффициенты полиномов для рассчета находятся в файле config.var (формат json)
-- Информация о занятой памяти в файле storage.var (формат json)
-- Для управление функционалом устройства используйте программу KalibratorGUI
-"#
-);
-
-static DRIVER_INF_COMPRESSED: CompressedData = packed_file!("stm32-USB-Self-writer.inf");
-
-/*
-unsafe extern "C" fn const_binary_reader(dest: *mut u8, size: i32, offset: u32, userdata: usize) {
-    let dptr = &*(userdata as *const StaticBinData);
-    if offset as usize > dptr.data.len() {
-        return;
-    }
-    let to_read = if offset as usize + size as usize > dptr.data.len() {
-        dptr.data.len() - offset as usize
-    } else {
-        size as usize
-    };
-
-    core::ptr::copy_nonoverlapping(dptr.data.as_ptr().add(offset as usize), dest, to_read);
-}
-*/
-
-unsafe extern "C" fn unpack_reader(dest: *mut u8, size: i32, offset: u32, userdata: usize) {
-    let dptr = &*(userdata as *const CompressedData);
-    if offset as usize > dptr.original_size {
-        return;
-    }
-    let to_read = if (offset as usize + size as usize) > dptr.original_size {
-        dptr.original_size - offset as usize
-    } else {
-        size as usize
-    };
-
-    HeatshrinkDecoder::source(dptr.data.iter().cloned())
-        .skip(offset as usize)
-        .take(to_read)
-        .enumerate()
-        .for_each(|(n, d)| *dest.add(n) = d);
-}
-
-//unsafe extern "C" fn null_read(_dest: *mut u8, _size: i32, _offset: u32, _userdata: usize) {}
-
-unsafe fn store_block_data(s: String, dest: *mut u8, size: i32, _offset: u32) {
-    let src = s.as_bytes();
-    let offset = _offset as usize;
-    if src.len() > offset {
-        let src = &src[offset..];
-        let to_write = core::cmp::min(size as usize, src.len());
-        core::ptr::copy_nonoverlapping(src.as_ptr(), dest, to_write);
-
-        // забиваем буфер пробелами до конца, чтобы в блокноте он нормально выглядел
-        core::ptr::write_bytes(dest.add(src.len()), b' ', size as usize - to_write);
-    } else {
-        // все пробелами забить
-        core::ptr::write_bytes(dest, b' ', size as usize);
-    }
-}
-
-unsafe extern "C" fn settings_read(dest: *mut u8, size: i32, offset: u32, _userdata: usize) {
-    match crate::settings::settings_action(Duration::ms(5), |(ws, _)| {
-        serde_json::to_string_pretty(&ws)
-    }) {
-        Ok(s) => store_block_data(s, dest, size, offset),
-        Err(crate::settings::SettingActionError::AccessError(e)) => {
-            defmt::error!("Failed to serialise settings: {}", defmt::Debug2Format(&e));
-        }
-        Err(crate::settings::SettingActionError::ActionError(e)) => {
-            defmt::error!(
-                "Failed to serialise settings: {}",
-                defmt::Display2Format(&e)
-            );
-        }
-    }
-}
-
-unsafe extern "C" fn meminfo_read(dest: *mut u8, size: i32, offset: u32, _userdata: usize) {
-    use serde::Serialize;
-
-    #[allow(non_snake_case)]
-    #[derive(Serialize)]
-    struct MemInfo {
-        FlashPageSize: u32,
-        FlashPages: u32,
-        FlashUsedPages: u32,
-    }
-
-    let info = MemInfo {
-        FlashPageSize: crate::main_data_storage::flash_page_size(),
-        FlashPages: 0,
-        FlashUsedPages: 0,
-    };
-
-    match serde_json::to_string_pretty(&info) {
-        Ok(s) => store_block_data(s, dest, size, offset),
-        Err(e) => defmt::error!(
-            "Failed to serialise flash info: {}",
-            defmt::Display2Format(&e)
-        ),
-    }
-}
-
-/*
-unsafe extern "C" fn master_read(dest: *mut u8, _size: i32, _offset: u32, userdata: usize) {
-    let boxed = alloc::boxed::Box::from_raw(
-        userdata as *mut crate::sensors::freqmeter::master_counter::MasterTimerInfo,
-    );
-
-    let s = alloc::format!("0x{:08X}", boxed.value());
-    core::ptr::copy_nonoverlapping(s.as_ptr(), dest, s.len());
-
-    core::mem::forget(boxed);
-}
-*/
 
 impl EMfatStorage {
     pub fn new(disk_label: &str) -> EMfatStorage {
@@ -157,6 +33,9 @@ impl EMfatStorage {
     }
 
     fn build_files_table() -> Vec<emfat_entry> {
+        use callbacks::{meminfo_read, settings_read, unpack_reader};
+        use static_data::{DRIVER_INF_COMPRESSED, PROTO_COMPRESSED, README_COMPRESSED};
+
         defmt::trace!("EmFat: Registring virtual files:");
 
         let mut res: Vec<emfat_entry> = Vec::new();
@@ -198,6 +77,20 @@ impl EMfatStorage {
                 .max_size(DRIVER_INF_COMPRESSED.original_size)
                 .read_cb(unpack_reader)
                 .user_data(&DRIVER_INF_COMPRESSED as *const CompressedData as usize)
+                .build(),
+        );
+
+        defmt::trace!("EmFat: .. /proto.prt");
+        res.push(
+            EntryBuilder::new()
+                .name(c_str!("proto.prt"))
+                .dir(false)
+                .lvl(1)
+                .offset(0)
+                .size(PROTO_COMPRESSED.original_size)
+                .max_size(PROTO_COMPRESSED.original_size)
+                .read_cb(unpack_reader)
+                .user_data(&PROTO_COMPRESSED as *const CompressedData as usize)
                 .build(),
         );
 
