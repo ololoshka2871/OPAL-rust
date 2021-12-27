@@ -47,13 +47,14 @@ impl FlasRWPolcy {
 
     // https://docs.rs/stm32l4xx-hal/0.6.0/stm32l4xx_hal/crc/index.html
     fn crc(&mut self, data: &[u8]) -> u32 {
-        if let Ok(mut crc_guard) = self.crc.lock(Duration::infinite()) {
-            crc_guard.reset();
-            crc_guard.feed(data);
-            crc_guard.result()
-        } else {
-            panic!("Failed to lock crc module");
-        }
+        self.crc
+            .lock(Duration::infinite())
+            .map(|mut crc_guard| {
+                crc_guard.reset();
+                crc_guard.feed(data);
+                crc_guard.result()
+            })
+            .expect("Failed to lock crc module")
     }
 }
 
@@ -61,27 +62,28 @@ impl StoragePolicy<flash::Error> for FlasRWPolcy {
     unsafe fn store(&mut self, data: &[u8]) -> Result<(), flash::Error> {
         let current_crc = [self.crc(data) as u64];
 
-        if let Ok(mut flash_guard) = self.flash.lock(Duration::infinite()) {
-            let flash = flash_guard.deref_mut();
-            let mut prog = flash.keyr.unlock_flash(&mut flash.sr, &mut flash.cr)?;
+        self.flash
+            .lock(Duration::infinite())
+            .map(|mut flash_guard| {
+                let flash = flash_guard.deref_mut();
+                let mut prog = flash.keyr.unlock_flash(&mut flash.sr, &mut flash.cr)?;
 
-            let len_in_u64_aligned = Self::len_in_u64_aligned(data);
+                let len_in_u64_aligned = Self::len_in_u64_aligned(data);
 
-            prog.erase_page(self.page)?;
-            prog.write_native(
-                self.page.to_address(),
-                ::core::slice::from_raw_parts(data.as_ptr() as *const u64, len_in_u64_aligned),
-            )?;
+                prog.erase_page(self.page)?;
+                prog.write_native(
+                    self.page.to_address(),
+                    ::core::slice::from_raw_parts(data.as_ptr() as *const u64, len_in_u64_aligned),
+                )?;
 
-            prog.write_native(
-                self.page.to_address() + len_in_u64_aligned * ::core::mem::size_of::<u64>(),
-                &current_crc,
-            )?;
+                prog.write_native(
+                    self.page.to_address() + len_in_u64_aligned * ::core::mem::size_of::<u64>(),
+                    &current_crc,
+                )?;
 
-            Ok(())
-        } else {
-            panic!("Failed to lock flash")
-        }
+                Ok(())
+            })
+            .expect("Failed to lock flash")
     }
 
     unsafe fn load(

@@ -1,8 +1,12 @@
+use core::usize;
+
 use alloc::{string::String, vec::Vec};
 
 use emfat_rust::{emfat_entry, emfat_t, EntryBuilder};
 
 use freertos_rust::Duration;
+use heatshrink_rust::{decoder::HeatshrinkDecoder, CompressedData};
+use heatshrink_rust_macro::{packed_file, packed_string};
 use my_proc_macro::c_str;
 use usbd_scsi::{BlockDevice, BlockDeviceError};
 
@@ -11,33 +15,30 @@ pub struct EMfatStorage {
     fstable: Vec<emfat_entry>,
 }
 
+/*
 struct StaticBinData {
     data: &'static [u8],
 }
+*/
 
 // terminate strings with '\0' c_str("text") for strlen() compatible
 
-static README: &str = "# СКТБ \"ЭЛПА\": Автономный регистратор давления\r\n\
-\r\n\
-Этот виртуальный диск предоставляет доступ к содержимому внутреннего накопителя устройства.\n\
-\r\n\
-- Для расшифровки содержимого используйте программу %TODO%.\r\n\
-- Драйвер для виртуального последовательного порта: driver.inf (Windows 7).\r\n
-- Коэффициенты полиномов для рассчета находятся в файле config.var (формат json)\r\n\
-- Информация о занятой памяти в файле storage.var (формат json)\r\n\
-- Для управление функционалом устройства используйте программу KalibratorGUI\r\n";
+static README_COMPRESSED: CompressedData = packed_string!(
+    r#"# СКТБ "ЭЛПА": Автономный регистратор давления
 
-static README_INFO: StaticBinData = StaticBinData {
-    data: README.as_bytes(),
-};
+Этот виртуальный диск предоставляет доступ к содержимому внутреннего накопителя устройства.
 
-static DRIVER: &[u8; 1536] = include_bytes!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/stm32-USB-Self-writer.inf"
-));
+- Для расшифровки содержимого используйте программу %TODO%.
+- Драйвер для виртуального последовательного порта: driver.inf (Windows 7).
+- Коэффициенты полиномов для рассчета находятся в файле config.var (формат json)
+- Информация о занятой памяти в файле storage.var (формат json)
+- Для управление функционалом устройства используйте программу KalibratorGUI
+"#
+);
 
-static DRIVER_INFO: StaticBinData = StaticBinData { data: DRIVER };
+static DRIVER_INF_COMPRESSED: CompressedData = packed_file!("stm32-USB-Self-writer.inf");
 
+/*
 unsafe extern "C" fn const_binary_reader(dest: *mut u8, size: i32, offset: u32, userdata: usize) {
     let dptr = &*(userdata as *const StaticBinData);
     if offset as usize > dptr.data.len() {
@@ -50,6 +51,25 @@ unsafe extern "C" fn const_binary_reader(dest: *mut u8, size: i32, offset: u32, 
     };
 
     core::ptr::copy_nonoverlapping(dptr.data.as_ptr().add(offset as usize), dest, to_read);
+}
+*/
+
+unsafe extern "C" fn unpack_reader(dest: *mut u8, size: i32, offset: u32, userdata: usize) {
+    let dptr = &*(userdata as *const CompressedData);
+    if offset as usize > dptr.original_size {
+        return;
+    }
+    let to_read = if (offset as usize + size as usize) > dptr.original_size {
+        dptr.original_size - offset as usize
+    } else {
+        size as usize
+    };
+
+    HeatshrinkDecoder::source(dptr.data.iter().cloned())
+        .skip(offset as usize)
+        .take(to_read)
+        .enumerate()
+        .for_each(|(n, d)| *dest.add(n) = d);
 }
 
 //unsafe extern "C" fn null_read(_dest: *mut u8, _size: i32, _offset: u32, _userdata: usize) {}
@@ -160,10 +180,10 @@ impl EMfatStorage {
                 .dir(false)
                 .lvl(1)
                 .offset(0)
-                .size(README.len())
-                .max_size(README.len())
-                .read_cb(const_binary_reader)
-                .user_data(&README_INFO as *const StaticBinData as usize)
+                .size(README_COMPRESSED.original_size)
+                .max_size(README_COMPRESSED.original_size)
+                .read_cb(unpack_reader)
+                .user_data(&README_COMPRESSED as *const CompressedData as usize)
                 .build(),
         );
 
@@ -174,10 +194,10 @@ impl EMfatStorage {
                 .dir(false)
                 .lvl(1)
                 .offset(0)
-                .size(DRIVER.len())
-                .max_size(DRIVER.len())
-                .read_cb(const_binary_reader)
-                .user_data(&DRIVER_INFO as *const StaticBinData as usize)
+                .size(DRIVER_INF_COMPRESSED.original_size)
+                .max_size(DRIVER_INF_COMPRESSED.original_size)
+                .read_cb(unpack_reader)
+                .user_data(&DRIVER_INF_COMPRESSED as *const CompressedData as usize)
                 .build(),
         );
 

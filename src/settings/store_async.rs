@@ -13,7 +13,7 @@ pub fn start_writing_settings(realy_write: bool) -> Result<(), FreeRtosError> {
 
     defmt::warn!("Save settings rquested...");
 
-    let saver = |_| {
+    let saver = move |_| {
         if let Err(e) = crate::settings::settings_save(Duration::infinite()) {
             defmt::error!("Failed to store settings: {}", defmt::Debug2Format(&e));
         }
