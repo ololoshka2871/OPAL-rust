@@ -76,3 +76,6 @@ pub const START_BLINK_PERIOD_MS: u32 = 1000;
 
 // включать счетчики за 2 периода измерения
 pub const PREHEAT_MULTIPLIER: u32 = 2;
+
+// Экспериментальное значение, время с подачи питания до запуска генератора
+pub const GEN_COLD_STARTUP_TIME_MS: u32 = 100;

@@ -1,4 +1,4 @@
-use core::ops::DerefMut;
+use core::{cmp::max, ops::DerefMut};
 
 use alloc::sync::Arc;
 use freertos_rust::{CurrentTask, Duration, FreeRtosError, Mutex, Queue, Task, TaskPriority};
@@ -55,10 +55,16 @@ impl RecorderProcessor {
             ch_cfg: super::read_settings(|(ws, _)| {
                 Ok(FChCfg {
                     p_preheat_time_ms: sysclk
-                        .duration_ms(ws.PMesureTime_ms * crate::config::PREHEAT_MULTIPLIER)
+                        .duration_ms(max(
+                            ws.PMesureTime_ms * crate::config::PREHEAT_MULTIPLIER,
+                            crate::config::GEN_COLD_STARTUP_TIME_MS,
+                        ))
                         .to_ms(),
                     t_preheat_time_ms: sysclk
-                        .duration_ms(ws.TMesureTime_ms * crate::config::PREHEAT_MULTIPLIER)
+                        .duration_ms(max(
+                            ws.TMesureTime_ms * crate::config::PREHEAT_MULTIPLIER,
+                            crate::config::GEN_COLD_STARTUP_TIME_MS,
+                        ))
                         .to_ms(),
                     p_write_period_ms: sysclk
                         .duration_ms(ws.writeConfig.BaseInterval_ms * ws.writeConfig.PWriteDevider)
@@ -305,12 +311,6 @@ impl RawValueProcessor for RecorderProcessor {
             guard.results[ch as usize] = Some(result);
         }
 
-        // продолжить работу, только если интервал записи меньше или равен времени прогрева канала
-        let continue_work = match ch {
-            FChannel::Pressure => self.ch_cfg.p_preheat_time_ms < self.ch_cfg.p_write_period_ms,
-            FChannel::Temperature => self.ch_cfg.t_preheat_time_ms < self.ch_cfg.t_write_period_ms,
-        };
-
         if unsafe {
             self.adaptate_f
                 .lock(Duration::infinite())
@@ -331,7 +331,18 @@ impl RawValueProcessor for RecorderProcessor {
 
             (true, new_cfg)
         } else {
-            (continue_work, None)
+            (
+                // продолжить работу, только если интервал записи меньше или равен времени прогрева канала
+                match ch {
+                    FChannel::Pressure => {
+                        self.ch_cfg.p_preheat_time_ms < self.ch_cfg.p_write_period_ms
+                    }
+                    FChannel::Temperature => {
+                        self.ch_cfg.t_preheat_time_ms < self.ch_cfg.t_write_period_ms
+                    }
+                },
+                None,
+            )
         }
     }
 

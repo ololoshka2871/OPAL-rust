@@ -166,7 +166,7 @@ where
         processor
             .process_f_signal_lost(ch, crate::config::INITIAL_FREQMETER_TARGET)
             .1
-            .unwrap()
+            .expect("Initial target mast be provided!")
             .1
     };
 

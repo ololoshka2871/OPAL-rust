@@ -30,7 +30,9 @@ where
     fn enable(&mut self) {
         self.set_lvl(crate::config::GENERATOR_ENABLE_LVL);
         self.start = true;
-        //freertos_rust::CurrentTask::delay(freertos_rust::Duration::ms(10));
+        freertos_rust::CurrentTask::delay(freertos_rust::Duration::ms(
+            crate::config::GEN_COLD_STARTUP_TIME_MS,
+        ));
         self.freqmeter.cold_start();
         let _ = self.no_signal_guard.start(Duration::infinite());
     }
