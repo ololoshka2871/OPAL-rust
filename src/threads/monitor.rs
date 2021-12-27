@@ -85,21 +85,18 @@ pub fn monitord<D: freertos_rust::DurationTicks>(
 
             static M_HEADER: &str = "\nOutput: | P         | T (*C)    | TCPU (*C) | Vbat (v)\n";
             stat.push_str(M_HEADER);
-            _output
-                .lock(Duration::infinite())
-                .map(|out| {
-                    stat.push_str(
-                        format!(
-                            "Output: | {P:<9.3} | {T:<9.3} | {TCPU:<9.3} | {VBAT:<8.3}\n",
-                            P = out.values[FChannel::Pressure as usize].unwrap_or(f64::NAN),
-                            T = out.values[FChannel::Temperature as usize].unwrap_or(f64::NAN),
-                            TCPU = out.t_cpu,
-                            VBAT = out.vbat,
-                        )
-                        .as_str(),
-                    );
-                })
-                .unwrap();
+            let _ = _output.lock(Duration::infinite()).map(|out| {
+                stat.push_str(
+                    format!(
+                        "Output: | {P:<9.3} | {T:<9.3} | {TCPU:<9.3} | {VBAT:<8.3}\n",
+                        P = out.values[FChannel::Pressure as usize].unwrap_or(f64::NAN),
+                        T = out.values[FChannel::Temperature as usize].unwrap_or(f64::NAN),
+                        TCPU = out.t_cpu,
+                        VBAT = out.vbat,
+                    )
+                    .as_str(),
+                );
+            });
         }
 
         defmt::info!("{}", Display2Format(&stat));

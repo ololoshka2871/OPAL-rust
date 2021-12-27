@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use super::{data_page::DataPage, write_controller::WriteController};
 
 pub struct TestWriter;
@@ -5,14 +7,14 @@ pub struct TestWriter;
 pub struct TestDataPage;
 
 impl DataPage for TestDataPage {
-    fn write_header(&mut self, output: &crate::workmodes::output_storage::OutputStorage) {
+    fn write_header(&mut self, _output: &crate::workmodes::output_storage::OutputStorage) {
         todo!()
     }
 
     fn push_data(
         &mut self,
-        result: Option<u32>,
-        channel: crate::threads::sensor_processor::FChannel,
+        _result: Option<u32>,
+        _channel: crate::threads::sensor_processor::FChannel,
     ) -> bool {
         todo!()
     }
@@ -27,7 +29,7 @@ impl WriteController<TestDataPage> for TestWriter {
         todo!()
     }
 
-    fn start_write(&mut self, page: TestDataPage) -> super::write_controller::PageWriteResult {
+    fn start_write(&mut self, _page: TestDataPage) -> super::write_controller::PageWriteResult {
         todo!()
     }
 }

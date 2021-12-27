@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 
 pub fn start_writing_settings(realy_write: bool) -> Result<(), FreeRtosError> {
     lazy_static! {
-        static ref TIMER: Mutex<Option<Timer>> = Mutex::new(None).unwrap();
+        static ref TIMER: Mutex<Option<Timer>> = crate::support::new_global_mutex();
     };
 
     if !realy_write {
@@ -18,10 +18,9 @@ pub fn start_writing_settings(realy_write: bool) -> Result<(), FreeRtosError> {
             defmt::error!("Failed to store settings: {}", defmt::Debug2Format(&e));
         }
 
-        TIMER
+        let _ = TIMER
             .lock(Duration::infinite())
-            .map(|mut guard| *guard = None)
-            .unwrap();
+            .map(|mut guard| *guard = None);
     };
 
     let timer = Timer::new(Duration::ms(1))
@@ -30,7 +29,7 @@ pub fn start_writing_settings(realy_write: bool) -> Result<(), FreeRtosError> {
         .create(saver)?;
 
     TIMER.lock(Duration::infinite()).map(|mut guard| {
-        timer.start(Duration::infinite()).unwrap();
+        let _ = timer.start(Duration::infinite());
         *guard = Some(timer);
     })?;
 

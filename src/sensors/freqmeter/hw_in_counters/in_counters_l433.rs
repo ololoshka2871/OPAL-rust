@@ -476,6 +476,8 @@ fn as_target32(prescaler: u32, reload: u32) -> u32 {
 fn transform_target32(mut target: u32) -> (u32, u32) {
     if target < 3 {
         target = 3;
+    } else {
+        target -= 1;
     }
     for prescaler in 1..u16::MAX as u32 {
         let reload = target / prescaler;

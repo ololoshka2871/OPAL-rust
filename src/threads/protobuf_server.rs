@@ -64,9 +64,11 @@ impl<'a, B: usb_device::bus::UsbBus> SerialStream<'a, B> {
     }
 
     fn block_thread() {
-        let _ = freertos_rust::Task::current()
-            .unwrap()
-            .take_notification(true, Duration::infinite());
+        unsafe {
+            let _ = freertos_rust::Task::current()
+                .unwrap_unchecked()
+                .take_notification(true, Duration::infinite());
+        }
     }
 }
 

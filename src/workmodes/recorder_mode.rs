@@ -287,7 +287,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
                 output.clone(),
                 self.sensor_command_queue.clone(),
                 RecorderClockConfigProvider::xtal2master_freq_multiplier(),
-                self.clocks.unwrap().sysclk(),
+                unsafe { self.clocks.unwrap_unchecked().sysclk() },
             );
 
             processor.start(
@@ -305,7 +305,10 @@ impl WorkMode<RecorderMode> for RecorderMode {
         }
         // --------------------------------------------------------------------
 
-        crate::workmodes::common::create_monitor(self.clocks.unwrap().sysclk(), output.clone())?;
+        crate::workmodes::common::create_monitor(
+            unsafe { self.clocks.unwrap_unchecked().sysclk() },
+            output.clone(),
+        )?;
 
         super::common::create_pseudo_idle_task()?;
 

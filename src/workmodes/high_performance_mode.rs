@@ -20,9 +20,10 @@ use crate::workmodes::{common::ClockConfigProvider, processing::HighPerformanceP
 
 use super::{output_storage::OutputStorage, WorkMode};
 
-const PLL_CFG: (u32, u32, u32) = (3, 40, 4);
-const APB1_DEVIDER: u32 = 4;
-const APB2_DEVIDER: u32 = 4;
+// /PD *M /AD
+const PLL_CFG: (u32, u32, u32) = (3, 40, 2);
+const APB1_DEVIDER: u32 = 8;
+const APB2_DEVIDER: u32 = 8;
 
 struct HighPerformanceClockConfigProvider;
 
@@ -324,7 +325,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             let processor = HighPerformanceProcessor::new(
                 self.output.clone(),
                 HighPerformanceClockConfigProvider::xtal2master_freq_multiplier(),
-                self.clocks.unwrap().sysclk(),
+                unsafe { self.clocks.unwrap_unchecked().sysclk() },
             );
             Task::new()
                 .name("SensProc")
@@ -337,7 +338,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         // --------------------------------------------------------------------
 
         crate::workmodes::common::create_monitor(
-            self.clocks.unwrap().sysclk(),
+            unsafe { self.clocks.unwrap_unchecked().sysclk() },
             self.output.clone(),
         )?;
 

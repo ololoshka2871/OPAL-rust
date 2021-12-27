@@ -25,14 +25,14 @@ pub struct MasterTimerInfo {
 static mut MATSTER_COUNTER: Option<MasterCounter> = None;
 
 impl MasterCounter {
-    pub fn allocate() -> Result<MasterTimerInfo, ()> {
+    pub fn acquire() -> MasterTimerInfo {
         if unsafe { MATSTER_COUNTER.is_none() } {
-            Err(())
+            panic!("Master counter acquire before init");
         } else {
-            Ok(MasterTimerInfo {
-                master: unsafe { MATSTER_COUNTER.as_mut().unwrap() },
+            MasterTimerInfo {
+                master: unsafe { MATSTER_COUNTER.as_mut().unwrap_unchecked() },
                 wanted_start: false,
-            })
+            }
         }
     }
 
@@ -181,6 +181,6 @@ impl Drop for MasterTimerInfo {
 
 pub(crate) unsafe fn master_ovf(id: u32) {
     if MATSTER_COUNTER.is_some() {
-        MATSTER_COUNTER.as_mut().unwrap().ovf_irq(id)
+        MATSTER_COUNTER.as_mut().unwrap_unchecked().ovf_irq(id)
     }
 }

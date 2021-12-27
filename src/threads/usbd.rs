@@ -37,7 +37,7 @@ pub fn usbd(
     defmt::info!("Usb thread started!");
 
     unsafe {
-        USBD_THREAD = Some(freertos_rust::Task::current().unwrap());
+        USBD_THREAD = Some(freertos_rust::Task::current().unwrap_unchecked());
     }
 
     defmt::info!("Creating usb low-level driver: PA11, PA12, AF10");
@@ -53,7 +53,7 @@ pub fn usbd(
 
     defmt::info!("Allocating SCSI device");
     let mut scsi = Scsi::new(
-        unsafe { USB_BUS.as_ref().unwrap() }, //&usb_bus,
+        unsafe { USB_BUS.as_ref().unwrap_unchecked() }, //&usb_bus,
         64, // для устройств full speed: max_packet_size 8, 16, 32 or 64
         EMfatStorage::new(c_str!("LOGGER")),
         "SCTB", // <= max 8 больших букв
@@ -62,20 +62,21 @@ pub fn usbd(
     );
 
     defmt::info!("Allocating ACM device");
-    let serial = SerialPort::new(unsafe { USB_BUS.as_ref().unwrap() });
+    let serial = SerialPort::new(unsafe { USB_BUS.as_ref().unwrap_unchecked() });
 
     let serial_container =
         Arc::new(Mutex::new(serial).expect("Failed to create serial guard mutex"));
 
     let vid_pid = UsbVidPid(0x0483, 0x5720);
     defmt::info!("Building usb device: vid={} pid={}", &vid_pid.0, &vid_pid.1);
-    let mut usb_dev = UsbDeviceBuilder::new(unsafe { USB_BUS.as_ref().unwrap() }, vid_pid)
-        .manufacturer("SCTB ELPA")
-        .product("Pressure self-registrator")
-        .serial_number("0123456789")
-        //.device_class(0) // Это не нужно для композита
-        .composite_with_iads()
-        .build();
+    let mut usb_dev =
+        UsbDeviceBuilder::new(unsafe { USB_BUS.as_ref().unwrap_unchecked() }, vid_pid)
+            .manufacturer("SCTB ELPA")
+            .product("Pressure self-registrator")
+            .serial_number("0123456789")
+            //.device_class(0) // Это не нужно для композита
+            .composite_with_iads()
+            .build();
 
     defmt::trace!("Set usb interrupt prio = {}", interrupt_prio);
     interrupt_controller.set_priority(Interrupt::USB_FS.into(), interrupt_prio);
@@ -106,10 +107,12 @@ pub fn usbd(
             interrupt_controller.unpend(Interrupt::USB_FS.into());
             interrupt_controller.unmask(Interrupt::USB_FS.into());
 
-            let _ = freertos_rust::Task::current()
-                .unwrap()
-                // ожидаем, что нотификационное значение будет > 0
-                .take_notification(true, Duration::infinite());
+            unsafe {
+                let _ = freertos_rust::Task::current()
+                    .unwrap_unchecked()
+                    // ожидаем, что нотификационное значение будет > 0
+                    .take_notification(true, Duration::infinite());
+            }
 
             interrupt_controller.mask(Interrupt::USB_FS.into());
         } else {

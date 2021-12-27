@@ -79,8 +79,8 @@ pub fn fill_output(
         }
     }
 
-    if err.is_some() {
-        Err(err.unwrap())
+    if let Some(err) = err {
+        Err(err)
     } else {
         Ok(())
     }

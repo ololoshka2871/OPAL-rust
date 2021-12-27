@@ -59,17 +59,17 @@ impl WorkRange {
 
     pub(crate) fn validate(&self) -> Result<(), WorkRangeError> {
         if let Some(absolute_maximum) = self.absolute_maximum {
-            if self.maximum.is_some() && absolute_maximum < self.maximum.unwrap() {
+            if self.maximum.is_some() && absolute_maximum < self.maximum.unwrap_or_default() {
                 return Err(WorkRangeError::MaximumAboveAbasoluteMaximum);
             }
-            if self.minimum.is_some() && absolute_maximum < self.minimum.unwrap() {
+            if self.minimum.is_some() && absolute_maximum < self.minimum.unwrap_or_default() {
                 return Err(WorkRangeError::MinimumAboveAbsoluteMaximum);
             }
         }
 
         if self.maximum.is_some()
             && self.minimum.is_some()
-            && (self.maximum.unwrap() < self.minimum.unwrap())
+            && (self.maximum.unwrap_or_default() < self.minimum.unwrap_or_default())
         {
             return Err(WorkRangeError::MinimumAboveMaximum);
         }
@@ -97,8 +97,10 @@ impl CalibrationDate {
     pub fn validate(&self) -> Result<(), DateField> {
         use my_proc_macro::{build_day, build_month, build_year};
 
-        if self.day.is_some() && self.day.unwrap() > 31 {
-            return Err(DateField::Day);
+        if let Some(day) = self.day {
+            if day > 31 {
+                return Err(DateField::Day);
+            }
         }
         if let Some(month) = self.month {
             if month > 12 || month < 1 {
@@ -110,9 +112,10 @@ impl CalibrationDate {
                 return Err(DateField::Past);
             }
             if self.day.is_some() && self.month.is_some() {
-                if self.month.unwrap() < build_month!() {
+                if self.month.unwrap_or_default() < build_month!() {
                     return Err(DateField::Past);
-                } else if self.month.unwrap() == build_month!() && self.day.unwrap() < build_day!()
+                } else if self.month.unwrap_or_default() == build_month!()
+                    && self.day.unwrap_or_default() < build_day!()
                 {
                     return Err(DateField::Past);
                 }

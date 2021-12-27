@@ -4,7 +4,7 @@ use freertos_rust::{Duration, Mutex};
 use stm32l4xx_hal::time::Hertz;
 
 use crate::{
-    settings::{app_settings::NonStoreSettings, AppSettings, SettingActionError},
+    settings::{app_settings::NonStoreSettings, AppSettings},
     threads::sensor_processor::FChannel,
     workmodes::{common::HertzExt, output_storage::OutputStorage},
 };
@@ -56,35 +56,33 @@ impl<const O: Ordering> OverMonitor<O> {
     }
 }
 
-pub(crate) fn read_settings<F, R>(f: F) -> Result<R, freertos_rust::FreeRtosError>
+pub(crate) fn read_settings<F, R>(f: F) -> R
 where
     F: FnMut((&mut AppSettings, &mut NonStoreSettings)) -> Result<R, ()>,
 {
-    crate::settings::settings_action::<_, _, _, ()>(Duration::ms(1), f).map_err(|e| match e {
-        SettingActionError::AccessError(e) => e,
-        SettingActionError::ActionError(_) => unreachable!(),
-    })
+    unsafe {
+        crate::settings::settings_action::<_, _, _, ()>(Duration::infinite(), f).unwrap_unchecked()
+    }
 }
 
-fn fref_getter() -> Result<f64, freertos_rust::FreeRtosError> {
-    read_settings(|(ws, _)| Ok(ws.Fref)).map(|fref| fref as f64)
+fn fref_getter() -> f64 {
+    read_settings(|(ws, _)| Ok(ws.Fref)) as f64
 }
 
-fn mt_getter(ch: FChannel) -> Result<f64, freertos_rust::FreeRtosError> {
+fn mt_getter(ch: FChannel) -> f64 {
     read_settings(|(ws, _)| {
         Ok(match ch {
             FChannel::Pressure => ws.PMesureTime_ms,
             FChannel::Temperature => ws.TMesureTime_ms,
         })
-    })
-    .map(|fref| fref as f64)
+    }) as f64
 }
 
-pub fn recorder_start_delay() -> Result<u32, freertos_rust::FreeRtosError> {
+pub fn recorder_start_delay() -> u32 {
     read_settings(|(ws, _)| Ok(ws.startDelay))
 }
 
-pub fn channel_config(ch: FChannel) -> Result<ChannelConfig, freertos_rust::FreeRtosError> {
+pub fn channel_config(ch: FChannel) -> ChannelConfig {
     read_settings(|(ws, _)| {
         Ok(match ch {
             FChannel::Pressure => ChannelConfig {
@@ -97,15 +95,9 @@ pub fn channel_config(ch: FChannel) -> Result<ChannelConfig, freertos_rust::Free
     })
 }
 
-pub fn calc_freq(
-    fref_multiplier: f64,
-    target: u32,
-    diff: u32,
-) -> Result<f64, freertos_rust::FreeRtosError> {
-    let fref = fref_multiplier * fref_getter()?;
-    let f = fref * target as f64 / diff as f64;
-
-    Ok(f)
+pub fn calc_freq(fref_multiplier: f64, target: u32, diff: u32) -> f64 {
+    let fref = fref_multiplier * fref_getter();
+    fref * target as f64 / diff as f64
 }
 
 fn mt2guard_ticks(mt: f64, sysclk: &Hertz) -> u32 {
@@ -113,23 +105,19 @@ fn mt2guard_ticks(mt: f64, sysclk: &Hertz) -> u32 {
         as u32
 }
 
-pub fn guard_ticks(ch: FChannel, sysclk: &Hertz) -> Result<u32, freertos_rust::FreeRtosError> {
-    let mt = mt_getter(ch)?;
-    Ok(mt2guard_ticks(mt, sysclk))
+pub fn guard_ticks(ch: FChannel, sysclk: &Hertz) -> u32 {
+    let mt = mt_getter(ch);
+    mt2guard_ticks(mt, sysclk)
 }
 
-pub fn calc_new_target(
-    ch: FChannel,
-    f: f64,
-    sysclk: &Hertz,
-) -> Result<(u32, u32), freertos_rust::FreeRtosError> {
-    let mt = mt_getter(ch)?;
+pub fn calc_new_target(ch: FChannel, f: f64, sysclk: &Hertz) -> (u32, u32) {
+    let mt = mt_getter(ch);
     let mut new_target = (f * mt / 1000.0f64) as u32;
     if new_target < 1 {
         new_target = 1;
     }
 
-    Ok((new_target, mt2guard_ticks(mt, sysclk)))
+    (new_target, mt2guard_ticks(mt, sysclk))
 }
 
 //---------------------------------------------------------------------------------------
@@ -139,7 +127,7 @@ pub fn calc_pressure(fp: f64, output: &mut OutputStorage) {
 
     let ft = output.values[FChannel::Temperature as usize];
 
-    if let Ok((t, overpress_rised)) = read_settings(|(ws, _)| {
+    let (t, overpress_rised) = read_settings(|(ws, _)| {
         let pressure = calc_p(fp, ft, &ws.P_Coefficients, ws.T_enabled);
 
         let overpress =
@@ -157,20 +145,20 @@ pub fn calc_pressure(fp: f64, output: &mut OutputStorage) {
         //defmt::trace!("Pressure {} ({}Hz)", pressure, fp);
 
         Ok((pressure_fixed, overpress_rised))
-    }) {
-        output.values[FChannel::Pressure as usize] = Some(t);
+    });
 
-        if overpress_rised {
-            defmt::error!("Pressure: Overpress detected!");
-            let _ = crate::settings::start_writing_settings(true);
-        }
+    output.values[FChannel::Pressure as usize] = Some(t);
+
+    if overpress_rised {
+        defmt::error!("Pressure: Overpress detected!");
+        let _ = crate::settings::start_writing_settings(true);
     }
 }
 
 pub fn calc_temperature(f: f64, output: &mut OutputStorage) {
     static mut T_OVER_MONITOR: OverMonitor<{ Ordering::Greater }> = OverMonitor(0);
 
-    if let Ok((t, overheat_rised)) = read_settings(|(ws, _)| {
+    let (t, overheat_rised) = read_settings(|(ws, _)| {
         let temperature = calc_t(f, &ws.T_Coefficients);
         let overheat =
             unsafe { T_OVER_MONITOR.check(temperature as f32, ws.TWorkRange.absolute_maximum) };
@@ -185,31 +173,15 @@ pub fn calc_temperature(f: f64, output: &mut OutputStorage) {
         //defmt::trace!("Temperature {} ({}Hz)", temperature, f);
 
         Ok((temperature_fixed, overheat_rised))
-    }) {
-        output.values[FChannel::Temperature as usize] = Some(t);
+    });
 
-        if overheat_rised {
-            defmt::error!("Temperature: Overheat detected!");
-            let _ = crate::settings::start_writing_settings(true);
-        }
+    output.values[FChannel::Temperature as usize] = Some(t);
+
+    if overheat_rised {
+        defmt::error!("Temperature: Overheat detected!");
+        let _ = crate::settings::start_writing_settings(true);
     }
 }
-
-/*
-pub fn unwrap_result(wraped: bool, prev_res: Option<u32>, mut result: u32) -> u32 {
-    if wraped {
-        // анализ результата: Если он меньше чем прошлый на величину около 0x10000 +/- 500
-        // то делаем поправку
-        if let Some(oldres) = prev_res {
-            let diff = (oldres as i64 - result as i64).abs();
-            if diff < 0x10000 + 500 && diff > 0x10000 - 500 {
-                result -= 0x10000;
-            }
-        }
-    }
-    result
-}
-*/
 
 //-----------------------------------------------------------------------------
 
@@ -236,7 +208,7 @@ fn calc_p(
     let ft_minus_ft0 = if !t_enabled || ft.is_none() {
         0.0f64
     } else {
-        ft.unwrap() - coeffs.Ft0 as f64
+        ft.unwrap_or_default() - coeffs.Ft0 as f64
     };
 
     let a = &coeffs.A;
@@ -282,7 +254,7 @@ pub fn process_t_cpu(
 
     //defmt::trace!("CPU Temperature {} ({})", celsius_degree, raw);
 
-    if let Ok((overheat_rised, t_mt)) = read_settings(|(ws, _)| {
+    let (overheat_rised, t_mt) = read_settings(|(ws, _)| {
         let overheat =
             unsafe { TCPU_OVER_MONITOR.check(celsius_degree, ws.TCPUWorkRange.absolute_maximum) };
 
@@ -292,23 +264,18 @@ pub fn process_t_cpu(
         }
 
         Ok((overheat_rised, ws.TMesureTime_ms))
-    }) {
-        output
-            .lock(Duration::infinite())
-            .map(|mut guard| {
-                guard.t_cpu = celsius_degree;
-                guard.t_cpu_adc = raw;
-            })
-            .unwrap();
+    });
+    let _ = output.lock(Duration::infinite()).map(|mut guard| {
+        guard.t_cpu = celsius_degree;
+        guard.t_cpu_adc = raw;
+    });
 
-        if overheat_rised {
-            defmt::error!("CPU Temperature: Overheat detected!");
-            let _ = crate::settings::start_writing_settings(true);
-        }
-
-        return (true, analog_period(current_period_ticks, t_mt, sys_clk));
+    if overheat_rised {
+        defmt::error!("CPU Temperature: Overheat detected!");
+        let _ = crate::settings::start_writing_settings(true);
     }
-    return (true, None);
+
+    (true, analog_period(current_period_ticks, t_mt, sys_clk))
 }
 
 pub fn process_vbat(
@@ -321,7 +288,7 @@ pub fn process_vbat(
     static mut VBAT_OVER_MONITOR: OverMonitor<{ Ordering::Greater }> = OverMonitor(0);
     static mut VBAT_UNDER_MONITOR: OverMonitor<{ Ordering::Less }> = OverMonitor(0);
 
-    if let Ok((vbat, overvoltage_raised, undervoltage_detected, mt)) = read_settings(|(ws, _)| {
+    let (vbat, overvoltage_raised, undervoltage_detected, mt) = read_settings(|(ws, _)| {
         let v_bat = vbat_input_mv as f32 / 1000.0
             * (crate::config::VBAT_DEVIDER_R1 + crate::config::VBAT_DEVIDER_R2)
             / crate::config::VBAT_DEVIDER_R2;
@@ -341,27 +308,23 @@ pub fn process_vbat(
             undervoltage,
             min(ws.PMesureTime_ms, ws.TMesureTime_ms),
         ))
-    }) {
-        //defmt::trace!("Vbat {} mv ({} mv / {})", vbat, vbat_input_mv, raw);
+    });
+    //defmt::trace!("Vbat {} mv ({} mv / {})", vbat, vbat_input_mv, raw);
 
-        output
-            .lock(Duration::infinite())
-            .map(|mut guard| {
-                guard.vbat = vbat;
-                guard.vbat_adc = raw;
-            })
-            .unwrap();
+    let _ = output.lock(Duration::infinite()).map(|mut guard| {
+        guard.vbat = vbat;
+        guard.vbat_adc = raw;
+    });
 
-        if overvoltage_raised {
-            defmt::error!("Vbat overvoltage detected!");
-            let _ = crate::settings::start_writing_settings(true);
-        }
-        return (
-            !undervoltage_detected,
-            analog_period(current_period_ticks, mt, sys_clk),
-        );
+    if overvoltage_raised {
+        defmt::error!("Vbat overvoltage detected!");
+        let _ = crate::settings::start_writing_settings(true);
     }
-    return (true, None);
+
+    (
+        !undervoltage_detected,
+        analog_period(current_period_ticks, mt, sys_clk),
+    )
 }
 
 fn analog_period(cutternt_t: u32, t: u32, sys_clk: Hertz) -> Option<u32> {

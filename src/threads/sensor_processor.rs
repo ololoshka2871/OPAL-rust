@@ -132,7 +132,7 @@ where
         });
     }
 
-    let master_counter = MasterCounter::allocate().unwrap();
+    let master_counter = MasterCounter::acquire();
     perith.timer1.configure(
         master_counter.cnt_addr(),
         &mut perith.timer1_dma_ch,
@@ -146,7 +146,7 @@ where
         ),
     );
 
-    let master_counter = MasterCounter::allocate().unwrap();
+    let master_counter = MasterCounter::acquire();
     perith.timer2.configure(
         master_counter.cnt_addr(),
         &mut perith.timer2_dma_ch,

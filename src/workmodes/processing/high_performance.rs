@@ -35,63 +35,52 @@ impl RawValueProcessor for HighPerformanceProcessor {
         target: u32,
         result: u32,
     ) -> (bool, Option<(u32, u32)>) {
-        if let Ok(config) = super::channel_config(ch) {
-            let mut new_target_opt = None;
-            if config.enabled {
-                if let Ok(mut guard) = self.output.lock(Duration::infinite()) {
-                    guard.targets[ch as usize] = target;
-                    //result = super::unwrap_result(wraped, guard.results[ch as usize], result);
-                    guard.results[ch as usize] = Some(result);
-                }
-
-                if let Ok(f) = super::calc_freq(self.fref_multiplier, target, result) {
-                    if let Ok(mut guard) = self.output.lock(Duration::infinite()) {
-                        guard.frequencys[ch as usize] = Some(f);
-                    }
-
-                    self.output
-                        .lock(Duration::infinite())
-                        .map(|mut g| {
-                            let o = g.deref_mut();
-                            match ch {
-                                FChannel::Pressure => super::calc_pressure(f, o),
-                                FChannel::Temperature => super::calc_temperature(f, o),
-                            }
-                        })
-                        .unwrap();
-
-                    if let Ok((new_target, guard_ticks)) =
-                        super::calc_new_target(ch, f, &self.sysclk)
-                    {
-                        if super::abs_difference(new_target, target)
-                            > crate::config::MINIMUM_ADAPTATION_INTERVAL
-                        {
-                            defmt::warn!(
-                                "Adaptation ch. {}, new target {}, guard: {} ticks",
-                                ch,
-                                new_target,
-                                guard_ticks
-                            );
-                            new_target_opt = Some((new_target, guard_ticks));
-                        }
-                    }
-                }
-                (true, new_target_opt)
-            } else {
-                self.output
-                    .lock(Duration::infinite())
-                    .map(|mut guard| {
-                        guard.targets[ch as usize] = target;
-                        guard.results[ch as usize] = None;
-                        guard.frequencys[ch as usize] = None;
-                        guard.values[ch as usize] = None;
-                    })
-                    .unwrap();
-                (false, new_target_opt)
+        let config = super::channel_config(ch);
+        let mut new_target_opt = None;
+        if config.enabled {
+            if let Ok(mut guard) = self.output.lock(Duration::infinite()) {
+                guard.targets[ch as usize] = target;
+                //result = super::unwrap_result(wraped, guard.results[ch as usize], result);
+                guard.results[ch as usize] = Some(result);
             }
+
+            let f = super::calc_freq(self.fref_multiplier, target, result);
+
+            if let Ok(mut guard) = self.output.lock(Duration::infinite()) {
+                guard.frequencys[ch as usize] = Some(f);
+            }
+
+            let _ = self.output.lock(Duration::infinite()).map(|mut g| {
+                let o = g.deref_mut();
+                match ch {
+                    FChannel::Pressure => super::calc_pressure(f, o),
+                    FChannel::Temperature => super::calc_temperature(f, o),
+                }
+            });
+
+            let (new_target, guard_ticks) = super::calc_new_target(ch, f, &self.sysclk);
+
+            if super::abs_difference(new_target, target)
+                > crate::config::MINIMUM_ADAPTATION_INTERVAL
+            {
+                defmt::warn!(
+                    "Adaptation ch. {}, new target {}, guard: {} ticks",
+                    ch,
+                    new_target,
+                    guard_ticks
+                );
+                new_target_opt = Some((new_target, guard_ticks));
+            }
+
+            (true, new_target_opt)
         } else {
-            defmt::error!("Failed to read channel config, abort processing.");
-            (true, None)
+            let _ = self.output.lock(Duration::infinite()).map(|mut guard| {
+                guard.targets[ch as usize] = target;
+                guard.results[ch as usize] = None;
+                guard.frequencys[ch as usize] = None;
+                guard.values[ch as usize] = None;
+            });
+            (false, new_target_opt)
         }
     }
 
@@ -103,16 +92,12 @@ impl RawValueProcessor for HighPerformanceProcessor {
             guard.values[ch as usize] = None;
         }
 
-        if let Ok(config) = super::channel_config(ch) {
-            if let Ok(guard_ticks) = super::guard_ticks(ch, &self.sysclk) {
-                return (
-                    config.enabled,
-                    Some((crate::config::INITIAL_FREQMETER_TARGET, guard_ticks)),
-                );
-            }
-        }
-
-        (false, None)
+        let config = super::channel_config(ch);
+        let guard_ticks = super::guard_ticks(ch, &self.sysclk);
+        (
+            config.enabled,
+            Some((crate::config::INITIAL_FREQMETER_TARGET, guard_ticks)),
+        )
     }
 
     fn process_adc_result(

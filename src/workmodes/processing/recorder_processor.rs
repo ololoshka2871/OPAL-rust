@@ -71,9 +71,7 @@ impl RecorderProcessor {
                     tcpu_en: ws.TCPUEnabled,
                     vbat_en: ws.VBatEnabled,
                 })
-            })
-            .unwrap(),
-
+            }),
             adaptate_f: Arc::new(Mutex::new(false).unwrap()),
         }
     }
@@ -91,7 +89,7 @@ impl RecorderProcessor {
         let sysclk = self.sysclk;
 
         let blink_period = sysclk.duration_ms(config::START_BLINK_PERIOD_MS);
-        let start_delay = sysclk.duration_ms(super::recorder_start_delay().unwrap());
+        let start_delay = sysclk.duration_ms(super::recorder_start_delay());
 
         let cfg = self.ch_cfg.clone();
         let fm = self.fref_multiplier;
@@ -136,62 +134,43 @@ impl RecorderProcessor {
         D: DataPage,
     {
         let adaptate_req = move |req| {
-            adaptate_f
-                .lock(Duration::infinite())
-                .map(|mut g| *g = req)
-                .unwrap();
+            let _ = adaptate_f.lock(Duration::infinite()).map(|mut g| *g = req);
+        };
+
+        let send_cc = |cmd| {
+            let _ = commad_queue.send(cmd, Duration::infinite());
         };
 
         let enable_p_channel = |enabled| {
             if enabled {
-                commad_queue
-                    .send(
-                        Command::Start(Channel::FChannel(FChannel::Pressure)),
-                        Duration::infinite(),
-                    )
-                    .unwrap();
+                send_cc(Command::Start(Channel::FChannel(FChannel::Pressure)));
             }
         };
 
         let enable_t_channel = |enabled| {
             if enabled {
-                commad_queue
-                    .send(
-                        Command::Start(Channel::FChannel(FChannel::Temperature)),
-                        Duration::infinite(),
-                    )
-                    .unwrap();
+                send_cc(Command::Start(Channel::FChannel(FChannel::Temperature)));
             }
         };
 
         let start_analog_channels = |tcpu_en, vbat_en| {
             if tcpu_en {
-                commad_queue
-                    .send(
-                        Command::Start(Channel::AChannel(AChannel::TCPU)),
-                        Duration::infinite(),
-                    )
-                    .unwrap();
+                send_cc(Command::Start(Channel::AChannel(AChannel::TCPU)));
             }
             if vbat_en {
-                commad_queue
-                    .send(
-                        Command::Start(Channel::AChannel(AChannel::Vbat)),
-                        Duration::infinite(),
-                    )
-                    .unwrap();
+                send_cc(Command::Start(Channel::AChannel(AChannel::Vbat)));
             }
         };
 
         fn calc_fp(o: &mut OutputStorage, fm: f64) {
             for c in [FChannel::Pressure, FChannel::Temperature] {
                 if let Some(result) = o.results[c as usize] {
-                    if let Ok(f) = super::calc_freq(fm, o.targets[c as usize], result) {
-                        o.frequencys[c as usize] = Some(f);
-                        match c {
-                            FChannel::Pressure => super::calc_pressure(f, o),
-                            FChannel::Temperature => super::calc_temperature(f, o),
-                        }
+                    let f = super::calc_freq(fm, o.targets[c as usize], result);
+
+                    o.frequencys[c as usize] = Some(f);
+                    match c {
+                        FChannel::Pressure => super::calc_pressure(f, o),
+                        FChannel::Temperature => super::calc_temperature(f, o),
                     }
                 } else {
                     o.frequencys[c as usize] = None;
@@ -201,10 +180,12 @@ impl RecorderProcessor {
         }
 
         let push_data = |page: &mut D, ch: FChannel| -> bool {
-            output
-                .lock(Duration::infinite())
-                .map(|guard| page.push_data(guard.results[ch as usize], ch))
-                .unwrap()
+            unsafe {
+                output
+                    .lock(Duration::infinite())
+                    .map(|guard| page.push_data(guard.results[ch as usize], ch))
+                    .unwrap_unchecked()
+            }
         };
 
         //1. Включаем частотыне каналы
@@ -246,14 +227,11 @@ impl RecorderProcessor {
                     }
                 }
             };
-            output
-                .lock(Duration::infinite())
-                .map(|mut guard| {
-                    let o = guard.deref_mut();
-                    calc_fp(o, fm);
-                    page.write_header(o);
-                })
-                .unwrap();
+            let _ = output.lock(Duration::infinite()).map(|mut guard| {
+                let o = guard.deref_mut();
+                calc_fp(o, fm);
+                page.write_header(o);
+            });
 
             // 4. Сбор данных
             let mut to_p_write = ch_cfg.p_write_period_ms;
@@ -333,25 +311,23 @@ impl RawValueProcessor for RecorderProcessor {
             FChannel::Temperature => self.ch_cfg.t_preheat_time_ms < self.ch_cfg.t_write_period_ms,
         };
 
-        if self
-            .adaptate_f
-            .lock(Duration::infinite())
-            .map(|g| *g)
-            .unwrap()
-        {
-            let mut new_cfg = None;
-            if let Ok(f) = super::calc_freq(self.fref_multiplier, target, result) {
-                if let Ok((new_target, new_guard)) = super::calc_new_target(ch, f, &self.sysclk) {
-                    new_cfg = Some((new_target, new_guard));
-                    defmt::warn!(
-                        "Ch. {} ({} Hz) Adaptation requested, target {} -> {}",
-                        ch,
-                        f,
-                        target,
-                        new_target
-                    );
-                }
-            }
+        if unsafe {
+            self.adaptate_f
+                .lock(Duration::infinite())
+                .map(|g| *g)
+                .unwrap_unchecked()
+        } {
+            let f = super::calc_freq(self.fref_multiplier, target, result);
+            let (new_target, new_guard) = super::calc_new_target(ch, f, &self.sysclk);
+            let new_cfg = Some((new_target, new_guard));
+
+            defmt::warn!(
+                "Ch. {} ({} Hz) Adaptation requested, target {} -> {}",
+                ch,
+                f,
+                target,
+                new_target
+            );
 
             (true, new_cfg)
         } else {
@@ -368,9 +344,8 @@ impl RawValueProcessor for RecorderProcessor {
             guard.values[ch as usize] = None;
         }
 
-        super::guard_ticks(ch, &self.sysclk)
-            .map(|g| (true, Some((target, g))))
-            .unwrap()
+        let guard_ticks = super::guard_ticks(ch, &self.sysclk);
+        (true, Some((target, guard_ticks)))
     }
 
     fn process_adc_result(

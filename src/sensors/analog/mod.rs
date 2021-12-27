@@ -2,7 +2,7 @@ use cortex_m::prelude::_embedded_hal_adc_OneShot;
 use freertos_rust::{Duration, Timer};
 use stm32l4xx_hal::adc::{Channel, ADC};
 
-use crate::threads::sensor_processor::AChannel;
+use crate::{support::new_freertos_timer, threads::sensor_processor::AChannel};
 
 pub trait AController {
     fn init_cycle(&mut self);
@@ -25,13 +25,8 @@ impl<ADCCH: Channel> AnalogChannel<ADCCH> {
         F: Fn() + Send + 'static,
         ADCCH: Send,
     {
-        let timer = Timer::new(Duration::ticks(analog_ticks))
-            .set_name(ch.into())
-            .set_auto_reload(false)
-            .create(move |_| f())
-            .unwrap();
-
-        timer.stop(Duration::infinite()).unwrap();
+        let timer = new_freertos_timer(Duration::ticks(analog_ticks), ch.into(), f);
+        let _ = timer.stop(Duration::infinite());
 
         Self {
             timer,
@@ -43,17 +38,17 @@ impl<ADCCH: Channel> AnalogChannel<ADCCH> {
 
 impl<ADCCH: Channel> AController for AnalogChannel<ADCCH> {
     fn init_cycle(&mut self) {
-        self.timer.start(Duration::infinite()).unwrap();
+        let _ = self.timer.start(Duration::infinite());
     }
 
     fn stop(&mut self) {
-        self.timer.stop(Duration::infinite()).unwrap();
+        let _ = self.timer.stop(Duration::infinite());
     }
 
     fn set_period(&mut self, ticks: u32) {
-        self.timer
-            .change_period(Duration::infinite(), Duration::ticks(ticks))
-            .unwrap();
+        let _ = self
+            .timer
+            .change_period(Duration::infinite(), Duration::ticks(ticks));
         self.period = ticks;
     }
 
@@ -62,6 +57,6 @@ impl<ADCCH: Channel> AController for AnalogChannel<ADCCH> {
     }
 
     fn read(&mut self, adc: &mut ADC) -> u16 {
-        adc.read(&mut self.adc_ch).unwrap()
+        adc.read(&mut self.adc_ch).unwrap_or_default()
     }
 }

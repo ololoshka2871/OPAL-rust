@@ -45,8 +45,8 @@ static GLOBAL: freertos_rust::FreeRtosAllocator = freertos_rust::FreeRtosAllocat
 fn main() -> ! {
     defmt::trace!("++ Start up! ++");
 
-    let p = cortex_m::Peripherals::take().unwrap();
-    let dp = stm32::Peripherals::take().unwrap();
+    let p = unsafe { cortex_m::Peripherals::take().unwrap_unchecked() };
+    let dp = unsafe { stm32::Peripherals::take().unwrap_unchecked() };
 
     let start_res = if is_usb_connected() {
         defmt::info!("USB connected, CPU max performance mode");
@@ -76,7 +76,7 @@ where
 
     #[cfg(debug_assertions)]
     master_value_stat::init_master_getter(
-        sensors::freqmeter::master_counter::MasterCounter::allocate().unwrap(),
+        sensors::freqmeter::master_counter::MasterCounter::acquire(),
     );
 
     mode.start_threads()

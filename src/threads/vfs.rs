@@ -122,7 +122,7 @@ impl EMfatStorage {
 
         /*
         let mut master = alloc::boxed::Box::new(
-            crate::sensors::freqmeter::master_counter::MasterCounter::allocate().unwrap(),
+            crate::sensors::freqmeter::master_counter::MasterCounter::acquire(),
         );
         master.want_start();
 

@@ -337,8 +337,11 @@ pub fn update_settings(
         store_coeff!(ws.startDelay <= w; set_start_delay; need_write);
 
         if let Some(set_pressure_meassure_units) = w.set_pressure_meassure_units {
-            ws.pressureMeassureUnits =
-                num::FromPrimitive::from_i32(set_pressure_meassure_units).unwrap();
+            if let Some(mu) = num::FromPrimitive::from_i32(set_pressure_meassure_units) {
+                ws.pressureMeassureUnits = mu;
+            } else {
+                return Err("Invalid measure unit".to_string());
+            }
             need_write = true;
         }
 

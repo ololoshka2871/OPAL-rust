@@ -108,7 +108,7 @@ static SETTINGS_PLACEHOLDER: Placeholder<AppSettings> =
     unsafe { core::mem::transmute([0u8; core::mem::size_of::<Placeholder<AppSettings>>()]) };
 
 lazy_static! {
-    static ref SETTINGS: Mutex<Option<SettingsManagerType>> = Mutex::new(None).unwrap();
+    static ref SETTINGS: Mutex<Option<SettingsManagerType>> = crate::support::new_global_mutex();
 }
 
 #[derive(Debug)]

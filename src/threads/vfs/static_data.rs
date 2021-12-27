@@ -1,6 +1,8 @@
 use heatshrink_rust::CompressedData;
 use heatshrink_rust_macro::{packed_file, packed_string};
 
+//-------------------------------------------------------------------------------------------------
+
 pub(crate) static README_COMPRESSED: CompressedData = packed_string!(
     r#"# СКТБ "ЭЛПА": Автономный регистратор давления
 
@@ -13,6 +15,9 @@ pub(crate) static README_COMPRESSED: CompressedData = packed_string!(
 - Для управление функционалом устройства используйте программу KalibratorGUI
 "#
 );
+
+//-------------------------------------------------------------------------------------------------
+// пусть до файлов относительно каталога, содержащего Cargo.toml
 
 pub(crate) static DRIVER_INF_COMPRESSED: CompressedData = packed_file!("stm32-USB-Self-writer.inf");
 

@@ -32,11 +32,11 @@ where
         self.start = true;
         //freertos_rust::CurrentTask::delay(freertos_rust::Duration::ms(10));
         self.freqmeter.cold_start();
-        self.no_signal_guard.start(Duration::infinite()).unwrap();
+        let _ = self.no_signal_guard.start(Duration::infinite());
     }
 
     fn diasble(&mut self) {
-        self.no_signal_guard.stop(Duration::infinite()).unwrap();
+        let _ = self.no_signal_guard.stop(Duration::infinite());
         self.freqmeter.stop();
         self.set_lvl(crate::config::GENERATOR_DISABLE_LVL);
     }
@@ -48,17 +48,17 @@ where
     }
 
     fn reset_guard(&mut self) {
-        self.no_signal_guard.stop(Duration::infinite()).unwrap();
-        self.no_signal_guard.start(Duration::infinite()).unwrap();
+        let _ = self.no_signal_guard.stop(Duration::infinite());
+        let _ = self.no_signal_guard.start(Duration::infinite());
     }
 
     fn set_target(&mut self, new_target: u32, guard_ticks: u32) {
-        self.no_signal_guard.stop(Duration::infinite()).unwrap();
+        let _ = self.no_signal_guard.stop(Duration::infinite());
         self.freqmeter.stop();
 
-        self.no_signal_guard
-            .change_period(Duration::infinite(), Duration::ticks(guard_ticks))
-            .unwrap();
+        let _ = self
+            .no_signal_guard
+            .change_period(Duration::infinite(), Duration::ticks(guard_ticks));
 
         self.freqmeter.set_target32(new_target);
         self.restart();
@@ -117,13 +117,9 @@ where
     where
         F: Fn() + Send + 'static,
     {
-        let timer = Timer::new(Duration::ticks(initial_guard_ticks))
-            .set_name(ch.into())
-            .set_auto_reload(false)
-            .create(move |_| f())
-            .unwrap();
-
-        timer.stop(Duration::infinite()).unwrap();
+        let timer =
+            crate::support::new_freertos_timer(Duration::ticks(initial_guard_ticks), ch.into(), f);
+        let _ = timer.stop(Duration::infinite());
 
         Self {
             freqmeter,
@@ -137,9 +133,9 @@ where
     }
 
     fn set_lvl(&mut self, lvl: PinState) {
-        match lvl {
-            PinState::High => self.gpio_pin.set_high().unwrap(),
-            PinState::Low => self.gpio_pin.set_low().unwrap(),
-        }
+        let _ = match lvl {
+            PinState::High => self.gpio_pin.set_high(),
+            PinState::Low => self.gpio_pin.set_low(),
+        };
     }
 }
