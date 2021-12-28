@@ -291,7 +291,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
             );
 
             processor.start(
-                crate::main_data_storage::test_writer::TestWriter {},
+                crate::main_data_storage::test_writer::TestWriter::default(),
                 self.led_pin,
             )?;
 
@@ -311,27 +311,6 @@ impl WorkMode<RecorderMode> for RecorderMode {
         )?;
 
         super::common::create_pseudo_idle_task()?;
-
-        /*
-        {
-            Task::new()
-                .name("hs-test")
-                .stack_size(2548)
-                .priority(TaskPriority(3))
-                .start(move |_| {
-                    let src = [1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-
-                    let mut it_src = src.iter().map(|a| *a);
-
-                    let mut enc = HeatshrinkEncoder::from_source(&mut it_src);
-                    let dec = HeatshrinkDecoder::from_source(&mut enc);
-
-                    for (i, b) in dec.enumerate() {
-                        defmt::debug!("decoded[{}] = {:X}", i, b);
-                    }
-                })?;
-        }
-        */
 
         Ok(())
     }

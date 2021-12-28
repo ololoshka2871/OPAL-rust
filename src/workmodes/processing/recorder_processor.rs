@@ -217,6 +217,7 @@ impl RecorderProcessor {
             enable_t_channel(ch_cfg.t_en);
             CurrentTask::delay(Duration::ms(ch_cfg.p_preheat_time_ms));
         }
+        adaptate_req(false);
 
         // 2. Частотыне каналы прогреты, включаем аналоговые
         start_analog_channels(ch_cfg.tcpu_en, ch_cfg.vbat_en);
@@ -269,25 +270,45 @@ impl RecorderProcessor {
             // 6. Запрос адаптации
             adaptate_req(true);
 
-            // 7. Запись станицы
-            match writer.start_write(page) {
-                PageWriteResult::Succes(n) => {
-                    defmt::info!("Flash page {} writen", n);
-                }
-                PageWriteResult::Fail(e) => {
-                    defmt::error!("Flash page write error: {}", e);
-                }
-                PageWriteResult::MemoryFull => {
-                    defmt::warn!("Last page writen, power down!");
-                    super::halt_cpu();
-                }
-            }
+            let write_time = {
+                let start_moment = freertos_rust::FreeRtosUtils::get_tick_count();
 
-            // 8. Ожидание завершения адаптации
-            CurrentTask::delay(Duration::ms(core::cmp::max(
-                ch_cfg.p_preheat_time_ms,
-                ch_cfg.t_preheat_time_ms,
-            )));
+                let write_res = writer.write(page);
+
+                let end_moment = freertos_rust::FreeRtosUtils::get_tick_count();
+
+                let mut write_time = if end_moment >= start_moment {
+                    end_moment - start_moment
+                } else {
+                    freertos_rust::FreeRtosTickType::MAX - start_moment + end_moment
+                };
+
+                // 7. Запись станицы
+                match write_res {
+                    PageWriteResult::Succes(n) => {
+                        defmt::info!("Flash page {} writen ({} ms)", n, write_time);
+                    }
+                    PageWriteResult::Fail(e) => {
+                        defmt::error!("Flash page write error: {}", e);
+                        write_time = 0;
+                    }
+                    PageWriteResult::MemoryFull => {
+                        defmt::warn!("Last page writen ({} ms), power down!", write_time);
+                        super::halt_cpu();
+                    }
+                }
+
+                write_time
+            };
+
+            // 8. Ожидание завершения адаптации пропуская 1 измерение
+            CurrentTask::delay(Duration::ms(
+                (core::cmp::max(ch_cfg.p_preheat_time_ms, ch_cfg.t_preheat_time_ms)
+                    / crate::config::PREHEAT_MULTIPLIER
+                    + crate::config::MINIMUM_ADAPTATION_INTERVAL)
+                    .checked_sub(write_time)
+                    .unwrap_or_default(),
+            ));
 
             adaptate_req(false);
         }
@@ -305,9 +326,17 @@ impl RawValueProcessor for RecorderProcessor {
         target: u32,
         result: u32,
     ) -> (bool, Option<(u32, u32)>) {
+        /*
+        defmt::debug!(
+            "process_f_result(ch={}, target={}, result{})",
+            ch,
+            target,
+            result
+        );
+        */
+
         if let Ok(mut guard) = self.output.lock(Duration::infinite()) {
             guard.targets[ch as usize] = target;
-            //result = super::unwrap_result(wraped, guard.results[ch as usize], result);
             guard.results[ch as usize] = Some(result);
         }
 
@@ -335,10 +364,10 @@ impl RawValueProcessor for RecorderProcessor {
                 // продолжить работу, только если интервал записи меньше или равен времени прогрева канала
                 match ch {
                     FChannel::Pressure => {
-                        self.ch_cfg.p_preheat_time_ms < self.ch_cfg.p_write_period_ms
+                        self.ch_cfg.p_preheat_time_ms > self.ch_cfg.p_write_period_ms
                     }
                     FChannel::Temperature => {
-                        self.ch_cfg.t_preheat_time_ms < self.ch_cfg.t_write_period_ms
+                        self.ch_cfg.t_preheat_time_ms > self.ch_cfg.t_write_period_ms
                     }
                 },
                 None,

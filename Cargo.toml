@@ -68,10 +68,10 @@ lto = true # better optimizations
 default = [
   "stm32l433",
   "defmt-debug", # отключить когда собираешь релиз
-  "monitor-heap",
-  "monitor-output",
+  #"monitor-heap",
+  #"monitor-output",
   #"led-blink ",
-  "monitor",
+  #"monitor",
 ]
 
 monitor-heap = ["monitor"]
