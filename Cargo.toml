@@ -38,6 +38,8 @@ panic-probe = { version = "0.2", features = ["print-defmt"] }
 stm32l4xx-hal = { git = "https://github.com/stm32-rs/stm32l4xx-hal.git", features = ["rt", "unproven", "stm32-usbd"] }
 freertos-rust = { git = "https://github.com/lobaro/FreeRTOS-rust.git" }
 
+self-recorder-packet = { git = "https://github.com/ololoshka2871/self-recorder-packet.git",  default-features = false }
+
 heatshrink-rust = { path = "lib/heatshrink.rs/heatshrink-rust" }
 heatshrink-rust-macro = { path = "lib/heatshrink.rs/heatshrink-rust-macro" }
 emfat-rust = { path = "lib/emfat" }

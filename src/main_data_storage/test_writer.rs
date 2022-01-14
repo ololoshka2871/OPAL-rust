@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
-use super::{data_page::DataPage, write_controller::WriteController};
+use alloc::vec::Vec;
+
+use super::{data_page::DataPage, write_controller::{WriteController, PageWriteResult}};
 
 #[derive(Default)]
 pub struct TestWriter {
@@ -10,6 +12,8 @@ pub struct TestWriter {
 #[derive(Default)]
 pub struct TestDataPage {
     page_number: u32,
+    
+    packed_data: Vec<u8>,
     counter: u8,
 }
 
@@ -34,7 +38,7 @@ impl DataPage for TestDataPage {
 }
 
 impl WriteController<TestDataPage> for TestWriter {
-    fn new_page(&mut self) -> Result<TestDataPage, freertos_rust::FreeRtosError> {
+    fn try_create_new_page(&mut self) -> Result<TestDataPage, freertos_rust::FreeRtosError> {
         defmt::debug!("new_page()");
         let res = Ok(TestDataPage {
             page_number: self.page,
@@ -45,8 +49,8 @@ impl WriteController<TestDataPage> for TestWriter {
         res
     }
 
-    fn write(&mut self, page: TestDataPage) -> super::write_controller::PageWriteResult {
+    fn write(&mut self, page: TestDataPage) -> PageWriteResult {
         defmt::debug!("start_write(page={})", page.page_number);
-        super::write_controller::PageWriteResult::Succes(page.page_number)
+        PageWriteResult::Succes(page.page_number)
     }
 }

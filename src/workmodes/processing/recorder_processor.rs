@@ -226,7 +226,7 @@ impl RecorderProcessor {
         loop {
             // 3. Создаем новый буфер страницы флеш-памяти
             let mut page = loop {
-                match writer.new_page() {
+                match writer.try_create_new_page() {
                     Ok(p) => break p,
                     Err(e) => {
                         defmt::error!("{}, retrying...", defmt::Debug2Format(&e));

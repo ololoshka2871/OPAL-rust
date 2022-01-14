@@ -7,6 +7,6 @@ pub enum PageWriteResult {
 }
 
 pub trait WriteController<P>: Send {
-    fn new_page(&mut self) -> Result<P, FreeRtosError>;
+    fn try_create_new_page(&mut self) -> Result<P, FreeRtosError>;
     fn write(&mut self, page: P) -> PageWriteResult;
 }

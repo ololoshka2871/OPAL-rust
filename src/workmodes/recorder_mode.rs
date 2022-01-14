@@ -291,7 +291,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
             );
 
             processor.start(
-                crate::main_data_storage::test_writer::TestWriter::default(),
+                crate::main_data_storage::cpu_flash_diff_writer::CpuFlashDiffWriter::new(),
                 self.led_pin,
             )?;
 

@@ -160,6 +160,10 @@ impl MasterTimerInfo {
         self.master.wrap_result_if_ovf64(counter_value)
     }
 
+    pub fn uptime_ms(&self) -> u64 {
+        todo!()
+    }
+
     #[inline]
     pub fn cnt_addr(&self) -> usize {
         self.master.cnt_addr()
