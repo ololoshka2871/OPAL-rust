@@ -2,7 +2,10 @@
 
 use alloc::vec::Vec;
 
-use super::{data_page::DataPage, write_controller::{WriteController, PageWriteResult}};
+use super::{
+    data_page::DataPage,
+    write_controller::{PageWriteResult, WriteController},
+};
 
 #[derive(Default)]
 pub struct TestWriter {
@@ -12,7 +15,7 @@ pub struct TestWriter {
 #[derive(Default)]
 pub struct TestDataPage {
     page_number: u32,
-    
+
     packed_data: Vec<u8>,
     counter: u8,
 }

@@ -1,8 +1,8 @@
 pub mod data_page;
 pub mod write_controller;
 
-pub mod test_writer;
 pub mod cpu_flash_diff_writer;
+pub mod test_writer;
 
 pub fn flash_erease() -> Result<(), ()> {
     Err(())

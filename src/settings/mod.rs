@@ -20,8 +20,8 @@ pub use store_async::start_writing_settings;
 
 static DEFAULT_SETTINGS: AppSettings = AppSettings {
     Serial: 0,
-    PMesureTime_ms: 1000,
-    TMesureTime_ms: 1000,
+    PMesureTime_ms: 100,
+    TMesureTime_ms: 100,
 
     Fref: crate::config::XTAL_FREQ,
 
@@ -77,7 +77,7 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
     TZeroCorrection: 0.0,
 
     writeConfig: app_settings::WriteConfig {
-        BaseInterval_ms: 1000,
+        BaseInterval_ms: 100,
         PWriteDevider: 1,
         TWriteDevider: 1,
     },

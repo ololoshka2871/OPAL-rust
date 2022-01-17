@@ -5,7 +5,6 @@
 use core::alloc::Layout;
 
 use cortex_m_rt::{exception, ExceptionFrame};
-use defmt::Debug2Format;
 use freertos_rust::{FreeRtosCharPtr, FreeRtosTaskHandle};
 
 #[exception]
@@ -13,15 +12,14 @@ unsafe fn DefaultHandler(irqn: i16) {
     // custom default handler
     // irqn is negative for Cortex-M exceptions
     // irqn is positive for device specific (line IRQ)
-    defmt::panic!("Unregistred irq: {}", irqn);
+    defmt::error!("Unregistred irq: {}", irqn);
+    panic!();
 }
 
 #[exception]
-unsafe fn HardFault(ef: &ExceptionFrame) -> ! {
-    loop {
-        defmt::panic!("HardFault:\n{}", Debug2Format(ef));
-        //cortex_m::asm::bkpt();
-    }
+unsafe fn HardFault(_ef: &ExceptionFrame) -> ! {
+    defmt::error!("HardFault");
+    panic!()
 }
 
 // define what happens in an Out Of Memory (OOM) condition

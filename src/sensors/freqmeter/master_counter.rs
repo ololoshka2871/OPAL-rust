@@ -124,7 +124,7 @@ impl MasterCounter {
         self.counter.cnt_addr()
     }
 
-    pub fn freq(&self) -> Hertz {
+    pub fn f_ref(&self) -> Hertz {
         self.ref_freq
     }
 }
@@ -161,7 +161,7 @@ impl MasterTimerInfo {
     }
 
     pub fn uptime_ms(&self) -> u64 {
-        todo!()
+        self.value64().0 / (self.f_ref().0 / 1_000) as u64
     }
 
     #[inline]
@@ -170,8 +170,8 @@ impl MasterTimerInfo {
     }
 
     #[inline]
-    pub fn freq(&self) -> Hertz {
-        self.master.freq()
+    pub fn f_ref(&self) -> Hertz {
+        self.master.f_ref()
     }
 }
 

@@ -104,7 +104,7 @@ impl RecorderProcessor {
 
         Task::new()
             .name("RecCtrl")
-            .stack_size(512)
+            .stack_size(1024)
             .priority(TaskPriority(config::RECORDER_CTRL_PRIO))
             .start(move |_| {
                 Self::led_blink(led, config::START_BLINK_COUNT, blink_period);
