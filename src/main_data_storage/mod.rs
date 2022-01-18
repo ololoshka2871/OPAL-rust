@@ -1,3 +1,8 @@
+use alloc::{sync::Arc, vec::Vec};
+use freertos_rust::Mutex;
+
+use stm32l4xx_hal::traits::flash;
+
 pub mod data_page;
 pub mod write_controller;
 
@@ -7,12 +12,16 @@ pub mod test_writer;
 mod internal_storage;
 
 pub trait PageAccessor {
-    fn write(&mut self, offset: usize, data: &[u8]) -> Result<(), ()>;
+    fn write(&mut self, data: Vec<u8>) -> Result<(), flash::Error>;
     fn read_to(&self, offset: usize, dest: &mut [u8]);
 }
 
 pub fn flash_erease() -> Result<(), ()> {
     internal_storage::flash_erease()
+}
+
+pub fn find_next_empty_page(start: u32) -> Option<u32> {
+    internal_storage::find_next_empty_page(start)
 }
 
 pub fn select_page(page: u32) -> Result<impl PageAccessor, ()> {
@@ -29,4 +38,8 @@ pub fn flash_page_size() -> u32 {
 
 pub fn flash_size() -> usize {
     internal_storage::flash_size()
+}
+
+pub(crate) fn init(flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>) {
+    internal_storage::init(flash);
 }

@@ -37,14 +37,6 @@ impl FlasRWPolcy {
         }
     }
 
-    fn len_in_u64_aligned(data: &[u8]) -> usize {
-        if data.len() % ::core::mem::size_of::<u64>() != 0 {
-            data.len() / ::core::mem::size_of::<u64>() + 1
-        } else {
-            data.len() / ::core::mem::size_of::<u64>()
-        }
-    }
-
     // https://docs.rs/stm32l4xx-hal/0.6.0/stm32l4xx_hal/crc/index.html
     fn crc(&mut self, data: &[u8]) -> u32 {
         self.crc
@@ -68,7 +60,8 @@ impl StoragePolicy<flash::Error> for FlasRWPolcy {
                 let flash = flash_guard.deref_mut();
                 let mut prog = flash.keyr.unlock_flash(&mut flash.sr, &mut flash.cr)?;
 
-                let len_in_u64_aligned = Self::len_in_u64_aligned(data);
+                let len_in_u64_aligned =
+                    crate::support::len_in_u64_aligned::len_in_u64_aligned(data);
 
                 prog.erase_page(self.page)?;
                 prog.write_native(
@@ -96,7 +89,8 @@ impl StoragePolicy<flash::Error> for FlasRWPolcy {
             data.len(),
         );
 
-        let len_aligned = Self::len_in_u64_aligned(data) * ::core::mem::size_of::<u64>();
+        let len_aligned = crate::support::len_in_u64_aligned::len_in_u64_aligned(data)
+            * ::core::mem::size_of::<u64>();
         let mut crc: u64 = core::mem::MaybeUninit::zeroed().assume_init();
 
         core::ptr::copy_nonoverlapping(

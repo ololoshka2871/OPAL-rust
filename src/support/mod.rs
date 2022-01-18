@@ -1,6 +1,7 @@
 pub mod filter;
 pub mod free_rtos_error_ext;
 pub mod interrupt_controller;
+pub mod len_in_u64_aligned;
 pub mod logging;
 pub mod usb_connection_checker;
 pub mod vusb_monitor;

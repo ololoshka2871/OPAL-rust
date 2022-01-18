@@ -3,7 +3,6 @@ use freertos_rust::FreeRtosError;
 pub enum PageWriteResult {
     Succes(u32),
     Fail(u32),
-    MemoryFull,
 }
 
 pub trait WriteController<P>: Send {

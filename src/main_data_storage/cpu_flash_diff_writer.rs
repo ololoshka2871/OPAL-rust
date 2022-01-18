@@ -1,8 +1,9 @@
 use alloc::sync::Arc;
-use freertos_rust::{CurrentTask, Duration, FreeRtosError, Mutex};
+use freertos_rust::{Duration, FreeRtosError, Mutex};
 use self_recorder_packet::DataBlockPacker;
 
 use crate::{
+    main_data_storage::PageAccessor,
     sensors::freqmeter::master_counter::{MasterCounter, MasterTimerInfo},
     settings,
     threads::sensor_processor::FChannel,
@@ -24,6 +25,7 @@ pub struct CpuFlashDiffWriter {
 pub struct DataBlock {
     packer: DataBlockPacker,
     counter: usize,
+    dest_page: u32,
     prevs: [u32; 2],
 }
 
@@ -75,7 +77,14 @@ impl CpuFlashDiffWriter {
 impl WriteController<DataBlock> for CpuFlashDiffWriter {
     fn try_create_new_page(&mut self) -> Result<DataBlock, FreeRtosError> {
         if !self.page_aqured {
-            defmt::info!("Aquaering Data Block");
+            if let Some(ep) = crate::main_data_storage::find_next_empty_page(self.next_page_number)
+            {
+                defmt::info!("Aquaering page {}", ep);
+                self.next_page_number = ep;
+            } else {
+                defmt::error!("Aquaering page failed, memory full!");
+                return Err(freertos_rust::FreeRtosError::OutOfMemory);
+            }
 
             let (base_interval_ms, interleave_ratio) =
                 match settings::settings_action::<_, _, _, ()>(Duration::ms(10), |(settings, _)| {
@@ -102,6 +111,7 @@ impl WriteController<DataBlock> for CpuFlashDiffWriter {
                     .set_timestamp(self.master_counter_info.uptime_ms())
                     .set_write_cfg(base_interval_ms, interleave_ratio)
                     .build(),
+                dest_page: self.next_page_number,
                 counter: 0,
                 prevs: [0, 0],
             };
@@ -130,17 +140,22 @@ impl WriteController<DataBlock> for CpuFlashDiffWriter {
                 })
                 .unwrap_or_default()
         }) {
-            defmt::info!(
-                "Write page {}, {} values ({} bytes) -> {}",
-                id,
-                input_count,
-                input_count * core::mem::size_of::<u32>(),
-                data.len()
-            );
+            if let Ok(mut page_accessor) = crate::main_data_storage::select_page(page.dest_page) {
+                let len = data.len();
+                if let Ok(()) = page_accessor.write(data) {
+                    defmt::info!(
+                        "Write page {}, {} values ({} bytes) -> {}",
+                        id,
+                        input_count,
+                        input_count * core::mem::size_of::<u32>(),
+                        len
+                    );
+                    return write_controller::PageWriteResult::Succes(id);
+                }
+            }
 
-            // TODO: !write!
-
-            write_controller::PageWriteResult::Succes(id)
+            defmt::error!("Failed to get page {}!", page.dest_page);
+            return write_controller::PageWriteResult::Fail(id);
         } else {
             defmt::error!("Page {} generation failed!", id);
             write_controller::PageWriteResult::Fail(id)

@@ -179,6 +179,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
     fn ini_static(&mut self) {
         crate::settings::init(self.flash(), self.crc());
+        crate::main_data_storage::init(self.flash());
     }
 
     // Работа от внешнего кварца HSE = 12 MHz

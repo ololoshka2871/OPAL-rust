@@ -228,6 +228,11 @@ impl RecorderProcessor {
             let mut page = loop {
                 match writer.try_create_new_page() {
                     Ok(p) => break p,
+                    Err(freertos_rust::FreeRtosError::OutOfMemory) => {
+                        defmt::warn!("Memory full, power down aster 1s");
+                        CurrentTask::delay(Duration::ms(1_000));
+                        super::halt_cpu();
+                    }
                     Err(e) => {
                         defmt::error!("{}, retrying...", defmt::Debug2Format(&e));
                         CurrentTask::delay(Duration::ticks(10));
@@ -291,10 +296,6 @@ impl RecorderProcessor {
                     PageWriteResult::Fail(e) => {
                         defmt::error!("Flash page write error: {}", e);
                         write_time = 0;
-                    }
-                    PageWriteResult::MemoryFull => {
-                        defmt::warn!("Last page writen ({} ms), power down!", write_time);
-                        super::halt_cpu();
                     }
                 }
 
