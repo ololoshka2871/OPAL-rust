@@ -33,7 +33,7 @@ impl EMfatStorage {
     }
 
     fn build_files_table() -> Vec<emfat_entry> {
-        use callbacks::{meminfo_read, settings_read, unpack_reader};
+        use callbacks::{flash_read, meminfo_read, settings_read, unpack_reader};
         use static_data::{DRIVER_INF_COMPRESSED, PROTO_COMPRESSED, README_COMPRESSED};
 
         defmt::trace!("EmFat: Registring virtual files:");
@@ -117,6 +117,20 @@ impl EMfatStorage {
                 .size(512) // noauto, размер может меняться - это генерированный текст
                 .max_size(2048)
                 .read_cb(meminfo_read)
+                .build(),
+        );
+
+        defmt::trace!("EmFat: .. /data.hs");
+        let flash_size = crate::main_data_storage::flash_size();
+        res.push(
+            EntryBuilder::new()
+                .name(c_str!("data.hs"))
+                .dir(false)
+                .lvl(1)
+                .offset(0)
+                .size(flash_size) // noauto, размер может меняться - это генерированный текст
+                .max_size(flash_size)
+                .read_cb(flash_read)
                 .build(),
         );
 

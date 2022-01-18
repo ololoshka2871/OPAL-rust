@@ -5,7 +5,8 @@ MEMORY
   /* These values correspond to the LM3S6965, one of the few devices QEMU can emulate */
 
   /* 3.2 FLASH main features: page size = 2K */
-  FLASH : ORIGIN = 0x08000000, LENGTH = 256K - 2K
+  FLASH : ORIGIN = 0x08000000, LENGTH = 256K - 3 * 2K
+  WRITER_TEST_AREA: ORIGIN = 0x08000000 + 256K - 3 * 2K, LENGTH = 2 * 2K
   SETTINGS: ORIGIN = 0x08000000 + 256K - 2K, LENGTH = 2K
 
   RAM : ORIGIN = 0x20000000, LENGTH = 64K
@@ -40,6 +41,12 @@ _stack_start = ORIGIN(RAM2) + LENGTH(RAM2);
 */
 
 SECTIONS {
+   .writer_test_area (NOLOAD): ALIGN(8)
+   {
+      __writer_area = .;
+      KEEP(*(.writer_test_area*));
+   } > WRITER_TEST_AREA
+
    .settings (NOLOAD) : ALIGN(8)
    {
       __settings_pos = .;

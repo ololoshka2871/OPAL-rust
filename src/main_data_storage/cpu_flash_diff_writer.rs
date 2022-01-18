@@ -1,4 +1,5 @@
-use freertos_rust::{Duration, FreeRtosError};
+use alloc::sync::Arc;
+use freertos_rust::{CurrentTask, Duration, FreeRtosError, Mutex};
 use self_recorder_packet::DataBlockPacker;
 
 use crate::{
@@ -16,11 +17,13 @@ use super::{
 pub struct CpuFlashDiffWriter {
     master_counter_info: MasterTimerInfo,
     next_page_number: u32,
+    crc_calc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>,
     page_aqured: bool,
 }
 
 pub struct DataBlock {
     packer: DataBlockPacker,
+    counter: usize,
     prevs: [u32; 2],
 }
 
@@ -35,12 +38,13 @@ impl DataPage for DataBlock {
     }
 
     fn push_data(&mut self, result: Option<u32>, channel: FChannel) -> bool {
-        defmt::debug!("DataPage::push_data(result={}, ch={})", result, channel);
+        //defmt::debug!("DataPage::push_data(result={}, ch={})", result, channel);
         let v = if let Some(r) = result {
             r - self.prevs[channel as usize]
         } else {
             self.prevs[channel as usize]
         };
+        self.counter += 1;
         match self.packer.push_val(v) {
             self_recorder_packet::PushResult::Success => false,
             self_recorder_packet::PushResult::Full => true,
@@ -50,18 +54,19 @@ impl DataPage for DataBlock {
     }
 
     fn finalise(&mut self) {
-        defmt::debug!("DataPage::finalise()");
+        //defmt::debug!("DataPage::finalise()");
     }
 }
 
 impl CpuFlashDiffWriter {
-    pub fn new() -> Self {
+    pub fn new(crc_calc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>) -> Self {
         let mut master_counter_info = MasterCounter::acquire();
         master_counter_info.want_start();
 
         Self {
             master_counter_info,
             next_page_number: 0,
+            crc_calc,
             page_aqured: false,
         }
     }
@@ -97,6 +102,7 @@ impl WriteController<DataBlock> for CpuFlashDiffWriter {
                     .set_timestamp(self.master_counter_info.uptime_ms())
                     .set_write_cfg(base_interval_ms, interleave_ratio)
                     .build(),
+                counter: 0,
                 prevs: [0, 0],
             };
 
@@ -111,10 +117,29 @@ impl WriteController<DataBlock> for CpuFlashDiffWriter {
 
     fn write(&mut self, page: DataBlock) -> write_controller::PageWriteResult {
         let id = page.packer.header.this_block_id;
+        let input_count = page.counter;
+
         self.page_aqured = false;
-        if let Some(data) = page.packer.to_result_full(|data| todo!("Generate CRC")) {
-            defmt::debug!("Write page {}", id);
-            todo!("Write page to controller flash");
+        if let Some(data) = page.packer.to_result_full(|data| {
+            self.crc_calc
+                .lock(Duration::infinite())
+                .map(|mut crc_guard| {
+                    crc_guard.reset();
+                    crc_guard.feed(data);
+                    crc_guard.result()
+                })
+                .unwrap_or_default()
+        }) {
+            defmt::info!(
+                "Write page {}, {} values ({} bytes) -> {}",
+                id,
+                input_count,
+                input_count * core::mem::size_of::<u32>(),
+                data.len()
+            );
+
+            // TODO: !write!
+
             write_controller::PageWriteResult::Succes(id)
         } else {
             defmt::error!("Page {} generation failed!", id);

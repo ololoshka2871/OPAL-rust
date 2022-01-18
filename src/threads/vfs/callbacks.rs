@@ -134,3 +134,19 @@ pub(crate) unsafe extern "C" fn master_read(
 
     core::mem::forget(boxed);
 }
+
+pub(crate) unsafe extern "C" fn flash_read(
+    dest: *mut u8,
+    size: i32,
+    offset: u32,
+    _userdata: usize,
+) {
+    use crate::main_data_storage::*;
+
+    if let Ok(page) = select_page(offset / flash_page_size()) {
+        page.read_to(
+            (offset % flash_page_size()) as usize,
+            core::slice::from_raw_parts_mut(dest, size as usize),
+        );
+    }
+}
