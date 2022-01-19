@@ -523,5 +523,11 @@
         должен подчистить IDLE который на когда не выполняется.
         [v] Перенести сохранение из специального потока в таймер
 [_] При малых временах измерения в режиме USB переполнение очереди контроллера измерений
+[v] Починить CRC32 тобы оно соответствовало zlib'овскому
+    // https://stackoverflow.com/a/48883954
+    config
+        .input_bit_reversal(BitReversal::ByByte)
+        .output_bit_reversal(true)
+    Результат инвертировать!
     
 [_] Изучить freertos_rust::patterns::compute_task

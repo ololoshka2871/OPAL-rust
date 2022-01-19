@@ -44,7 +44,7 @@ impl FlasRWPolcy {
             .map(|mut crc_guard| {
                 crc_guard.reset();
                 crc_guard.feed(data);
-                crc_guard.result()
+                !crc_guard.result()
             })
             .expect("Failed to lock crc module")
     }
@@ -92,6 +92,9 @@ impl StoragePolicy<flash::Error> for FlasRWPolcy {
         let len_aligned = crate::support::len_in_u64_aligned::len_in_u64_aligned(data)
             * ::core::mem::size_of::<u64>();
         let mut crc: u64 = core::mem::MaybeUninit::zeroed().assume_init();
+
+        let test_crc = self.crc(b"test_string");
+        defmt::debug!("test crc32: 0x{:X}", test_crc);
 
         core::ptr::copy_nonoverlapping(
             (self.page.to_address() + len_aligned) as *const _,

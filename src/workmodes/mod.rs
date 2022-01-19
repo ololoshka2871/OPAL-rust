@@ -21,12 +21,10 @@ pub trait WorkMode<T> {
 }
 
 fn configure_crc_module(config: stm32l4xx_hal::crc::Config) -> stm32l4xx_hal::crc::Crc {
-    // FIXME
-    //const CRC_POLY: u32 = 0xffff_ffff;
-    //const CRC_INITIAL: u32 = 0xffff_ffff;
-
     config
-        //.polynomial(stm32l4xx_hal::crc::Polynomial::L32(CRC_POLY))
-        //.initial_value(CRC_INITIAL)
+        // теперь результат соответсвует zlib овскому, но !нужно инвертировать!
+        // https://stackoverflow.com/a/48883954
+        .input_bit_reversal(stm32l4xx_hal::crc::BitReversal::ByByte)
+        .output_bit_reversal(true)
         .freeze()
 }
