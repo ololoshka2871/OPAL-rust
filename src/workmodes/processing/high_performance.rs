@@ -62,7 +62,7 @@ impl RawValueProcessor for HighPerformanceProcessor {
             if super::abs_difference(new_target, target)
                 > crate::config::MINIMUM_ADAPTATION_INTERVAL
             {
-                defmt::warn!(
+                defmt::trace!(
                     "Adaptation ch. {}, new target {}, guard: {} ticks",
                     ch,
                     new_target,

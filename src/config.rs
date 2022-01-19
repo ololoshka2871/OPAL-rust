@@ -34,14 +34,14 @@ pub const PROTOBUF_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 1;
 pub const MONITOR_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 1;
 
 /// sensor processor task prio
-pub const SENS_PROC_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 2;
+pub const SENS_PROC_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 3;
 
 // recorder controller task prio
 pub const RECORDER_CTRL_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 1;
 
 //-----------------------------------------------------------------------------
 
-pub const INITIAL_FREQMETER_TARGET: u32 = 50;
+pub const INITIAL_FREQMETER_TARGET: u32 = 1;
 
 //-----------------------------------------------------------------------------
 

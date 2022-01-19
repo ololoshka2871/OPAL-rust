@@ -18,10 +18,13 @@ use self::{app_settings::NonStoreSettings, flash_rw_polcy::Placeholder};
 
 pub use store_async::start_writing_settings;
 
+pub static MAX_MT: u32 = 5000;
+pub static MIN_MT: u32 = 20;
+
 static DEFAULT_SETTINGS: AppSettings = AppSettings {
     Serial: 0,
-    PMesureTime_ms: 100,
-    TMesureTime_ms: 100,
+    PMesureTime_ms: MIN_MT,
+    TMesureTime_ms: MIN_MT,
 
     Fref: crate::config::XTAL_FREQ,
 

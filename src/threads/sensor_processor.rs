@@ -95,11 +95,11 @@ impl OnCycleFinished for DMAFinished {
     fn cycle_finished(&self, event: TimerEvent, captured: u32, target: u32, irq: Interrupt) {
         let mut ctx = InterruptContext::new();
         let (result, wraped) = self.master.update_captured_value(captured);
-        if let Err(e) = self.cc.send_from_isr(
+        if let Err(_e) = self.cc.send_from_isr(
             &mut ctx,
             Command::ReadyFChannel(self.ch, event, target, result, wraped),
         ) {
-            defmt::error!("Sensor command queue error: {}", defmt::Debug2Format(&e));
+            defmt::error!("Sensor command queue error: {}", defmt::Debug2Format(&_e));
         }
         self.ic.unpend(irq);
     }
@@ -123,12 +123,14 @@ where
     VBATPIN: Send + adc::Channel,
 {
     fn send_command(cc: &Queue<Command>, cmd: Command) {
-        let _ = cc.send(cmd, Duration::infinite()).map_err(|e| {
+        // При очень малых временах измерения очередь забивается, поэтому чтобы совсем не
+        // залипнуть, игнорим если данные не влезли в очередь
+        let _ = cc.send(cmd, Duration::zero()).map_err(|_e| {
             defmt::error!(
                 "Failed to send {} to command queue: {}",
                 cmd,
-                defmt::Debug2Format(&e)
-            )
+                defmt::Debug2Format(&_e)
+            );
         });
     }
 
@@ -219,7 +221,7 @@ where
                     let ch = &mut p_channels[c as usize];
                     if wraped {
                         // трюки с компенсацией не надежны. Перезапускаем цыкл и все
-                        defmt::warn!("Ch. {}, wraped, restart", c);
+                        defmt::trace!("Ch. {}, wraped, restart", c);
                         ch.restart();
                     } else {
                         if let Some(result) = ch.input_captured(ev, captured) {

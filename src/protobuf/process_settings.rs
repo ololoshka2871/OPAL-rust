@@ -8,13 +8,13 @@ use alloc::{
 use freertos_rust::Duration;
 use my_proc_macro::store_coeff;
 
-use crate::{protobuf::PASSWORD_SIZE, settings::SettingActionError};
+use crate::{
+    config::XTAL_FREQ,
+    protobuf::PASSWORD_SIZE,
+    settings::{SettingActionError, MAX_MT, MIN_MT},
+};
 
-static MAX_MT: u32 = 5000;
-static MIN_MT: u32 = 10;
-
-static F_REF_BASE: u32 = 16000000;
-static F_REF_DELTA: u32 = 500;
+const F_REF_DELTA: u32 = 500;
 
 fn strlenn(str: &[u8], max: usize) -> usize {
     let max_scan = core::cmp::min(str.len(), max);
@@ -112,10 +112,10 @@ fn verify_parameters(
 
     if let Some(set_fref) = ws.set_fref {
         deny_if_password_invalid("Fref")?;
-        if set_fref > F_REF_BASE + F_REF_DELTA || set_fref < F_REF_BASE - F_REF_DELTA {
+        if set_fref > XTAL_FREQ + F_REF_DELTA || set_fref < XTAL_FREQ - F_REF_DELTA {
             return Err(SettingActionError::ActionError(format!(
                 "Reference frequency {} is too different from base {} +/- {}",
-                set_fref, F_REF_BASE, F_REF_DELTA
+                set_fref, XTAL_FREQ, F_REF_DELTA
             )));
         }
     }

@@ -69,8 +69,9 @@ lto = true # better optimizations
 [features]
 default = [
   "stm32l433",
+  "freqmeter-start-stop", # При временах измерения <= 100 мс только этот режим адекватно работает
   "defmt-debug", # отключить когда собираешь релиз
-  #"monitor-heap",
+  "monitor-heap",
   #"monitor-output",
   #"led-blink ",
   #"monitor",
@@ -80,7 +81,7 @@ monitor-heap = ["monitor"]
 monitor-output = ["monitor"]
 stm32l433 = [ "stm32l4xx-hal/stm32l433" ]
 monitor = []
-#freqmeter-start-stop = []
+freqmeter-start-stop = []
 led-blink = []
 
  # do NOT modify these features

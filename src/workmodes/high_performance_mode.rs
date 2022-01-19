@@ -171,7 +171,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             adc_common: dp.ADC_COMMON,
             vbat_pin: gpioa.pa1.into_analog(&mut gpioa.moder, &mut gpioa.pupdr),
 
-            sensor_command_queue: Arc::new(freertos_rust::Queue::new(7).unwrap()),
+            sensor_command_queue: Arc::new(freertos_rust::Queue::new(15).unwrap()),
 
             output: Arc::new(Mutex::new(OutputStorage::default()).unwrap()),
         }

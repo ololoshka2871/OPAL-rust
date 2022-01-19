@@ -93,9 +93,6 @@ impl StoragePolicy<flash::Error> for FlasRWPolcy {
             * ::core::mem::size_of::<u64>();
         let mut crc: u64 = core::mem::MaybeUninit::zeroed().assume_init();
 
-        let test_crc = self.crc(b"test_string");
-        defmt::debug!("test crc32: 0x{:X}", test_crc);
-
         core::ptr::copy_nonoverlapping(
             (self.page.to_address() + len_aligned) as *const _,
             &mut crc,
