@@ -53,19 +53,20 @@ impl RecorderProcessor {
             sysclk,
 
             ch_cfg: super::read_settings(|(ws, _)| {
+                let preheat_time_ms = |mt| {
+                    sysclk
+                        .duration_ms(max(
+                            mt * crate::config::PREHEAT_MULTIPLIER
+                                + crate::config::GEN_COLD_STARTUP_TIME_MS,
+                            crate::config::MINIMUM_ADAPTATION_INTERVAL
+                                + crate::config::GEN_COLD_STARTUP_TIME_MS,
+                        ))
+                        .to_ms()
+                };
+
                 Ok(FChCfg {
-                    p_preheat_time_ms: sysclk
-                        .duration_ms(max(
-                            ws.PMesureTime_ms * crate::config::PREHEAT_MULTIPLIER,
-                            crate::config::GEN_COLD_STARTUP_TIME_MS,
-                        ))
-                        .to_ms(),
-                    t_preheat_time_ms: sysclk
-                        .duration_ms(max(
-                            ws.TMesureTime_ms * crate::config::PREHEAT_MULTIPLIER,
-                            crate::config::GEN_COLD_STARTUP_TIME_MS,
-                        ))
-                        .to_ms(),
+                    p_preheat_time_ms: preheat_time_ms(ws.PMesureTime_ms),
+                    t_preheat_time_ms: preheat_time_ms(ws.TMesureTime_ms),
                     p_write_period_ms: sysclk
                         .duration_ms(ws.writeConfig.BaseInterval_ms * ws.writeConfig.PWriteDevider)
                         .to_ms(),
@@ -215,9 +216,14 @@ impl RecorderProcessor {
         } else {
             enable_p_channel(ch_cfg.p_en);
             enable_t_channel(ch_cfg.t_en);
-            CurrentTask::delay(Duration::ms(ch_cfg.p_preheat_time_ms));
+            // 2 - по тому, что каналы включаются синхронно (там delay)
+            CurrentTask::delay(Duration::ms(2 * ch_cfg.p_preheat_time_ms));
         }
         adaptate_req(false);
+
+        loop {
+            CurrentTask::delay(Duration::infinite());
+        }
 
         // 2. Частотыне каналы прогреты, включаем аналоговые
         start_analog_channels(ch_cfg.tcpu_en, ch_cfg.vbat_en);
@@ -362,7 +368,7 @@ impl RawValueProcessor for RecorderProcessor {
             (true, new_cfg)
         } else {
             (
-                // продолжить работу, только если интервал записи меньше или равен времени прогрева канала
+                // продолжить работу, только если интервал записи меньше или равен времени "прогрева" канала
                 match ch {
                     FChannel::Pressure => {
                         self.ch_cfg.p_preheat_time_ms > self.ch_cfg.p_write_period_ms

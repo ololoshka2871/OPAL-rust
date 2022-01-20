@@ -100,7 +100,10 @@ pub fn calc_freq(fref_multiplier: f64, target: u32, diff: u32) -> f64 {
     fref * target as f64 / diff as f64
 }
 
-fn mt2guard_ticks(mt: f64, sysclk: &Hertz) -> u32 {
+fn mt2guard_ticks(mut mt: f64, sysclk: &Hertz) -> u32 {
+    if mt < crate::config::MIN_GUARD_TIME {
+        mt = crate::config::MIN_GUARD_TIME;
+    }
     (sysclk.duration_ms(mt as u32).to_ms() as f32 * crate::config::MEASURE_TIME_TO_GUARD_MULTIPLIER)
         as u32
 }

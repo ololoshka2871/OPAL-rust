@@ -72,7 +72,7 @@ default = [
   "freqmeter-start-stop", # При временах измерения <= 100 мс только этот режим адекватно работает
   "defmt-debug", # отключить когда собираешь релиз
   "monitor-heap",
-  #"monitor-output",
+  #"monitor-output", # В режиме самописца данных там нет
   #"led-blink ",
   #"monitor",
 ]

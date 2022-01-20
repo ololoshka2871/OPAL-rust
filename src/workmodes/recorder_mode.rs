@@ -168,7 +168,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
                 )
                 .set_speed(Speed::Low),
 
-            sensor_command_queue: Arc::new(freertos_rust::Queue::new(7).unwrap()),
+            sensor_command_queue: Arc::new(freertos_rust::Queue::new(40).unwrap()),
         }
     }
 

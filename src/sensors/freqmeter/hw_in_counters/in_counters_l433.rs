@@ -498,7 +498,6 @@ unsafe fn call_dma_cb(
 ) {
     if let Some(f) = cb {
         // reload | prescaler -> 32 bit target
-        // f.cycle_finished(captured, as_target32(prescaler, reload), irq);
         f.cycle_finished(
             if opm_val {
                 TimerEvent::Stop

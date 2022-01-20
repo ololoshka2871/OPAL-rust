@@ -80,7 +80,7 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
     TZeroCorrection: 0.0,
 
     writeConfig: app_settings::WriteConfig {
-        BaseInterval_ms: 100,
+        BaseInterval_ms: MIN_MT,
         PWriteDevider: 1,
         TWriteDevider: 1,
     },

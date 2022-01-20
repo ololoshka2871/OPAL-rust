@@ -99,7 +99,12 @@ impl OnCycleFinished for DMAFinished {
             &mut ctx,
             Command::ReadyFChannel(self.ch, event, target, result, wraped),
         ) {
-            defmt::error!("Sensor command queue error: {}", defmt::Debug2Format(&_e));
+            defmt::error!(
+                "Command send error: {} | ch. {} ev. {}",
+                defmt::Debug2Format(&_e),
+                self.ch,
+                event
+            );
         }
         self.ic.unpend(irq);
     }
