@@ -24,7 +24,7 @@ use crate::{
 
 use super::{common::ClockConfigProvider, output_storage::OutputStorage, WorkMode};
 
-const PLL_CFG: (u32, u32, u32) = (1, 8, 8);
+const PLL_CFG: (u32, u32, u32) = (1, 8, 8); // Меньше 12 нельзя!
 const APB1_DEVIDER: u32 = 1;
 const APB2_DEVIDER: u32 = 1;
 
