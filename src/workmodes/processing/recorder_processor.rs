@@ -221,10 +221,6 @@ impl RecorderProcessor {
         }
         adaptate_req(false);
 
-        loop {
-            CurrentTask::delay(Duration::infinite());
-        }
-
         // 2. Частотыне каналы прогреты, включаем аналоговые
         start_analog_channels(ch_cfg.tcpu_en, ch_cfg.vbat_en);
         CurrentTask::delay(Duration::ticks(10));
@@ -235,7 +231,7 @@ impl RecorderProcessor {
                 match writer.try_create_new_page() {
                     Ok(p) => break p,
                     Err(freertos_rust::FreeRtosError::OutOfMemory) => {
-                        defmt::warn!("Memory full, power down aster 1s");
+                        defmt::warn!("Memory full, power down after 1s");
                         CurrentTask::delay(Duration::ms(1_000));
                         super::halt_cpu();
                     }

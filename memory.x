@@ -5,9 +5,9 @@ MEMORY
   /* These values correspond to the LM3S6965, one of the few devices QEMU can emulate */
 
   /* 3.2 FLASH main features: page size = 2K */
-  FLASH : ORIGIN = 0x08000000, LENGTH = 256K - 3 * 2K
-  WRITER_TEST_AREA: ORIGIN = 0x08000000 + 256K - 3 * 2K, LENGTH = 2 * 2K
-  SETTINGS: ORIGIN = 0x08000000 + 256K - 2K, LENGTH = 2K
+  FLASH : ORIGIN = 0x08000000, LENGTH = 256K - (8 + 1) * 2K
+  WRITER_TEST_AREA: ORIGIN = 0x08000000 + 256K - (8 + 1) * 2K, LENGTH = 8 * 2K
+  SETTINGS: ORIGIN = 0x08000000 + 256K - 1 * 2K, LENGTH = 1 * 2K
 
   RAM : ORIGIN = 0x20000000, LENGTH = 64K
   RAM2 : ORIGIN = 0x10000000, LENGTH = 0x4000

@@ -353,6 +353,8 @@ pub fn abs_difference<T: Sub<Output = T> + Ord>(x: T, y: T) -> T {
 
 /// Вечный сон
 pub fn halt_cpu() -> ! {
-    cortex_m::interrupt::free(|_| cortex_m::asm::wfi());
+    cortex_m::interrupt::free(|_| loop {
+        cortex_m::asm::wfi()
+    });
     loop {}
 }

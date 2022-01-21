@@ -7,9 +7,11 @@ use stm32l4xx_hal::{flash::WriteErase, traits::flash};
 use super::PageAccessor;
 
 pub const INTERNAL_FLASH_PAGE_SIZE: usize = 2048;
+pub const INTERNAL_FLASH_PAGES: usize = 8;
 
 #[link_section = ".writer_test_area.place"]
-static STORAGE: [u8; INTERNAL_FLASH_PAGE_SIZE * 2] = [0u8; INTERNAL_FLASH_PAGE_SIZE * 2];
+static STORAGE: [u8; INTERNAL_FLASH_PAGE_SIZE * INTERNAL_FLASH_PAGES] =
+    [0u8; INTERNAL_FLASH_PAGE_SIZE * INTERNAL_FLASH_PAGES];
 
 static mut FLASH: Option<Arc<Mutex<stm32l4xx_hal::flash::Parts>>> = None;
 
@@ -39,7 +41,7 @@ impl<'a> PageAccessor for InternalPageAccessor<'a> {
 }
 
 pub fn select_page(page: u32) -> Result<impl PageAccessor, ()> {
-    assert!(page < 2);
+    assert!(page < flash_size_pages());
     if let Some(flash) = unsafe { &FLASH } {
         if let Ok(guard) = flash.lock(Duration::infinite()) {
             return Ok(InternalPageAccessor {
@@ -58,11 +60,19 @@ pub fn flash_erease() -> Result<(), ()> {
 }
 
 pub fn find_next_empty_page(start: u32) -> Option<u32> {
-    Some(start)
+    if start < flash_size_pages() {
+        Some(start)
+    } else {
+        None
+    }
 }
 
 pub fn flash_size() -> usize {
     STORAGE.len()
+}
+
+pub fn flash_size_pages() -> u32 {
+    (STORAGE.len() / INTERNAL_FLASH_PAGE_SIZE) as u32
 }
 
 pub fn init(flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>) {
