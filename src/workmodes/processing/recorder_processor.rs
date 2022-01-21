@@ -83,7 +83,12 @@ impl RecorderProcessor {
         }
     }
 
-    pub fn start<W, D, P>(&mut self, writer: W, led: P) -> Result<Task, FreeRtosError>
+    pub fn start<W, D, P>(
+        &mut self,
+        scb: cortex_m::peripheral::SCB,
+        writer: W,
+        led: P,
+    ) -> Result<Task, FreeRtosError>
     where
         P: 'static + OutputPin + Send,
         W: 'static + WriteController<D>,
@@ -110,7 +115,7 @@ impl RecorderProcessor {
             .start(move |_| {
                 Self::led_blink(led, config::START_BLINK_COUNT, blink_period);
                 CurrentTask::delay(start_delay); // задержка старта
-                Self::controller(output, cq, cfg, fm, writer, adaptate_f);
+                Self::controller(output, cq, cfg, fm, writer, adaptate_f, scb);
             })
     }
 
@@ -136,6 +141,7 @@ impl RecorderProcessor {
         fm: f64,
         mut writer: W,
         adaptate_f: Arc<Mutex<bool>>,
+        mut scb: cortex_m::peripheral::SCB,
     ) where
         W: WriteController<D>,
         D: DataPage,
@@ -231,9 +237,11 @@ impl RecorderProcessor {
                 match writer.try_create_new_page() {
                     Ok(p) => break p,
                     Err(freertos_rust::FreeRtosError::OutOfMemory) => {
-                        defmt::warn!("Memory full, power down after 1s");
-                        CurrentTask::delay(Duration::ms(1_000));
-                        super::halt_cpu();
+                        super::halt_cpu(
+                            &mut scb,
+                            "Memory full, power down after 1s",
+                            Duration::ms(1_000),
+                        );
                     }
                     Err(e) => {
                         defmt::error!("{}, retrying...", defmt::Debug2Format(&e));
@@ -241,11 +249,31 @@ impl RecorderProcessor {
                     }
                 }
             };
-            let _ = output.lock(Duration::infinite()).map(|mut guard| {
-                let o = guard.deref_mut();
-                calc_fp(o, fm);
-                page.write_header(o);
-            });
+            let v_bat = unsafe {
+                output
+                    .lock(Duration::infinite())
+                    .map(|mut guard| {
+                        let o = guard.deref_mut();
+                        calc_fp(o, fm);
+                        page.write_header(o);
+                        o.vbat
+                    })
+                    .unwrap_unchecked()
+            };
+
+            let _ = crate::settings::settings_action::<_, _, _, ()>(
+                Duration::infinite(),
+                |(settings, _)| {
+                    if v_bat < settings.VbatWorkRange.minimum {
+                        super::halt_cpu(
+                            &mut scb,
+                            "Battery low, power down after 1s",
+                            Duration::ms(1_000),
+                        );
+                    }
+                    Ok(())
+                },
+            );
 
             // 4. Сбор данных
             let mut to_p_write = ch_cfg.p_write_period_ms;

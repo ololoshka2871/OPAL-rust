@@ -17,16 +17,6 @@ pub struct RegisterBlock {
     //pub apb2fz: APB2FZ,
     pub apb2fz: vcell::VolatileCell<u32>,
 }
-/* TODO: как в хале
-pub type CR = Reg<u32, _CR>;
-
-pub struct _CR;
-
-impl Readable for CR {}
-impl Writable for CR {}
-
-pub mod cr;
-*/
 
 pub const DEBUG_MCU: *mut crate::support::debug_mcu::RegisterBlock =
     0xE004_2000 as *mut crate::support::debug_mcu::RegisterBlock;

@@ -47,7 +47,7 @@ pub extern "C" fn rust_begin_unwind(
     file: &'static str,
     line: u32,
 ) -> ! {
-    defmt::panic!("unwind() failed at {}:{}", file, line);
+    cortex_m::asm::udf();
 }
 
 #[cfg(debug_assertions)]

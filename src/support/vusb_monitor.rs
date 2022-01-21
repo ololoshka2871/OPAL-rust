@@ -23,6 +23,10 @@ impl<'a> VUsbMonitor<'a> {
         // enable montoring 1.2v
         pwr.cr2.modify(|_, w| w.pvme1().set_bit());
 
+        // без этогй задержки в релизном билде видимо не успевает сработать и всегда детектится что 
+        // USB питание присутствует
+        cortex_m::asm::delay(10); 
+
         VUsbMonitor {
             was_pwr_disabled,
             rcc,
@@ -48,16 +52,15 @@ impl<'a> Drop for VUsbMonitor<'a> {
 
 impl<'a> UsbConnectionChecker for VUsbMonitor<'a> {
     fn is_usb_connected(&self) -> bool {
-        let mut trys = 3;
         let mut present = false;
 
         // wait bit clear
-        while trys > 0 && !present {
+        for _ in 0..3 {
             if self.pwr.sr2.read().pvmo1().bit_is_clear() {
                 present = true;
+                break;
             }
             cortex_m::asm::delay(1);
-            trys -= 1;
         }
 
         defmt::debug!("USB power monitor PVMO1: {}", present);

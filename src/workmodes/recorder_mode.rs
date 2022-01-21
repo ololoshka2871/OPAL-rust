@@ -95,6 +95,7 @@ pub struct RecorderMode {
     vbat_pin: PA1<Analog>,
 
     led_pin: PD0<Output<PushPull>>,
+    scb: cortex_m::peripheral::SCB,
 
     sensor_command_queue: Arc<freertos_rust::Queue<threads::sensor_processor::Command>>,
 }
@@ -167,6 +168,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
                     crate::config::LED_DISABLE,
                 )
                 .set_speed(Speed::Low),
+            scb: p.SCB,
 
             sensor_command_queue: Arc::new(freertos_rust::Queue::new(40).unwrap()),
         }
@@ -292,6 +294,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
             );
 
             processor.start(
+                self.scb,
                 crate::main_data_storage::cpu_flash_diff_writer::CpuFlashDiffWriter::new(
                     self.crc.clone(),
                 ),

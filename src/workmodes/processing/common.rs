@@ -1,6 +1,6 @@
 use core::{cmp::min, ops::Sub};
 
-use freertos_rust::{Duration, Mutex};
+use freertos_rust::{CurrentTask, Duration, DurationTicks, Mutex};
 use stm32l4xx_hal::time::Hertz;
 
 use crate::{
@@ -352,9 +352,24 @@ pub fn abs_difference<T: Sub<Output = T> + Ord>(x: T, y: T) -> T {
 }
 
 /// Вечный сон
-pub fn halt_cpu() -> ! {
-    cortex_m::interrupt::free(|_| loop {
-        cortex_m::asm::wfi()
+pub fn halt_cpu<D: DurationTicks>(
+    scb: &mut cortex_m::peripheral::SCB,
+    reason: &str,
+    delay: D,
+) -> ! {
+    defmt::warn!("{}", reason);
+    CurrentTask::delay(delay);
+    cortex_m::interrupt::free(|_| {
+        // shutdown mode: RM0394: Table 20. Low-power mode summary
+        // PWR_CR1.LPMS=”1xx”
+        unsafe {
+            (*stm32l4xx_hal::device::PWR::ptr())
+                .cr1
+                .modify(|_, w| w.lpms().bits(0b100))
+        };
+        // SCR.SLEEPDEEP = 1
+        scb.set_sleepdeep();
+        cortex_m::asm::wfi();
     });
     loop {}
 }

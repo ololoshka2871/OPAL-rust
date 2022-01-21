@@ -65,9 +65,9 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
     },
 
     VbatWorkRange: app_settings::WorkRange {
-        minimum: 1.5,
-        maximum: 3.6,
-        absolute_maximum: f32::NAN,
+        minimum: 2.2, //2.05 for TPS6223xx
+        maximum: 5.5,
+        absolute_maximum: 6.0, // TPS6223xx
     },
 
     calibration_date: app_settings::CalibrationDate {

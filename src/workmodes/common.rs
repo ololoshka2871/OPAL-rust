@@ -95,7 +95,7 @@ pub fn create_monitor(
     Ok(())
 }
 
-pub fn create_pseudo_idle_task() -> Result<freertos_rust::Task, freertos_rust::FreeRtosError> {
+pub fn create_pseudo_idle_task() -> Result<(), freertos_rust::FreeRtosError> {
     #[cfg(debug_assertions)]
     {
         use freertos_rust::{Task, TaskPriority};
@@ -109,6 +109,7 @@ pub fn create_pseudo_idle_task() -> Result<freertos_rust::Task, freertos_rust::F
                 unsafe {
                     freertos_rust::freertos_rs_isr_yield();
                 }
-            })
+            })?;
     }
+    Ok(())
 }
