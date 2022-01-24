@@ -10,11 +10,6 @@ use stm32l4xx_hal::{
     time::Hertz,
 };
 
-/*
-use heatshrink_rust::decoder::HeatshrinkDecoder;
-use heatshrink_rust::encoder::HeatshrinkEncoder;
-*/
-
 use crate::{
     sensors::freqmeter::master_counter,
     support::{interrupt_controller::IInterruptController, InterruptController},
@@ -24,15 +19,15 @@ use crate::{
 
 use super::{common::ClockConfigProvider, output_storage::OutputStorage, WorkMode};
 
-const PLL_CFG: (u32, u32, u32) = (2, 11, 8); // подобрать черех CubeMX
 const APB1_DEVIDER: u32 = 1;
 const APB2_DEVIDER: u32 = 1;
+const AHB_PRESCALER: u32 = 4;
 
 struct RecorderClockConfigProvider;
 
 impl ClockConfigProvider for RecorderClockConfigProvider {
     fn core_frequency() -> Hertz {
-        let f = crate::config::XTAL_FREQ * PLL_CFG.1 / (PLL_CFG.0 * PLL_CFG.2);
+        let f = crate::config::XTAL_FREQ / AHB_PRESCALER;
         Hertz(f)
     }
 
@@ -54,18 +49,274 @@ impl ClockConfigProvider for RecorderClockConfigProvider {
     }
 
     fn pll_config() -> PllConfig {
-        PllConfig::new(
-            PLL_CFG.0 as u8,
-            PLL_CFG.1 as u8,
-            super::common::to_pll_devider(PLL_CFG.2),
-        )
+        unreachable!()
     }
 
     fn xtal2master_freq_multiplier() -> f64 {
         if APB1_DEVIDER > 1 {
-            PLL_CFG.1 as f64 / (PLL_CFG.0 * PLL_CFG.2) as f64 / APB1_DEVIDER as f64 * 2.0
+            2.0 / AHB_PRESCALER as f64
         } else {
-            PLL_CFG.1 as f64 / (PLL_CFG.0 * PLL_CFG.2) as f64
+            1.0 / AHB_PRESCALER as f64
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+/// HSE Configuration
+struct HseConfig {
+    /// Clock speed of HSE
+    speed: u32,
+    /// If the clock driving circuitry is bypassed i.e. using an oscillator, not a crystal or
+    /// resonator
+    bypass: stm32l4xx_hal::rcc::CrystalBypass,
+    /// Clock Security System enable/disable
+    css: stm32l4xx_hal::rcc::ClockSecuritySystem,
+}
+
+struct MyCFGR {
+    hse: HseConfig,
+    hclk: Option<u32>,
+    pclk1: Option<u32>,
+    pclk2: Option<u32>,
+    sysclk: u32,
+}
+
+impl MyCFGR {
+    fn new() -> Self {
+        Self {
+            hse: HseConfig {
+                speed: 0,
+                bypass: stm32l4xx_hal::rcc::CrystalBypass::Disable,
+                css: stm32l4xx_hal::rcc::ClockSecuritySystem::Enable,
+            },
+            hclk: None,
+            pclk1: None,
+            pclk2: None,
+            sysclk: 0,
+        }
+    }
+
+    /// Add an HSE to the system
+    pub fn hse<F>(
+        mut self,
+        freq: F,
+        bypass: stm32l4xx_hal::rcc::CrystalBypass,
+        css: stm32l4xx_hal::rcc::ClockSecuritySystem,
+    ) -> Self
+    where
+        F: Into<Hertz>,
+    {
+        self.hse = HseConfig {
+            speed: freq.into().0,
+            bypass,
+            css,
+        };
+
+        self
+    }
+
+    /// Sets a frequency for the AHB bus
+    pub fn hclk<F>(mut self, freq: F) -> Self
+    where
+        F: Into<Hertz>,
+    {
+        self.hclk = Some(freq.into().0);
+        self
+    }
+
+    /// Sets the system (core) frequency
+    pub fn sysclk<F>(mut self, freq: F) -> Self
+    where
+        F: Into<Hertz>,
+    {
+        self.sysclk = freq.into().0;
+        self
+    }
+
+    /// Sets a frequency for the APB1 bus
+    pub fn pclk1<F>(mut self, freq: F) -> Self
+    where
+        F: Into<Hertz>,
+    {
+        self.pclk1 = Some(freq.into().0);
+        self
+    }
+
+    /// Sets a frequency for the APB2 bus
+    pub fn pclk2<F>(mut self, freq: F) -> Self
+    where
+        F: Into<Hertz>,
+    {
+        self.pclk2 = Some(freq.into().0);
+        self
+    }
+
+    fn freeze(
+        &self,
+        _acr: &mut stm32l4xx_hal::flash::ACR,
+        _pwr: &mut stm32l4xx_hal::pwr::Pwr,
+    ) -> stm32l4xx_hal::rcc::Clocks {
+        // Поскольку поля stm32l4xx_hal::rcc::Clocks приватные, делает точно такую же
+        // структуру, заполняем её и трансмутируем тип core::mem::transmute()
+        #[derive(Clone, Copy, Debug)]
+        #[allow(dead_code)]
+        struct Clocks {
+            hclk: Hertz,
+            hsi48: bool,
+            msi: Option<stm32l4xx_hal::rcc::MsiFreq>,
+            lsi: bool,
+            lse: bool,
+            pclk1: Hertz,
+            pclk2: Hertz,
+            ppre1: u8,
+            ppre2: u8,
+            sysclk: Hertz,
+            pll_source: Option<stm32l4xx_hal::rcc::PllSource>,
+        }
+
+        let rcc = unsafe { &*stm32::RCC::ptr() };
+        //
+        // 1. Setup clocks
+        //
+
+        // If HSE is available, set it up
+
+        rcc.cr.write(|w| {
+            w.hseon().set_bit();
+
+            if self.hse.bypass == stm32l4xx_hal::rcc::CrystalBypass::Enable {
+                w.hsebyp().set_bit();
+            }
+
+            w
+        });
+
+        while rcc.cr.read().hserdy().bit_is_clear() {}
+
+        // Setup CSS
+        if self.hse.css == stm32l4xx_hal::rcc::ClockSecuritySystem::Enable {
+            // Enable CSS
+            rcc.cr.modify(|_, w| w.csson().set_bit());
+        }
+
+        assert!(self.sysclk <= 80_000_000);
+
+        let (hpre_bits, hpre_div) = self
+            .hclk
+            .map(|hclk| match self.sysclk / hclk {
+                // From p 194 in RM0394
+                0 => unreachable!(),
+                1 => (0b0000, 1),
+                2 => (0b1000, 2),
+                3..=5 => (0b1001, 4),
+                6..=11 => (0b1010, 8),
+                12..=39 => (0b1011, 16),
+                40..=95 => (0b1100, 64),
+                96..=191 => (0b1101, 128),
+                192..=383 => (0b1110, 256),
+                _ => (0b1111, 512),
+            })
+            .unwrap_or((0b0000, 1));
+
+        let hclk = self.sysclk / hpre_div;
+
+        assert!(hclk <= self.sysclk);
+
+        let (ppre1_bits, ppre1) = self
+            .pclk1
+            .map(|pclk1| match hclk / pclk1 {
+                // From p 194 in RM0394
+                0 => unreachable!(),
+                1 => (0b000, 1),
+                2 => (0b100, 2),
+                3..=5 => (0b101, 4),
+                6..=11 => (0b110, 8),
+                _ => (0b111, 16),
+            })
+            .unwrap_or((0b000, 1));
+
+        let pclk1 = hclk / ppre1 as u32;
+
+        assert!(pclk1 <= self.sysclk);
+
+        let (ppre2_bits, ppre2) = self
+            .pclk2
+            .map(|pclk2| match hclk / pclk2 {
+                // From p 194 in RM0394
+                0 => unreachable!(),
+                1 => (0b000, 1),
+                2 => (0b100, 2),
+                3..=5 => (0b101, 4),
+                6..=11 => (0b110, 8),
+                _ => (0b111, 16),
+            })
+            .unwrap_or((0b000, 1));
+
+        let pclk2 = hclk / ppre2 as u32;
+
+        assert!(pclk2 <= self.sysclk);
+
+        // adjust flash wait states
+        unsafe {
+            (*stm32::FLASH::ptr()).acr.write(|w| {
+                w.latency().bits(if hclk <= 16_000_000 {
+                    0b000
+                } else if hclk <= 32_000_000 {
+                    0b001
+                } else if hclk <= 48_000_000 {
+                    0b010
+                } else if hclk <= 64_000_000 {
+                    0b011
+                } else {
+                    0b100
+                })
+            })
+        }
+
+        let sysclk_src_bits = 0b10; // HSE
+
+        // HSE: HSE selected as system clock
+        rcc.cfgr.write(|w| unsafe {
+            w.ppre2()
+                .bits(ppre2_bits)
+                .ppre1()
+                .bits(ppre1_bits)
+                .hpre()
+                .bits(hpre_bits)
+                .sw()
+                .bits(sysclk_src_bits)
+        });
+
+        while rcc.cfgr.read().sws().bits() != sysclk_src_bits {}
+
+        //
+        // 3. Shutdown unused clocks that have auto-started
+        //
+
+        // MSI always starts on reset
+        {
+            rcc.cr
+                .modify(|_, w| w.msion().clear_bit().msipllen().clear_bit())
+        }
+
+        //
+        // 4. Clock setup done!
+        //
+
+        unsafe {
+            core::mem::transmute(Clocks {
+                hclk: Hertz(hclk),
+                lsi: false,
+                lse: false,
+                msi: None,
+                hsi48: false,
+                pclk1: Hertz(pclk1),
+                pclk2: Hertz(pclk2),
+                ppre1,
+                ppre2,
+                sysclk: Hertz(self.sysclk),
+                pll_source: None,
+            })
         }
     }
 }
@@ -191,49 +442,34 @@ impl WorkMode<RecorderMode> for RecorderMode {
     // Установить частоту CPU = 12 MHz
     // USB не тактируется
     fn configure_clock(&mut self) {
-        fn setup_cfgr(work_cfgr: &mut stm32l4xx_hal::rcc::CFGR) {
-            let mut cfgr = unsafe {
-                core::mem::MaybeUninit::<stm32l4xx_hal::rcc::CFGR>::zeroed().assume_init()
-            };
-
-            core::mem::swap(&mut cfgr, work_cfgr);
-
-            let mut cfgr = cfgr
+        fn setup_cfgr() -> MyCFGR {
+            MyCFGR::new()
+                // TODO: constants
                 .hse(
-                    12.mhz(), // onboard crystall
+                    Hertz(crate::config::XTAL_FREQ), // onboard crystall
                     stm32l4xx_hal::rcc::CrystalBypass::Disable,
                     stm32l4xx_hal::rcc::ClockSecuritySystem::Enable,
                 )
-                // FIXME: Don't use PLL, dirrectly connect HSE to CPU (see freeze())
-                .sysclk_with_pll(
-                    RecorderClockConfigProvider::core_frequency(),
-                    RecorderClockConfigProvider::pll_config(),
-                )
-                .pll_source(stm32l4xx_hal::rcc::PllSource::HSE)
-                //.sysclk(12.mhz())
-                //.hclk(3.mhz())
-                // FIXME: master counter - max speed, input counters - slow down
+                .sysclk(Hertz(crate::config::XTAL_FREQ))
+                .hclk(Hertz(crate::config::XTAL_FREQ / AHB_PRESCALER))
                 .pclk1(RecorderClockConfigProvider::apb1_frequency())
-                .pclk2(RecorderClockConfigProvider::apb1_frequency());
-
-            core::mem::swap(&mut cfgr, work_cfgr);
+                .pclk2(RecorderClockConfigProvider::apb2_frequency())
         }
 
-        setup_cfgr(&mut self.rcc.cfgr);
+        let cfgr = setup_cfgr();
 
         let clocks = if let Ok(mut flash) = self.flash.lock(Duration::infinite()) {
-            self.rcc.cfgr.freeze(&mut flash.acr, &mut self.pwr)
+            cfgr.freeze(&mut flash.acr, &mut self.pwr)
         } else {
             panic!()
         };
 
-        /*
-        // low poer run (F <= 2MHz) (на 12 MHz выйгрыш около 200мкА)
+        // low power run (F <= 2MHz) (на 12 MHz выйгрыш около 200мкА)
         unsafe {
             (*stm32l4xx_hal::device::PWR::ptr())
                 .cr1
                 .modify(|_, w| w.lpr().set_bit())
-        };*/
+        };
 
         // stm32l433cc.pdf: fugure. 4
         master_counter::MasterCounter::init(
