@@ -205,14 +205,13 @@ impl WorkMode<RecorderMode> for RecorderMode {
                     stm32l4xx_hal::rcc::ClockSecuritySystem::Enable,
                 )
                 // FIXME: Don't use PLL, dirrectly connect HSE to CPU (see freeze())
-                /*.sysclk_with_pll(
+                .sysclk_with_pll(
                     RecorderClockConfigProvider::core_frequency(),
                     RecorderClockConfigProvider::pll_config(),
                 )
                 .pll_source(stm32l4xx_hal::rcc::PllSource::HSE)
-                */
-                .sysclk(12.mhz())
-                .hclk(3.mhz())
+                //.sysclk(12.mhz())
+                //.hclk(3.mhz())
                 // FIXME: master counter - max speed, input counters - slow down
                 .pclk1(RecorderClockConfigProvider::apb1_frequency())
                 .pclk2(RecorderClockConfigProvider::apb1_frequency());
@@ -228,12 +227,13 @@ impl WorkMode<RecorderMode> for RecorderMode {
             panic!()
         };
 
+        /*
         // low poer run (F <= 2MHz) (на 12 MHz выйгрыш около 200мкА)
         unsafe {
             (*stm32l4xx_hal::device::PWR::ptr())
                 .cr1
                 .modify(|_, w| w.lpr().set_bit())
-        };
+        };*/
 
         // stm32l433cc.pdf: fugure. 4
         master_counter::MasterCounter::init(
