@@ -23,9 +23,9 @@ impl<'a> VUsbMonitor<'a> {
         // enable montoring 1.2v
         pwr.cr2.modify(|_, w| w.pvme1().set_bit());
 
-        // без этогй задержки в релизном билде видимо не успевает сработать и всегда детектится что 
+        // без этогй задержки в релизном билде видимо не успевает сработать и всегда детектится что
         // USB питание присутствует
-        cortex_m::asm::delay(10); 
+        cortex_m::asm::delay(10);
 
         VUsbMonitor {
             was_pwr_disabled,

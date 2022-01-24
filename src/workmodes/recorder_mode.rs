@@ -24,7 +24,7 @@ use crate::{
 
 use super::{common::ClockConfigProvider, output_storage::OutputStorage, WorkMode};
 
-const PLL_CFG: (u32, u32, u32) = (1, 8, 8); // Меньше 12 нельзя!
+const PLL_CFG: (u32, u32, u32) = (2, 11, 8); // подобрать черех CubeMX
 const APB1_DEVIDER: u32 = 1;
 const APB2_DEVIDER: u32 = 1;
 
@@ -205,11 +205,14 @@ impl WorkMode<RecorderMode> for RecorderMode {
                     stm32l4xx_hal::rcc::ClockSecuritySystem::Enable,
                 )
                 // FIXME: Don't use PLL, dirrectly connect HSE to CPU (see freeze())
-                .sysclk_with_pll(
+                /*.sysclk_with_pll(
                     RecorderClockConfigProvider::core_frequency(),
                     RecorderClockConfigProvider::pll_config(),
                 )
                 .pll_source(stm32l4xx_hal::rcc::PllSource::HSE)
+                */
+                .sysclk(12.mhz())
+                .hclk(3.mhz())
                 // FIXME: master counter - max speed, input counters - slow down
                 .pclk1(RecorderClockConfigProvider::apb1_frequency())
                 .pclk2(RecorderClockConfigProvider::apb1_frequency());
@@ -223,6 +226,13 @@ impl WorkMode<RecorderMode> for RecorderMode {
             self.rcc.cfgr.freeze(&mut flash.acr, &mut self.pwr)
         } else {
             panic!()
+        };
+
+        // low poer run (F <= 2MHz) (на 12 MHz выйгрыш около 200мкА)
+        unsafe {
+            (*stm32l4xx_hal::device::PWR::ptr())
+                .cr1
+                .modify(|_, w| w.lpr().set_bit())
         };
 
         // stm32l433cc.pdf: fugure. 4
