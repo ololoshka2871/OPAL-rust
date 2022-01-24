@@ -37,7 +37,7 @@ impl RawValueProcessor for HighPerformanceProcessor {
     ) -> (bool, Option<(u32, u32)>) {
         let config = super::channel_config(ch);
         let mut new_target_opt = None;
-        if config.enabled {
+        if config.enabled && result > 0 {
             if let Ok(mut guard) = self.output.lock(Duration::infinite()) {
                 guard.targets[ch as usize] = target;
                 guard.results[ch as usize] = Some(result);
