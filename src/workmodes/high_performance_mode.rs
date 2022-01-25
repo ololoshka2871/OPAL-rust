@@ -326,7 +326,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             let processor = HighPerformanceProcessor::new(
                 self.output.clone(),
                 HighPerformanceClockConfigProvider::xtal2master_freq_multiplier(),
-                unsafe { self.clocks.unwrap_unchecked().sysclk() },
+                unsafe { self.clocks.unwrap_unchecked().hclk() },
             );
             Task::new()
                 .name("SensProc")
@@ -339,7 +339,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         // --------------------------------------------------------------------
 
         crate::workmodes::common::create_monitor(
-            unsafe { self.clocks.unwrap_unchecked().sysclk() },
+            unsafe { self.clocks.unwrap_unchecked().hclk() },
             self.output.clone(),
         )?;
 
