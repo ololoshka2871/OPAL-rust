@@ -146,6 +146,135 @@ impl RecorderProcessor {
         W: WriteController<D>,
         D: DataPage,
     {
+        enum Event {
+            /// Приступить к прогреву канала
+            Preheat,
+            /// Записать значение
+            Measure,
+            /// Записать значение и выключить канал
+            MeasureAndSleep,
+        }
+
+        enum CurrentChState {
+            /// Сейчас канал в готовности
+            Ready,
+            // Сейчас канал прогревается
+            Heating,
+            // Сейчас канал отключен
+            Sleeping,
+        }
+
+        enum ToWriteCounterMode {
+            /// Режим прогрев-измерение-сон
+            HeatMeasureStop,
+            /// Изменеие без сна
+            MeasureOnly,
+        }
+
+        struct ToWriteCounter {
+            write_period_ms: u32,
+            preheat_time_ms: u32,
+            counter: u32,
+            mode: ToWriteCounterMode,
+            cur_state: CurrentChState,
+            ch_enabled: bool,
+        }
+
+        impl ToWriteCounter {
+            fn channel_heated(write_period_ms: u32, preheat_time_ms: u32, enabled: bool) -> Self {
+                Self {
+                    write_period_ms,
+                    preheat_time_ms,
+                    counter: 0,
+                    mode: if preheat_time_ms < write_period_ms {
+                        ToWriteCounterMode::HeatMeasureStop
+                    } else {
+                        ToWriteCounterMode::MeasureOnly
+                    },
+                    cur_state: CurrentChState::Ready,
+                    ch_enabled: enabled,
+                }
+            }
+
+            fn accept_state(&mut self, state: CurrentChState) {
+                self.cur_state = state
+            }
+
+            fn to_write(&self) -> u32 {
+                let odd = self.counter % self.write_period_ms;
+                if odd == 0 {
+                    odd
+                } else {
+                    self.write_period_ms - odd
+                }
+            }
+
+            /// Возврещает количество милисекунд, которые можно поспать до момента когда надо будет
+            /// прогреть канал или снять измерения
+            fn to_next_event(&self) -> u32 {
+                if self.ch_enabled {
+                    let to_write = self.to_write();
+                    match (&self.mode, &self.cur_state) {
+                        (ToWriteCounterMode::HeatMeasureStop, CurrentChState::Ready)
+                        | (ToWriteCounterMode::HeatMeasureStop, CurrentChState::Heating) => {
+                            to_write
+                        }
+                        (ToWriteCounterMode::HeatMeasureStop, CurrentChState::Sleeping) => {
+                            if to_write >= self.preheat_time_ms {
+                                to_write - self.preheat_time_ms
+                            } else {
+                                to_write
+                            }
+                        }
+                        (ToWriteCounterMode::MeasureOnly, _) => to_write,
+                    }
+                } else {
+                    freertos_rust::FreeRtosTickType::MAX
+                }
+            }
+
+            /// Вызвать это после того как поспали, указав сколько проспали
+            /// смещае указательвнутренего времени
+            fn tick(&mut self, time_ms: u32) {
+                self.counter += time_ms;
+            }
+
+            /// возвращает код действия, которое надо выполнить на этом шаге или ни какого действия
+            fn is_event(&self) -> Option<Event> {
+                if self.ch_enabled {
+                    let to_write = self.to_write();
+                    match (&self.mode, &self.cur_state) {
+                        (ToWriteCounterMode::HeatMeasureStop, CurrentChState::Ready)
+                        | (ToWriteCounterMode::HeatMeasureStop, CurrentChState::Heating) => {
+                            if to_write == 0 {
+                                Some(Event::MeasureAndSleep)
+                            } else {
+                                None
+                            }
+                        }
+                        (ToWriteCounterMode::HeatMeasureStop, CurrentChState::Sleeping) => {
+                            if to_write == self.preheat_time_ms {
+                                Some(Event::Preheat)
+                            } else if to_write == 0 {
+                                Some(Event::MeasureAndSleep)
+                            } else {
+                                None
+                            }
+                        }
+                        (ToWriteCounterMode::MeasureOnly, _) => {
+                            if to_write == 0 {
+                                Some(Event::Measure)
+                            } else {
+                                None
+                            }
+                        }
+                    }
+                } else {
+                    None
+                }
+            }
+        }
+
         let adaptate_req = move |req| {
             let _ = adaptate_f.lock(Duration::infinite()).map(|mut g| *g = req);
         };
@@ -192,13 +321,44 @@ impl RecorderProcessor {
             }
         }
 
-        let push_data = |page: &mut D, ch: FChannel| -> bool {
-            unsafe {
-                output
-                    .lock(Duration::infinite())
-                    .map(|guard| page.push_data(guard.results[ch as usize], ch))
-                    .unwrap_unchecked()
+        let process_sensor_event = |waiter: &mut ToWriteCounter, page: &mut D, ch: FChannel| {
+            match waiter.is_event() {
+                // Начать прогрев канала
+                Some(Event::Preheat) => {
+                    send_cc(Command::Start(Channel::FChannel(ch)));
+                    waiter.accept_state(CurrentChState::Heating);
+                }
+                // Только записать измерения
+                Some(Event::Measure) => {
+                    if unsafe {
+                        output
+                            .lock(Duration::infinite())
+                            .map(|guard| page.push_data(guard.results[ch as usize], ch))
+                            .unwrap_unchecked()
+                    } {
+                        return true;
+                    }
+                    waiter.accept_state(CurrentChState::Ready);
+                }
+                // Записать измерения и выключить канал
+                Some(Event::MeasureAndSleep) => {
+                    if unsafe {
+                        output
+                            .lock(Duration::infinite())
+                            .map(|guard| page.push_data(guard.results[ch as usize], ch))
+                            .unwrap_unchecked()
+                    } {
+                        // Блок заполнен, даже если положено поспать, игнорируем и сразу
+                        // возвращаемся
+                        waiter.accept_state(CurrentChState::Ready);
+                        return true;
+                    }
+                    send_cc(Command::Stop(Channel::FChannel(ch)));
+                    waiter.accept_state(CurrentChState::Sleeping);
+                }
+                None => {}
             }
+            return false;
         };
 
         //1. Включаем частотыне каналы
@@ -276,27 +436,49 @@ impl RecorderProcessor {
             );
 
             // 4. Сбор данных
-            let mut to_p_write = ch_cfg.p_write_period_ms;
-            let mut to_t_write = ch_cfg.t_write_period_ms;
+            // Это счетчики, количество базовых интервалов, МЕЖДУ записями
+            // Если интервал до следующей записи больше времени холодного старта канала
+            // То надо усыпить канал и потом поднять его за ch_cfg.?_preheat_time_ms до момента
+            // кода надо снимать показания.
+            let mut to_p_write_ = ToWriteCounter::channel_heated(
+                ch_cfg.p_write_period_ms,
+                ch_cfg.p_preheat_time_ms,
+                ch_cfg.p_en,
+            );
+            let mut to_t_write_ = ToWriteCounter::channel_heated(
+                ch_cfg.t_write_period_ms,
+                ch_cfg.t_preheat_time_ms,
+                ch_cfg.t_en,
+            );
+
             loop {
-                let to_next_write = core::cmp::min(to_p_write, to_t_write);
-                CurrentTask::delay(Duration::ms(to_next_write));
-                to_p_write -= to_next_write;
-                to_t_write -= to_next_write;
+                let to_next_event =
+                    core::cmp::min(to_p_write_.to_next_event(), to_t_write_.to_next_event());
 
-                if to_p_write == 0 {
-                    if push_data(&mut page, FChannel::Pressure) {
-                        break;
-                    }
-                    to_p_write = ch_cfg.p_write_period_ms;
+                if to_next_event > 0 {
+                    defmt::debug!("{} ms sleep to next event", to_next_event);
+                    CurrentTask::delay(Duration::ms(to_next_event));
+
+                    to_p_write_.tick(to_next_event);
+                    to_t_write_.tick(to_next_event);
                 }
 
-                if to_t_write == 0 {
-                    if push_data(&mut page, FChannel::Temperature) {
-                        break;
-                    }
-                    to_t_write = ch_cfg.t_write_period_ms;
+                let start_moment = freertos_rust::FreeRtosUtils::get_tick_count();
+                if process_sensor_event(&mut to_p_write_, &mut page, FChannel::Pressure) {
+                    enable_t_channel(ch_cfg.t_en);
+                    break;
                 }
+                if process_sensor_event(&mut to_t_write_, &mut page, FChannel::Temperature) {
+                    enable_p_channel(ch_cfg.p_en);
+                    break;
+                }
+                let end_moment = freertos_rust::FreeRtosUtils::get_tick_count();
+
+                // Подвигаем счетчики, чтобы предотвратить цыклическое выполнение одинаковых действий
+                let done = core::cmp::max(end_moment.abs_diff(start_moment), 1);
+                CurrentTask::delay(Duration::ms(done));
+                to_p_write_.tick(done);
+                to_t_write_.tick(done);
             }
 
             // 5. Финализация
@@ -312,11 +494,7 @@ impl RecorderProcessor {
 
                 let end_moment = freertos_rust::FreeRtosUtils::get_tick_count();
 
-                let mut write_time = if end_moment >= start_moment {
-                    end_moment - start_moment
-                } else {
-                    freertos_rust::FreeRtosTickType::MAX - start_moment + end_moment
-                };
+                let mut write_time = end_moment.abs_diff(start_moment);
 
                 // 7. Запись станицы
                 match write_res {
@@ -357,14 +535,12 @@ impl RawValueProcessor for RecorderProcessor {
         target: u32,
         result: u32,
     ) -> (bool, Option<(u32, u32)>) {
-        /*
         defmt::debug!(
-            "process_f_result(ch={}, target={}, result{})",
+            "process_f_result(ch={}, target={}, result={})",
             ch,
             target,
             result
         );
-        */
 
         if let Ok(mut guard) = self.output.lock(Duration::infinite()) {
             guard.targets[ch as usize] = target;
@@ -391,18 +567,7 @@ impl RawValueProcessor for RecorderProcessor {
 
             (true, new_cfg)
         } else {
-            (
-                // продолжить работу, только если интервал записи меньше или равен времени "прогрева" канала
-                match ch {
-                    FChannel::Pressure => {
-                        self.ch_cfg.p_preheat_time_ms > self.ch_cfg.p_write_period_ms
-                    }
-                    FChannel::Temperature => {
-                        self.ch_cfg.t_preheat_time_ms > self.ch_cfg.t_write_period_ms
-                    }
-                },
-                None,
-            )
+            (true, None)
         }
     }
 

@@ -7,7 +7,7 @@ use stm32l4xx_hal::{flash::WriteErase, traits::flash};
 use super::PageAccessor;
 
 pub const INTERNAL_FLASH_PAGE_SIZE: usize = 2048;
-pub const INTERNAL_FLASH_PAGES: usize = 8;
+pub const INTERNAL_FLASH_PAGES: usize = 2;
 
 #[link_section = ".writer_test_area.place"]
 static STORAGE: [u8; INTERNAL_FLASH_PAGE_SIZE * INTERNAL_FLASH_PAGES] =

@@ -224,6 +224,20 @@ fn verify_parameters(
                 )));
             }
         }
+        if let Some(p_devider) = set_write_config.p_write_devider {
+            if p_devider == 0 {
+                return Err(SettingActionError::ActionError(
+                    "P write devider == 0".to_string(),
+                ));
+            }
+        }
+        if let Some(t_devider) = set_write_config.t_write_devider {
+            if t_devider == 0 {
+                return Err(SettingActionError::ActionError(
+                    "T write devider == 0".to_string(),
+                ));
+            }
+        }
     }
 
     if let Some(set_pressure_meassure_units) = ws.set_pressure_meassure_units {

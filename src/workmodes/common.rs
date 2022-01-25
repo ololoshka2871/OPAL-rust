@@ -48,7 +48,7 @@ impl Format for Ticks {
 }
 
 pub fn to_real_period<D: DurationTicks, F: Into<Hertz>>(period: D, sysclk: F) -> Duration {
-    let in_freq_hz = Hertz(crate::config::XTAL_FREQ);
+    let in_freq_hz = Hertz(crate::config::FREERTOS_CONFIG_FREQ);
     let fcpu_hz: Hertz = sysclk.into();
 
     let ticks = period.to_ticks() as u64 * fcpu_hz.0 as u64 / in_freq_hz.0 as u64;

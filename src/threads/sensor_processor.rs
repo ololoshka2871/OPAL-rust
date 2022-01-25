@@ -70,7 +70,7 @@ pub enum Command {
     Stop(Channel),
     ReadyFChannel(FChannel, TimerEvent, u32, u32, bool),
     ReadAChannel(AChannel),
-    TimeoutFChannel(FChannel),
+    TimeoutFChannel(FChannel, u32),
 }
 
 struct DMAFinished {
@@ -183,7 +183,12 @@ where
         perith.en_1,
         FChannel::Pressure,
         initial_target(FChannel::Pressure),
-        move || send_command(cc.as_ref(), Command::TimeoutFChannel(FChannel::Pressure)),
+        move |guard_time| {
+            send_command(
+                cc.as_ref(),
+                Command::TimeoutFChannel(FChannel::Pressure, guard_time),
+            )
+        },
     );
 
     let cc = command_queue.clone();
@@ -192,7 +197,12 @@ where
         perith.en_2,
         FChannel::Temperature,
         initial_target(FChannel::Temperature),
-        move || send_command(cc.as_ref(), Command::TimeoutFChannel(FChannel::Temperature)),
+        move |guard_time| {
+            send_command(
+                cc.as_ref(),
+                Command::TimeoutFChannel(FChannel::Temperature, guard_time),
+            )
+        },
     );
 
     let mut p_channels: [&mut dyn FChProcessor; 2] = [&mut p_controller, &mut t_controller];
@@ -201,12 +211,12 @@ where
     //----------------------------------------------------
 
     let cc = command_queue.clone();
-    let mut t_cpu = AnalogChannel::new(AChannel::TCPU, perith.tcpu_ch, 1, move || {
+    let mut t_cpu = AnalogChannel::new(AChannel::TCPU, perith.tcpu_ch, 1, move |_| {
         send_command(cc.as_ref(), Command::ReadAChannel(AChannel::TCPU))
     });
 
     let cc = command_queue.clone();
-    let mut vbat = AnalogChannel::new(AChannel::Vbat, perith.vbat_pin, 1, move || {
+    let mut vbat = AnalogChannel::new(AChannel::Vbat, perith.vbat_pin, 1, move |_| {
         send_command(cc.as_ref(), Command::ReadAChannel(AChannel::Vbat))
     });
 
@@ -218,9 +228,15 @@ where
     loop {
         if let Ok(cmd) = command_queue.receive(Duration::infinite()) {
             match cmd {
-                Command::Start(Channel::FChannel(c)) => p_channels[c as usize].enable(),
+                Command::Start(Channel::FChannel(c)) => {
+                    p_channels[c as usize].enable();
+                    defmt::debug!("Enable ch. {}", c);
+                }
                 Command::Start(Channel::AChannel(c)) => a_channels[c as usize].init_cycle(),
-                Command::Stop(Channel::FChannel(c)) => p_channels[c as usize].diasble(),
+                Command::Stop(Channel::FChannel(c)) => {
+                    p_channels[c as usize].diasble();
+                    defmt::debug!("Disable ch. {}", c);
+                }
                 Command::Stop(Channel::AChannel(c)) => a_channels[c as usize].stop(),
                 Command::ReadyFChannel(c, ev, target, captured, wraped) => {
                     let ch = &mut p_channels[c as usize];
@@ -266,8 +282,8 @@ where
                         ch.init_cycle();
                     }
                 }
-                Command::TimeoutFChannel(c) => {
-                    defmt::warn!("ch. {} signal lost.", c);
+                Command::TimeoutFChannel(c, guard_ticks) => {
+                    defmt::warn!("ch. {} signal lost. ({}) ticks", c, guard_ticks);
                     let ch = &mut p_channels[c as usize];
 
                     ch.diasble();

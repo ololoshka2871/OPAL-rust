@@ -4,7 +4,7 @@ use core::marker::PhantomData;
 use freertos_rust::{Duration, Timer};
 use stm32l4xx_hal::{gpio::PinState, prelude::OutputPin};
 
-use crate::threads::sensor_processor::FChannel;
+use crate::{support::timer_period::TimerExt, threads::sensor_processor::FChannel};
 
 use super::{f_ch_processor::FChProcessor, hw_in_counters::InCounter, TimerEvent};
 
@@ -17,6 +17,7 @@ where
     prev: u32,
     start: bool,
     no_signal_guard: Timer,
+    current_guard_ticks: u32,
     _phantomdata1: PhantomData<DMA>,
     _phantomdata2: PhantomData<INPIN>,
 }
@@ -54,6 +55,7 @@ where
     fn set_target(&mut self, new_target: u32, guard_ticks: u32) {
         let _ = self.no_signal_guard.stop(Duration::infinite());
         self.freqmeter.stop();
+        self.current_guard_ticks = guard_ticks;
 
         let _ = self
             .no_signal_guard
@@ -114,10 +116,13 @@ where
         f: F,
     ) -> Self
     where
-        F: Fn() + Send + 'static,
+        F: Fn(u32) + Send + 'static,
     {
-        let timer =
-            crate::support::new_freertos_timer(Duration::ticks(initial_guard_ticks), ch.into(), f);
+        let timer = crate::support::new_freertos_timer(
+            Duration::ticks(initial_guard_ticks),
+            ch.into(),
+            move |timer| f(timer.period()),
+        );
         let _ = timer.stop(Duration::infinite());
 
         Self {
@@ -126,6 +131,7 @@ where
             prev: 0,
             start: false,
             no_signal_guard: timer,
+            current_guard_ticks: initial_guard_ticks,
             _phantomdata1: PhantomData,
             _phantomdata2: PhantomData,
         }

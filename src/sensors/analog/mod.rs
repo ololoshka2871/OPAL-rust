@@ -2,7 +2,10 @@ use cortex_m::prelude::_embedded_hal_adc_OneShot;
 use freertos_rust::{Duration, Timer};
 use stm32l4xx_hal::adc::{Channel, ADC};
 
-use crate::{support::new_freertos_timer, threads::sensor_processor::AChannel};
+use crate::{
+    support::{new_freertos_timer, timer_period::TimerExt},
+    threads::sensor_processor::AChannel,
+};
 
 pub trait AController {
     fn init_cycle(&mut self);
@@ -22,10 +25,12 @@ pub struct AnalogChannel<ADCCH: Channel> {
 impl<ADCCH: Channel> AnalogChannel<ADCCH> {
     pub fn new<F>(ch: AChannel, adc_ch: ADCCH, analog_ticks: u32, f: F) -> Self
     where
-        F: Fn() + Send + 'static,
+        F: Fn(u32) + Send + 'static,
         ADCCH: Send,
     {
-        let timer = new_freertos_timer(Duration::ticks(analog_ticks), ch.into(), f);
+        let timer = new_freertos_timer(Duration::ticks(analog_ticks), ch.into(), move |timer| {
+            f(timer.period())
+        });
         let _ = timer.stop(Duration::infinite());
 
         Self {

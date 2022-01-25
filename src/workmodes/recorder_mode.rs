@@ -21,14 +21,12 @@ use super::{common::ClockConfigProvider, output_storage::OutputStorage, WorkMode
 
 const APB1_DEVIDER: u32 = 1;
 const APB2_DEVIDER: u32 = 1;
-const AHB_PRESCALER: u32 = 4;
 
 struct RecorderClockConfigProvider;
 
 impl ClockConfigProvider for RecorderClockConfigProvider {
     fn core_frequency() -> Hertz {
-        let f = crate::config::XTAL_FREQ / AHB_PRESCALER;
-        Hertz(f)
+        Hertz(crate::config::FREERTOS_CONFIG_FREQ)
     }
 
     fn apb1_frequency() -> Hertz {
@@ -54,9 +52,9 @@ impl ClockConfigProvider for RecorderClockConfigProvider {
 
     fn xtal2master_freq_multiplier() -> f64 {
         if APB1_DEVIDER > 1 {
-            2.0 / AHB_PRESCALER as f64
+            2.0 / (crate::config::XTAL_FREQ as f64 / crate::config::FREERTOS_CONFIG_FREQ as f64)
         } else {
-            1.0 / AHB_PRESCALER as f64
+            1.0 / (crate::config::XTAL_FREQ as f64 / crate::config::FREERTOS_CONFIG_FREQ as f64)
         }
     }
 }
@@ -451,7 +449,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
                     stm32l4xx_hal::rcc::ClockSecuritySystem::Enable,
                 )
                 .sysclk(Hertz(crate::config::XTAL_FREQ))
-                .hclk(Hertz(crate::config::XTAL_FREQ / AHB_PRESCALER))
+                .hclk(RecorderClockConfigProvider::core_frequency())
                 .pclk1(RecorderClockConfigProvider::apb1_frequency())
                 .pclk2(RecorderClockConfigProvider::apb2_frequency())
         }
