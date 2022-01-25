@@ -256,6 +256,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     }
 
     fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
+        let sys_clk = unsafe { self.clocks.unwrap_unchecked().hclk() };
+
         {
             defmt::trace!("Creating usb thread...");
             let usbperith = threads::usbd::UsbdPeriph {
@@ -326,22 +328,19 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             let processor = HighPerformanceProcessor::new(
                 self.output.clone(),
                 HighPerformanceClockConfigProvider::xtal2master_freq_multiplier(),
-                unsafe { self.clocks.unwrap_unchecked().hclk() },
+                sys_clk,
             );
             Task::new()
                 .name("SensProc")
                 .stack_size(1024)
                 .priority(TaskPriority(crate::config::SENS_PROC_TASK_PRIO))
                 .start(move |_| {
-                    threads::sensor_processor::sensor_processor(sp, cq, ic, processor)
+                    threads::sensor_processor::sensor_processor(sp, cq, ic, processor, sys_clk)
                 })?;
         }
         // --------------------------------------------------------------------
 
-        crate::workmodes::common::create_monitor(
-            unsafe { self.clocks.unwrap_unchecked().hclk() },
-            self.output.clone(),
-        )?;
+        crate::workmodes::common::create_monitor(sys_clk, self.output.clone())?;
 
         super::common::create_pseudo_idle_task()?;
 

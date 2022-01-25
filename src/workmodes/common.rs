@@ -33,11 +33,17 @@ pub struct Ticks(pub u32);
 
 pub trait HertzExt {
     fn duration_ms(&self, ms: u32) -> Duration;
+
+    fn real_duration_from_ticks(&self, ticks: u32) -> Duration;
 }
 
 impl HertzExt for Hertz {
     fn duration_ms(&self, ms: u32) -> Duration {
         to_real_period(Duration::ms(ms), self.clone())
+    }
+
+    fn real_duration_from_ticks(&self, ticks: u32) -> Duration {
+        from_real_period(ticks, self.clone())
     }
 }
 
@@ -52,6 +58,15 @@ pub fn to_real_period<D: DurationTicks, F: Into<Hertz>>(period: D, sysclk: F) ->
     let fcpu_hz: Hertz = sysclk.into();
 
     let ticks = period.to_ticks() as u64 * fcpu_hz.0 as u64 / in_freq_hz.0 as u64;
+
+    Duration::ticks(ticks as u32)
+}
+
+pub fn from_real_period<F: Into<Hertz>>(period: u32, sysclk: F) -> Duration {
+    let in_freq_hz = Hertz(crate::config::FREERTOS_CONFIG_FREQ);
+    let fcpu_hz: Hertz = sysclk.into();
+
+    let ticks = period as u64 * in_freq_hz.0 as u64 / fcpu_hz.0 as u64;
 
     Duration::ticks(ticks as u32)
 }

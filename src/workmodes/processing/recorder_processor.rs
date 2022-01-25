@@ -557,18 +557,19 @@ impl RawValueProcessor for RecorderProcessor {
             let (new_target, new_guard) = super::calc_new_target(ch, f, &self.sysclk);
             let new_cfg = Some((new_target, new_guard));
 
-            defmt::warn!(
-                "Ch. {} ({} Hz) Adaptation requested, target {} -> {}",
-                ch,
-                f,
-                target,
-                new_target
-            );
+            if target != new_target {
+                defmt::warn!(
+                    "Ch. {} ({} Hz) Adaptation requested, target {} -> {}",
+                    ch,
+                    f,
+                    target,
+                    new_target
+                );
 
-            (true, new_cfg)
-        } else {
-            (true, None)
+                return (true, new_cfg);
+            }
         }
+        (true, None)
     }
 
     fn process_f_signal_lost(&mut self, ch: FChannel, target: u32) -> (bool, Option<(u32, u32)>) {

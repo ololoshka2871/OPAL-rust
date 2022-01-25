@@ -481,6 +481,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
     fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
         let output = Arc::new(Mutex::new(OutputStorage::default()).unwrap());
 
+        let sys_clk = unsafe { self.clocks.unwrap_unchecked().hclk() };
         {
             use stm32l4xx_hal::adc::{Resolution, SampleTime};
 
@@ -534,7 +535,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
                 output.clone(),
                 self.sensor_command_queue.clone(),
                 RecorderClockConfigProvider::xtal2master_freq_multiplier(),
-                unsafe { self.clocks.unwrap_unchecked().hclk() },
+                sys_clk,
             );
 
             processor.start(
@@ -550,15 +551,12 @@ impl WorkMode<RecorderMode> for RecorderMode {
                 .stack_size(1024)
                 .priority(TaskPriority(crate::config::SENS_PROC_TASK_PRIO))
                 .start(move |_| {
-                    threads::sensor_processor::sensor_processor(sp, cq, ic, processor)
+                    threads::sensor_processor::sensor_processor(sp, cq, ic, processor, sys_clk)
                 })?;
         }
         // --------------------------------------------------------------------
 
-        crate::workmodes::common::create_monitor(
-            unsafe { self.clocks.unwrap_unchecked().hclk() },
-            output.clone(),
-        )?;
+        crate::workmodes::common::create_monitor(sys_clk, output.clone())?;
 
         super::common::create_pseudo_idle_task()?;
 

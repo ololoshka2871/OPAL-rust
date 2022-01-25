@@ -1,5 +1,16 @@
 use core::fmt::Debug;
 
+use crate::{
+    sensors::{
+        analog::{AController, AnalogChannel},
+        freqmeter::{
+            master_counter::{MasterCounter, MasterTimerInfo},
+            FChProcessor, FreqmeterController, InCounter, OnCycleFinished, TimerEvent,
+        },
+    },
+    support::interrupt_controller::{IInterruptController, Interrupt},
+    workmodes::{common::HertzExt, processing::RawValueProcessor},
+};
 use alloc::sync::Arc;
 use freertos_rust::{Duration, InterruptContext, Queue};
 use stm32l4xx_hal::{
@@ -7,19 +18,6 @@ use stm32l4xx_hal::{
     prelude::OutputPin,
 };
 use strum::IntoStaticStr;
-
-use crate::{
-    sensors::analog::AnalogChannel,
-    sensors::{
-        analog::AController,
-        freqmeter::{
-            master_counter::{MasterCounter, MasterTimerInfo},
-            FChProcessor, FreqmeterController, InCounter, OnCycleFinished, TimerEvent,
-        },
-    },
-    support::interrupt_controller::{IInterruptController, Interrupt},
-    workmodes::processing::RawValueProcessor,
-};
 
 pub struct SensorPerith<TIM1, DMA1, TIM2, DMA2, PIN1, PIN2, ENPIN1, ENPIN2, VBATPIN, TCPU>
 // Суть в том, что мы напишем КОНКРЕТНУЮ имплементацию InCounter<DMA> для
@@ -115,6 +113,7 @@ pub fn sensor_processor<PTIM, PDMA, TTIM, TDMA, PPIN, TPIN, ENPIN1, ENPIN2, TP, 
     command_queue: Arc<freertos_rust::Queue<Command>>,
     ic: Arc<dyn IInterruptController>,
     mut processor: TP,
+    sysclk: stm32l4xx_hal::time::Hertz,
 ) -> !
 where
     PTIM: InCounter<PDMA, PPIN>,
@@ -283,8 +282,13 @@ where
                     }
                 }
                 Command::TimeoutFChannel(c, guard_ticks) => {
-                    defmt::warn!("ch. {} signal lost. ({}) ticks", c, guard_ticks);
                     let ch = &mut p_channels[c as usize];
+                    defmt::warn!(
+                        "ch. {} signal lost. (target={}, guard={} ms)",
+                        c,
+                        ch.target(),
+                        sysclk.real_duration_from_ticks(guard_ticks).to_ms()
+                    );
 
                     ch.diasble();
 
