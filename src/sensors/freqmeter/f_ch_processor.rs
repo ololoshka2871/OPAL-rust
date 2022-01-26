@@ -4,6 +4,7 @@ pub trait FChProcessor {
     fn power_on(&mut self);
     fn start(&mut self);
     fn diasble(&mut self);
+    fn enabled(&self) -> bool;
 
     fn target(&self) -> u32;
 

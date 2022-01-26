@@ -230,10 +230,10 @@ where
                 Command::Start(Channel::FChannel(c), i) => {
                     if i == crate::config::F_CH_START_COUNT {
                         p_channels[c as usize].start();
-                        defmt::debug!("Enable ch. {}", c);
+                        defmt::trace!("Enable ch. {}", c);
                     } else {
                         if i == 0 {
-                            defmt::debug!("Ch. {} power on", c);
+                            defmt::trace!("Ch. {} power on", c);
                             p_channels[c as usize].power_on();
                         }
 
@@ -244,7 +244,7 @@ where
                 Command::Start(Channel::AChannel(c), _) => a_channels[c as usize].init_cycle(),
                 Command::Stop(Channel::FChannel(c)) => {
                     p_channels[c as usize].diasble();
-                    defmt::debug!("Disable ch. {}", c);
+                    defmt::trace!("Disable ch. {}", c);
                 }
                 Command::Stop(Channel::AChannel(c)) => a_channels[c as usize].stop(),
                 Command::ReadyFChannel(c, ev, target, captured, wraped) => {
@@ -254,7 +254,7 @@ where
                         defmt::trace!("Ch. {}, wraped, restart", c);
                         ch.restart();
                     } else {
-                        defmt::debug!("Ch. {}, ev={}, c={}", c, ev, captured);
+                        defmt::trace!("Ch. {}, ev={}, c={}", c, ev, captured);
                         if let Some(result) = ch.input_captured(ev, captured) {
                             let (continue_work, new_target) =
                                 processor.process_f_result(c, target, result);
@@ -301,15 +301,21 @@ where
                         sysclk.real_duration_from_ticks(guard_ticks).to_ms()
                     );
 
-                    ch.diasble();
-
                     let (continue_work, new_target) =
                         processor.process_f_signal_lost(c, ch.target());
                     if continue_work {
                         if let Some((nt, mt)) = new_target {
                             ch.set_target(nt, mt);
                         }
-                        send_command(&command_queue, Command::Start(Channel::FChannel(c), 0));
+                        // в теории там может быть все выключено, начинаем шататную процедуру
+                        // запуска
+                        if ch.enabled() {
+                            ch.restart();
+                        } else {
+                            send_command(&command_queue, Command::Start(Channel::FChannel(c), 0));
+                        }
+                    } else {
+                        ch.diasble();
                     }
                 }
             }

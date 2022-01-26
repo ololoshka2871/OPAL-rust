@@ -582,7 +582,21 @@ impl RawValueProcessor for RecorderProcessor {
         }
 
         let guard_ticks = super::guard_ticks(ch, &self.sysclk);
-        (true, Some((target, guard_ticks)))
+        let adaptation_enabled = unsafe {
+            self.adaptate_f
+                .lock(Duration::infinite())
+                .map(|g| *g)
+                .unwrap_unchecked()
+        };
+
+        (
+            true,
+            if adaptation_enabled {
+                Some((crate::config::INITIAL_FREQMETER_TARGET, guard_ticks))
+            } else {
+                Some((target, guard_ticks))
+            },
+        )
     }
 
     fn process_adc_result(

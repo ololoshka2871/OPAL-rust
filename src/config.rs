@@ -80,7 +80,8 @@ pub const START_BLINK_PERIOD_MS: u32 = 1000;
 pub const PREHEAT_MULTIPLIER: u32 = 2;
 
 // Счетчик, отскрочки включения частотомера после включения питания
-pub const F_CH_START_COUNT: u32 = 3;
+pub const F_CH_START_COUNT: u32 = 2;
 
 // Экспериментальное значение, время с подачи питания до запуска генератора
-pub const GEN_COLD_STARTUP_TIME_MS: u32 = 100;
+// Канал температуры дает 100kHz как минимум перые 100 ms, берем запас
+pub const GEN_COLD_STARTUP_TIME_MS: u32 = 200;

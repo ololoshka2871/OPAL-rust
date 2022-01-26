@@ -44,6 +44,10 @@ where
         self.set_lvl(crate::config::GENERATOR_DISABLE_LVL);
     }
 
+    fn enabled(&self) -> bool {
+        self.start
+    }
+
     fn restart(&mut self) {
         self.start = true;
         self.reset_guard();
