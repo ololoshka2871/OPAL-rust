@@ -285,22 +285,22 @@ impl RecorderProcessor {
 
         let enable_p_channel = |enabled| {
             if enabled {
-                send_cc(Command::Start(Channel::FChannel(FChannel::Pressure)));
+                send_cc(Command::Start(Channel::FChannel(FChannel::Pressure), 0));
             }
         };
 
         let enable_t_channel = |enabled| {
             if enabled {
-                send_cc(Command::Start(Channel::FChannel(FChannel::Temperature)));
+                send_cc(Command::Start(Channel::FChannel(FChannel::Temperature), 0));
             }
         };
 
         let start_analog_channels = |tcpu_en, vbat_en| {
             if tcpu_en {
-                send_cc(Command::Start(Channel::AChannel(AChannel::TCPU)));
+                send_cc(Command::Start(Channel::AChannel(AChannel::TCPU), 0));
             }
             if vbat_en {
-                send_cc(Command::Start(Channel::AChannel(AChannel::Vbat)));
+                send_cc(Command::Start(Channel::AChannel(AChannel::Vbat), 0));
             }
         };
 
@@ -325,7 +325,7 @@ impl RecorderProcessor {
             match waiter.is_event() {
                 // Начать прогрев канала
                 Some(Event::Preheat) => {
-                    send_cc(Command::Start(Channel::FChannel(ch)));
+                    send_cc(Command::Start(Channel::FChannel(ch), 0));
                     waiter.accept_state(CurrentChState::Heating);
                 }
                 // Только записать измерения

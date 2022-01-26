@@ -474,8 +474,8 @@ fn as_target32(prescaler: u32, reload: u32) -> u32 {
 }
 
 fn transform_target32(mut target: u32) -> (u32, u32) {
-    if target < 3 {
-        target = 3;
+    if target < 2 {
+        target = 2;
     } else {
         target -= 1;
     }

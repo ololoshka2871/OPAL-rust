@@ -64,7 +64,7 @@ pub enum Channel {
 
 #[derive(Clone, Copy, Debug, defmt::Format)]
 pub enum Command {
-    Start(Channel),
+    Start(Channel, u32),
     Stop(Channel),
     ReadyFChannel(FChannel, TimerEvent, u32, u32, bool),
     ReadAChannel(AChannel),
@@ -227,11 +227,21 @@ where
     loop {
         if let Ok(cmd) = command_queue.receive(Duration::infinite()) {
             match cmd {
-                Command::Start(Channel::FChannel(c)) => {
-                    p_channels[c as usize].enable();
-                    defmt::debug!("Enable ch. {}", c);
+                Command::Start(Channel::FChannel(c), i) => {
+                    if i == crate::config::F_CH_START_COUNT {
+                        p_channels[c as usize].start();
+                        defmt::debug!("Enable ch. {}", c);
+                    } else {
+                        if i == 0 {
+                            defmt::debug!("Ch. {} power on", c);
+                            p_channels[c as usize].power_on();
+                        }
+
+                        // перепосылаем команду со счетчиком +1
+                        send_command(&command_queue, Command::Start(Channel::FChannel(c), i + 1));
+                    }
                 }
-                Command::Start(Channel::AChannel(c)) => a_channels[c as usize].init_cycle(),
+                Command::Start(Channel::AChannel(c), _) => a_channels[c as usize].init_cycle(),
                 Command::Stop(Channel::FChannel(c)) => {
                     p_channels[c as usize].diasble();
                     defmt::debug!("Disable ch. {}", c);
@@ -244,6 +254,7 @@ where
                         defmt::trace!("Ch. {}, wraped, restart", c);
                         ch.restart();
                     } else {
+                        defmt::debug!("Ch. {}, ev={}, c={}", c, ev, captured);
                         if let Some(result) = ch.input_captured(ev, captured) {
                             let (continue_work, new_target) =
                                 processor.process_f_result(c, target, result);
@@ -298,7 +309,7 @@ where
                         if let Some((nt, mt)) = new_target {
                             ch.set_target(nt, mt);
                         }
-                        ch.enable();
+                        ch.start();
                     }
                 }
             }

@@ -79,5 +79,8 @@ pub const START_BLINK_PERIOD_MS: u32 = 1000;
 // включать счетчики за 2 периода измерения
 pub const PREHEAT_MULTIPLIER: u32 = 2;
 
+// Счетчик, отскрочки включения частотомера после включения питания
+pub const F_CH_START_COUNT: u32 = 3;
+
 // Экспериментальное значение, время с подачи питания до запуска генератора
 pub const GEN_COLD_STARTUP_TIME_MS: u32 = 100;

@@ -377,7 +377,7 @@ pub fn enable_selected_channels(cq: &Queue<Command>) {
             ];
             for (c, enabled) in flags.iter() {
                 if *enabled {
-                    cq.send(Command::Start(*c), Duration::infinite())
+                    cq.send(Command::Start(*c, 0), Duration::infinite())
                 } else {
                     cq.send(Command::Stop(*c), Duration::infinite())
                 }?;

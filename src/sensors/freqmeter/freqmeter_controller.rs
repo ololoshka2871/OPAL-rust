@@ -28,8 +28,11 @@ where
     ENPIN: OutputPin,
     <ENPIN as OutputPin>::Error: Debug,
 {
-    fn enable(&mut self) {
+    fn power_on(&mut self) {
         self.set_lvl(crate::config::GENERATOR_ENABLE_LVL);
+    }
+
+    fn start(&mut self) {
         self.start = true;
         self.freqmeter.cold_start();
         let _ = self.no_signal_guard.start(Duration::infinite());

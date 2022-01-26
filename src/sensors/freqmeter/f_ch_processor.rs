@@ -1,7 +1,8 @@
 use super::TimerEvent;
 
 pub trait FChProcessor {
-    fn enable(&mut self);
+    fn power_on(&mut self);
+    fn start(&mut self);
     fn diasble(&mut self);
 
     fn target(&self) -> u32;
