@@ -387,11 +387,11 @@ impl RecorderProcessor {
         }
         adaptate_req(false);
 
-        // 2. Частотыне каналы прогреты, включаем аналоговые
-        start_analog_channels(ch_cfg.tcpu_en, ch_cfg.vbat_en);
-        CurrentTask::delay(Duration::ticks(10));
-
         loop {
+            // 2. Частотыне каналы прогреты, включаем аналоговые
+            start_analog_channels(ch_cfg.tcpu_en, ch_cfg.vbat_en);
+            CurrentTask::delay(Duration::ticks(10));
+
             // 3. Создаем новый буфер страницы флеш-памяти
             let mut page = loop {
                 match writer.try_create_new_page() {
@@ -420,6 +420,8 @@ impl RecorderProcessor {
                     })
                     .unwrap_unchecked()
             };
+
+            // 3_а. Шапка записана, аналоговые каналы отключаются сами см. process_adc_result()
 
             let _ = crate::settings::settings_action::<_, _, _, ()>(
                 Duration::infinite(),
@@ -535,7 +537,7 @@ impl RawValueProcessor for RecorderProcessor {
         target: u32,
         result: u32,
     ) -> (bool, Option<(u32, u32)>) {
-        defmt::debug!(
+        defmt::trace!(
             "process_f_result(ch={}, target={}, result={})",
             ch,
             target,
