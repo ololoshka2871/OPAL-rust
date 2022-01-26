@@ -31,16 +31,20 @@ pub struct DataBlock {
 
 impl DataPage for DataBlock {
     fn write_header(&mut self, output: &OutputStorage) {
-        defmt::debug!("DataPage::write_header");
         let h = &mut self.packer.header;
 
         h.targets = output.targets;
         h.t_cpu = output.t_cpu;
         h.v_bat = output.vbat;
+
+        defmt::debug!(
+            "{}",
+            crate::main_data_storage::header_printer::HeaderPrinter(h)
+        );
     }
 
     fn push_data(&mut self, result: Option<u32>, channel: FChannel) -> bool {
-        //defmt::debug!("DataPage::push_data(result={}, ch={})", result, channel);
+        defmt::debug!("DataPage::push_data(result={}, ch={})", result, channel);
         let v = if let Some(r) = result {
             let diff = r as i32
                 - unsafe { core::mem::transmute::<u32, i32>(self.prevs[channel as usize]) };
@@ -104,16 +108,18 @@ impl WriteController<DataBlock> for CpuFlashDiffWriter {
                     _ => unreachable!(),
                 };
 
+            let packer = DataBlockPacker::builder()
+                .set_ids(
+                    self.next_page_number.checked_sub(1).unwrap_or_default(),
+                    self.next_page_number,
+                )
+                .set_size(crate::main_data_storage::flash_page_size() as usize)
+                .set_timestamp(self.master_counter_info.uptime_ms())
+                .set_write_cfg(base_interval_ms, interleave_ratio)
+                .build();
+
             let res = DataBlock {
-                packer: DataBlockPacker::builder()
-                    .set_ids(
-                        self.next_page_number.checked_sub(1).unwrap_or_default(),
-                        self.next_page_number,
-                    )
-                    .set_size(crate::main_data_storage::flash_page_size() as usize)
-                    .set_timestamp(self.master_counter_info.uptime_ms())
-                    .set_write_cfg(base_interval_ms, interleave_ratio)
-                    .build(),
+                packer,
                 dest_page: self.next_page_number,
                 counter: 0,
                 prevs: [0, 0],

@@ -9,6 +9,7 @@ pub mod write_controller;
 pub mod cpu_flash_diff_writer;
 //pub mod test_writer;
 
+pub(crate) mod header_printer;
 mod internal_storage;
 
 pub trait PageAccessor {
