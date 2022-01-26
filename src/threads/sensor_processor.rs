@@ -309,7 +309,7 @@ where
                         if let Some((nt, mt)) = new_target {
                             ch.set_target(nt, mt);
                         }
-                        ch.start();
+                        send_command(&command_queue, Command::Start(Channel::FChannel(c), 0));
                     }
                 }
             }
