@@ -22,7 +22,29 @@ pub fn flash_erease() -> Result<(), ()> {
 }
 
 pub fn find_next_empty_page(start: u32) -> Option<u32> {
-    internal_storage::find_next_empty_page(start)
+    if start < flash_size_pages() {
+        for p in start..flash_size_pages() {
+            let accessor = unsafe { select_page(p).unwrap_unchecked() };
+            let mut header_blockchain: self_recorder_packet::DataPacketHeader =
+                unsafe { core::mem::MaybeUninit::uninit().assume_init() };
+            accessor.read_to(0, unsafe {
+                core::slice::from_raw_parts_mut(
+                    &mut header_blockchain as *mut _ as *mut u8,
+                    core::mem::size_of_val(&header_blockchain),
+                )
+            });
+
+            // признаком того, что флешка стерта является то, что там везде FF
+            if core::cmp::min(
+                header_blockchain.this_block_id,
+                header_blockchain.prev_block_id,
+            ) == u32::MAX
+            {
+                return Some(p);
+            }
+        }
+    }
+    None
 }
 
 pub fn select_page(page: u32) -> Result<impl PageAccessor, ()> {
@@ -39,6 +61,10 @@ pub fn flash_page_size() -> u32 {
 
 pub fn flash_size() -> usize {
     internal_storage::flash_size()
+}
+
+pub fn flash_size_pages() -> u32 {
+    internal_storage::flash_size_pages()
 }
 
 pub(crate) fn init(flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>) {

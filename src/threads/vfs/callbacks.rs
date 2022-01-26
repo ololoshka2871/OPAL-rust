@@ -106,8 +106,8 @@ pub(crate) unsafe extern "C" fn meminfo_read(
 
     let info = MemInfo {
         FlashPageSize: crate::main_data_storage::flash_page_size(),
-        FlashPages: 0,
-        FlashUsedPages: 0,
+        FlashPages: crate::main_data_storage::flash_size_pages(),
+        FlashUsedPages: crate::main_data_storage::find_next_empty_page(0).unwrap_or_default(),
     };
 
     match serde_json::to_string_pretty(&info) {

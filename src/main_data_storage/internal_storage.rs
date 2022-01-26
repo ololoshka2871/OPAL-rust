@@ -59,14 +59,6 @@ pub fn flash_erease() -> Result<(), ()> {
     Err(())
 }
 
-pub fn find_next_empty_page(start: u32) -> Option<u32> {
-    if start < flash_size_pages() {
-        Some(start)
-    } else {
-        None
-    }
-}
-
 pub fn flash_size() -> usize {
     STORAGE.len()
 }
