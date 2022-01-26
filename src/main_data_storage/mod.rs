@@ -12,6 +12,14 @@ pub mod cpu_flash_diff_writer;
 pub(crate) mod header_printer;
 mod internal_storage;
 
+enum MemoryState {
+    Undefined,
+    PartialUsed(u32),
+    FullUsed,
+}
+
+static mut NEXT_EMPTY_PAGE: MemoryState = MemoryState::Undefined;
+
 pub trait PageAccessor {
     fn write(&mut self, data: Vec<u8>) -> Result<(), flash::Error>;
     fn read_to(&self, offset: usize, dest: &mut [u8]);
@@ -22,6 +30,16 @@ pub fn flash_erease() -> Result<(), ()> {
 }
 
 pub fn find_next_empty_page(start: u32) -> Option<u32> {
+    match unsafe { &NEXT_EMPTY_PAGE } {
+        MemoryState::Undefined => {}
+        MemoryState::PartialUsed(next_free_page) => {
+            if start <= *next_free_page {
+                return Some(*next_free_page);
+            }
+        }
+        MemoryState::FullUsed => return None,
+    }
+
     if start < flash_size_pages() {
         for p in start..flash_size_pages() {
             let accessor = unsafe { select_page(p).unwrap_unchecked() };
@@ -40,10 +58,12 @@ pub fn find_next_empty_page(start: u32) -> Option<u32> {
                 header_blockchain.prev_block_id,
             ) == u32::MAX
             {
+                unsafe { NEXT_EMPTY_PAGE = MemoryState::PartialUsed(p) };
                 return Some(p);
             }
         }
     }
+    unsafe { NEXT_EMPTY_PAGE = MemoryState::FullUsed };
     None
 }
 
@@ -69,4 +89,10 @@ pub fn flash_size_pages() -> u32 {
 
 pub(crate) fn init(flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>) {
     internal_storage::init(flash);
+    let next_free_page = find_next_empty_page(0);
+    if let Some(next_free_page) = next_free_page {
+        defmt::info!("Memory: {} pages used", next_free_page);
+    } else {
+        defmt::warn!("Memory full!");
+    }
 }
