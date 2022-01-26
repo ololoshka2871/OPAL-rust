@@ -304,12 +304,13 @@ impl RecorderProcessor {
             }
         };
 
-        fn calc_fp(o: &mut OutputStorage, fm: f64) {
+        fn calc_freqs(o: &mut OutputStorage, fm: f64) {
             for c in [FChannel::Pressure, FChannel::Temperature] {
                 if let Some(result) = o.results[c as usize] {
                     let f = super::calc_freq(fm, o.targets[c as usize], result);
 
                     o.frequencys[c as usize] = Some(f);
+                    // там внутри есть проверка выхода за рабочий диопазон и перевод в единицы измерения
                     match c {
                         FChannel::Pressure => super::calc_pressure(f, o),
                         FChannel::Temperature => super::calc_temperature(f, o),
@@ -414,7 +415,7 @@ impl RecorderProcessor {
                     .lock(Duration::infinite())
                     .map(|mut guard| {
                         let o = guard.deref_mut();
-                        calc_fp(o, fm);
+                        calc_freqs(o, fm);
                         page.write_header(o);
                         o.vbat
                     })
