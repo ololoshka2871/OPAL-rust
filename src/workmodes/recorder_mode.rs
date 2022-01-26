@@ -541,6 +541,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
             processor.start(
                 self.scb,
                 crate::main_data_storage::cpu_flash_diff_writer::CpuFlashDiffWriter::new(
+                    RecorderClockConfigProvider::xtal2master_freq_multiplier() as f32,
                     self.crc.clone(),
                 ),
                 self.led_pin,

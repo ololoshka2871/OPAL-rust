@@ -9,6 +9,7 @@ impl<'a> Format for HeaderPrinter<'a> {
             fmt,
             r#"Block {} (prev {}): {{
     timestamp: {},
+    f_ref: {},
     targets: {},
     base_interval_ms: {},
     interleave_ratio: {},
@@ -18,6 +19,7 @@ impl<'a> Format for HeaderPrinter<'a> {
             self.0.this_block_id,
             self.0.prev_block_id,
             self.0.timestamp,
+            self.0.f_ref,
             self.0.targets,
             self.0.base_interval_ms,
             self.0.interleave_ratio,

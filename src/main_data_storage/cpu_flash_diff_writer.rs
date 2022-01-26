@@ -19,6 +19,7 @@ pub struct CpuFlashDiffWriter {
     master_counter_info: MasterTimerInfo,
     next_page_number: u32,
     crc_calc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>,
+    fref_mul: f32,
     page_aqured: bool,
 }
 
@@ -68,7 +69,7 @@ impl DataPage for DataBlock {
 }
 
 impl CpuFlashDiffWriter {
-    pub fn new(crc_calc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>) -> Self {
+    pub fn new(fref_mul: f32, crc_calc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>) -> Self {
         let mut master_counter_info = MasterCounter::acquire();
         master_counter_info.want_start();
 
@@ -76,6 +77,7 @@ impl CpuFlashDiffWriter {
             master_counter_info,
             next_page_number: 0,
             crc_calc,
+            fref_mul: fref_mul,
             page_aqured: false,
         }
     }
@@ -93,7 +95,7 @@ impl WriteController<DataBlock> for CpuFlashDiffWriter {
                 return Err(freertos_rust::FreeRtosError::OutOfMemory);
             }
 
-            let (base_interval_ms, interleave_ratio) =
+            let (base_interval_ms, interleave_ratio, fref) =
                 match settings::settings_action::<_, _, _, ()>(Duration::ms(10), |(settings, _)| {
                     Ok((
                         settings.writeConfig.BaseInterval_ms,
@@ -101,6 +103,7 @@ impl WriteController<DataBlock> for CpuFlashDiffWriter {
                             settings.writeConfig.PWriteDevider,
                             settings.writeConfig.TWriteDevider,
                         ],
+                        settings.Fref,
                     ))
                 }) {
                     Ok(r) => r,
@@ -115,6 +118,7 @@ impl WriteController<DataBlock> for CpuFlashDiffWriter {
                 )
                 .set_size(crate::main_data_storage::flash_page_size() as usize)
                 .set_timestamp(self.master_counter_info.uptime_ms())
+                .set_fref(self.fref_mul * fref as f32)
                 .set_write_cfg(base_interval_ms, interleave_ratio)
                 .build();
 
