@@ -23,8 +23,8 @@ pub static MIN_MT: u32 = 20;
 
 static DEFAULT_SETTINGS: AppSettings = AppSettings {
     Serial: 0,
-    PMesureTime_ms: 100,
-    TMesureTime_ms: 100,
+    PMesureTime_ms: 500,
+    TMesureTime_ms: 500,
 
     Fref: crate::config::XTAL_FREQ,
 
@@ -80,7 +80,7 @@ static DEFAULT_SETTINGS: AppSettings = AppSettings {
     TZeroCorrection: 0.0,
 
     writeConfig: app_settings::WriteConfig {
-        BaseInterval_ms: 1500,
+        BaseInterval_ms: 500,
         PWriteDevider: 2,
         TWriteDevider: 3,
     },

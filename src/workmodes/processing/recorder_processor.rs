@@ -458,7 +458,7 @@ impl RecorderProcessor {
                     core::cmp::min(to_p_write_.to_next_event(), to_t_write_.to_next_event());
 
                 if to_next_event > 0 {
-                    defmt::debug!("{} ms sleep to next event", to_next_event);
+                    defmt::trace!("{} ms sleep to next event", to_next_event);
                     CurrentTask::delay(Duration::ms(to_next_event));
 
                     to_p_write_.tick(to_next_event);

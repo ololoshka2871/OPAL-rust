@@ -71,9 +71,9 @@ lto = true # better optimizations
 default = [
   "stm32l433",
   "freqmeter-start-stop", # При временах измерения <= 100 мс только этот режим адекватно работает
-  "defmt-debug", # отключить когда собираешь релиз
+  "defmt-debug",
   "monitor-heap",
-  "monitor-output", # В режиме самописца данных там нет
+  #"monitor-output", # В режиме самописца данных там нет
   #"led-blink ",
   #"monitor",
 ]
@@ -85,7 +85,7 @@ monitor = []
 freqmeter-start-stop = []
 led-blink = []
 
- # do NOT modify these features
+ # defmt: do NOT modify these features
 defmt-default = []
 defmt-trace = []
 defmt-debug = []
