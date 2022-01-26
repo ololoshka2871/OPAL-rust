@@ -342,7 +342,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         crate::workmodes::common::create_monitor(sys_clk, self.output.clone())?;
 
-        super::common::create_pseudo_idle_task()?;
+        //super::common::create_pseudo_idle_task()?;
 
         enable_selected_channels(self.sensor_command_queue.as_ref());
 

@@ -110,6 +110,7 @@ pub fn create_monitor(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn create_pseudo_idle_task() -> Result<(), freertos_rust::FreeRtosError> {
     #[cfg(debug_assertions)]
     {

@@ -558,7 +558,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
 
         crate::workmodes::common::create_monitor(sys_clk, output.clone())?;
 
-        super::common::create_pseudo_idle_task()?;
+        //super::common::create_pseudo_idle_task()?;
 
         Ok(())
     }

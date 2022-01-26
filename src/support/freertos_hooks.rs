@@ -49,10 +49,3 @@ pub extern "C" fn rust_begin_unwind(
 ) -> ! {
     cortex_m::asm::udf();
 }
-
-#[cfg(debug_assertions)]
-#[no_mangle]
-// debug mode: disable sleep (wfi)
-pub extern "C" fn vApplicationIdleHook() {
-    cortex_m::asm::wfi();
-}
