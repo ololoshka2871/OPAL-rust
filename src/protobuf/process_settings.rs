@@ -360,11 +360,15 @@ pub fn update_settings(
         }
 
         if let Some(set_password) = &w.set_password {
-            ts.current_password.copy_from_slice(set_password.as_bytes());
-            let newlen = set_password.len();
-            if newlen < PASSWORD_SIZE {
-                ts.current_password[newlen..].fill(b'\0');
+            let newlen = core::cmp::min(set_password.len(), PASSWORD_SIZE);
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    set_password.as_ptr(),
+                    ts.current_password.as_mut_ptr(),
+                    newlen,
+                );
             }
+            ts.current_password[newlen..].fill(b'\0');
         }
 
         Ok(need_write)
