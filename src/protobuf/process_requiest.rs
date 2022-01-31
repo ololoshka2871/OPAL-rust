@@ -123,6 +123,8 @@ fn fill_flash_state(
 
     flash_status.status = if let Some(true) = reset_monitoring_failed {
         super::messages::flash_status::Status::ResetMonitoringFailed
+    } else if crate::main_data_storage::is_erase_in_progress() {
+        super::messages::flash_status::Status::Ereasing
     } else {
         super::messages::flash_status::Status::Ok
     } as i32;

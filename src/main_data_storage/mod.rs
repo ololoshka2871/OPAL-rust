@@ -1,5 +1,7 @@
+use core::sync::atomic::AtomicBool;
+
 use alloc::{sync::Arc, vec::Vec};
-use freertos_rust::Mutex;
+use freertos_rust::{FreeRtosError, Mutex, Task, TaskPriority};
 
 use stm32l4xx_hal::traits::flash;
 
@@ -19,14 +21,52 @@ enum MemoryState {
 }
 
 static mut NEXT_EMPTY_PAGE: MemoryState = MemoryState::Undefined;
+static mut ERASER_THREAD: (Option<Task>, AtomicBool) = (None, AtomicBool::new(false));
 
 pub trait PageAccessor {
     fn write(&mut self, data: Vec<u8>) -> Result<(), flash::Error>;
     fn read_to(&self, offset: usize, dest: &mut [u8]);
+    fn erase(&mut self) -> Result<(), flash::Error>;
 }
 
-pub fn flash_erease() -> Result<(), ()> {
-    internal_storage::flash_erease()
+pub fn is_erase_in_progress() -> bool {
+    if unsafe { ERASER_THREAD.1.load(core::sync::atomic::Ordering::Relaxed) } {
+        true
+    } else {
+        if unsafe { ERASER_THREAD.0.is_some() } {
+            unsafe { ERASER_THREAD.0 = None };
+        }
+        false
+    }
+}
+
+pub fn flash_erease() -> Result<(), FreeRtosError> {
+    if !is_erase_in_progress() {
+        let task = Task::new()
+            .name("FlashClr")
+            .priority(TaskPriority(crate::config::FLASH_CLEANER_PRIO))
+            .start(move |_| {
+                let _ = internal_storage::flash_erease();
+
+                defmt::info!("Flash erased succesfilly");
+                unsafe {
+                    ERASER_THREAD
+                        .1
+                        .store(false, core::sync::atomic::Ordering::Relaxed);
+                };
+            })?;
+
+        unsafe {
+            ERASER_THREAD.0 = Some(task);
+            ERASER_THREAD
+                .1
+                .store(true, core::sync::atomic::Ordering::Relaxed)
+        };
+
+        Ok(())
+    } else {
+        Err(FreeRtosError::OutOfMemory)
+    }
 }
 
 pub fn find_next_empty_page(start: u32) -> Option<u32> {

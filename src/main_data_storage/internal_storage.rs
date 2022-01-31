@@ -20,15 +20,22 @@ pub struct InternalPageAccessor<'a> {
     ptr: *mut u8,
 }
 
+impl<'a> InternalPageAccessor<'a> {
+    fn get_prog(&mut self) -> Result<stm32l4xx_hal::flash::FlashProgramming, flash::Error> {
+        let flash = self._guard.deref_mut();
+        flash.keyr.unlock_flash(&mut flash.sr, &mut flash.cr)
+    }
+}
+
 impl<'a> PageAccessor for InternalPageAccessor<'a> {
     fn write(&mut self, data: Vec<u8>) -> Result<(), flash::Error> {
-        let flash = self._guard.deref_mut();
-        let mut prog = flash.keyr.unlock_flash(&mut flash.sr, &mut flash.cr)?;
+        let ptr = self.ptr as usize;
+        let mut prog = self.get_prog()?;
 
         let len_in_u64_aligned =
             crate::support::len_in_u64_aligned::len_in_u64_aligned(data.as_slice());
 
-        prog.write_native(self.ptr as usize, unsafe {
+        prog.write_native(ptr, unsafe {
             ::core::slice::from_raw_parts(data.as_ptr() as *const u64, len_in_u64_aligned)
         })
     }
@@ -37,6 +44,17 @@ impl<'a> PageAccessor for InternalPageAccessor<'a> {
         unsafe {
             core::ptr::copy_nonoverlapping(self.ptr.add(offset), dest.as_mut_ptr(), dest.len())
         }
+    }
+
+    fn erase(&mut self) -> Result<(), flash::Error> {
+        const PAGE0_ADDR: usize = flash::FlashPage(0).to_address();
+        const PAGE_SIZE: usize = flash::FlashPage(1).to_address() - PAGE0_ADDR;
+
+        let page = (self.ptr as usize - PAGE0_ADDR) / PAGE_SIZE;
+        let mut prog = self.get_prog()?;
+
+        prog.erase_page(stm32l4xx_hal::flash::FlashPage(page))?;
+        Ok(())
     }
 }
 
@@ -55,8 +73,12 @@ pub fn select_page(page: u32) -> Result<impl PageAccessor, ()> {
     Err(())
 }
 
-pub fn flash_erease() -> Result<(), ()> {
-    Err(())
+pub fn flash_erease() -> Result<(), flash::Error> {
+    for page in 0..INTERNAL_FLASH_PAGES {
+        unsafe { select_page(page as u32).unwrap_unchecked() }.erase()?;
+        freertos_rust::CurrentTask::delay(Duration::ms(100000)); // имитация долгого стирания
+    }
+    Ok(())
 }
 
 pub fn flash_size() -> usize {
