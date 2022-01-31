@@ -15,6 +15,7 @@ where
     freqmeter: &'a mut TIM,
     gpio_pin: ENPIN,
     prev: u32,
+    prev_diff: Option<u32>,
     start: bool,
     no_signal_guard: Timer,
     current_guard_ticks: u32,
@@ -74,7 +75,7 @@ where
 
     #[allow(unused_mut)]
     #[allow(unused_assignments)]
-    fn input_captured(&mut self, mut event: TimerEvent, captured: u32) -> Option<u32> {
+    fn input_captured(&mut self, mut event: TimerEvent, mut captured: u32) -> Option<u32> {
         #[cfg(not(feature = "freqmeter-start-stop"))]
         {
             event = if self.start {
@@ -91,12 +92,45 @@ where
                 None
             }
             TimerEvent::Stop => {
-                let diff = if self.prev <= captured {
+                let mut diff = if self.prev <= captured {
                     captured - self.prev
                 } else {
-                    //defmt::warn!("Master overflow");
                     u32::MAX - self.prev + captured
                 };
+
+                {
+                    const DETECT_WINDOW: u32 = 500;
+                    const MASTER_SELF_MAX_VALUE: u32 = u16::MAX as u32 + 1;
+
+                    if let Some(pd) = &self.prev_diff {
+                        let diff2prev_diff = pd.abs_diff(diff);
+                        if diff2prev_diff <= MASTER_SELF_MAX_VALUE + DETECT_WINDOW
+                            && diff2prev_diff >= MASTER_SELF_MAX_VALUE - DETECT_WINDOW
+                        {
+                            defmt::warn!(
+                                "0xffff + {} wrap diff detected ({} -> {}), fixing!",
+                                diff2prev_diff as i32 - MASTER_SELF_MAX_VALUE as i32,
+                                pd,
+                                diff
+                            );
+                            if *pd > diff {
+                                // Иглка вниз
+                                captured += MASTER_SELF_MAX_VALUE;
+                                diff += MASTER_SELF_MAX_VALUE;
+                            } else {
+                                // Иголка вверх
+                                captured -= MASTER_SELF_MAX_VALUE;
+                                diff -= MASTER_SELF_MAX_VALUE;
+                            }
+                            self.prev_diff = None;
+                        } else {
+                            self.prev_diff = Some(diff);
+                        }
+                    } else {
+                        self.prev_diff = Some(diff);
+                    }
+                }
+
                 self.prev = captured;
 
                 Some(diff)
@@ -136,6 +170,7 @@ where
             freqmeter,
             gpio_pin,
             prev: 0,
+            prev_diff: None,
             start: false,
             no_signal_guard: timer,
             current_guard_ticks: initial_guard_ticks,
