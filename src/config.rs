@@ -40,7 +40,7 @@ pub const SENS_PROC_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 3;
 // recorder controller task prio
 pub const RECORDER_CTRL_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 1;
 
-// flash cleaner prio
+/// flash cleaner prio
 pub const FLASH_CLEANER_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO;
 
 //-----------------------------------------------------------------------------

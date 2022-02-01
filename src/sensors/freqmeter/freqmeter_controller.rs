@@ -107,6 +107,8 @@ where
                         if diff2prev_diff <= MASTER_SELF_MAX_VALUE + DETECT_WINDOW
                             && diff2prev_diff >= MASTER_SELF_MAX_VALUE - DETECT_WINDOW
                         {
+                            // Или может забраковать измерение?
+
                             defmt::warn!(
                                 "0xffff + {} wrap diff detected ({} -> {}), fixing!",
                                 diff2prev_diff as i32 - MASTER_SELF_MAX_VALUE as i32,
@@ -114,7 +116,7 @@ where
                                 diff
                             );
                             if *pd > diff {
-                                // Иглка вниз
+                                // Иголка вниз
                                 captured += MASTER_SELF_MAX_VALUE;
                                 diff += MASTER_SELF_MAX_VALUE;
                             } else {

@@ -50,6 +50,7 @@ pub fn flash_erease() -> Result<(), FreeRtosError> {
 
                 defmt::info!("Flash erased succesfilly");
                 unsafe {
+                    NEXT_EMPTY_PAGE = MemoryState::Undefined;
                     ERASER_THREAD
                         .1
                         .store(false, core::sync::atomic::Ordering::Relaxed);
