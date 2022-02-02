@@ -557,9 +557,36 @@
 
 [_] QuardSPI
     [v] https://russianblogs.com/article/5522908302/
-    [_] В hal отсутвует поддержка QUARDSPI в чипе L433 по тому что нет регистров в зависимости stm32l4
-        [_] Почему нет?
+    [v] В hal отсутвует поддержка QUARDSPI в чипе L433 по тому что нет регистров в зависимости stm32l4
+        [v] Почему нет?
+            В оригинальном .svd файле от ST для L4x3 нет секции об QSPI как она есть для L4x1 и L4x2
+            Секция такая:
+            ```xml
+            <peripheral>
+                <name>QUADSPI</name>
+                <description>QuadSPI interface</description>
+                <groupName>QUADSPI</groupName>
+                <baseAddress>0xA0001000</baseAddress>
+            ...
+            </peripheral>
+            ```
+            Перед модулем `DBGMCU`
+        [v] Проверить отладчиком существование чего-то по адресу 0xA0001000
+            Читаются нули, нет ошибки доступа к памяти
+    [_] Собственная реализация методом копи-пасты с необходимыми модицикациями
+        [v] Перечислить все пины, доступные для QSPI
+        [v] Заставить хотябы собираться
+        [_] Убрать излишннюю копипасту, максимум импортов из оригинальных либ
+
     [v] Переход на отладку при помощи плагина cortex-debug, там есть дамп памяти и загрузка svd
+        [v] [Дамп памяти](https://github.com/Microsoft/vscode-cpptools/issues/1503#issuecomment-767481312)
+            ```
+            1- Start a debug session.
+            2- Open the command pallet (press F1).
+            3-Type Cortex-Debug: View memory.
+            4-Type in memory location (e.g. 0x08000000).
+            5-Type in memory length (e.g. 128).
+            ```
 
 [_] Modbus сервер, как альтернатива Protobuf, не вместе!
     [?] Подбор библиотеки - Чет там все сложно, но ориентировочно https://github.com/zzeroo/libmodbus-rs

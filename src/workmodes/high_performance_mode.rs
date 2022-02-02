@@ -112,6 +112,14 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         let mut gpioa = dp.GPIOA.split(&mut rcc.ahb2);
         let mut gpiod = dp.GPIOD.split(&mut rcc.ahb2);
 
+        {
+            unsafe {
+                (*stm32::RCC::ptr())
+                    .ahb3enr
+                    .modify(|_, w| w.qspien().set_bit());
+            }
+        }
+
         HighPerformanceMode {
             flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
             crc: Arc::new(
