@@ -7,6 +7,41 @@
     "version": "0.2.0",
     "configurations": [
         {
+            // all params: https://github.com/Marus/cortex-debug/blob/master/debug_attributes.md
+            "name": "cortex-debug (Debug)",
+            "type": "cortex-debug",
+            "cwd": "${workspaceRoot}",
+            "executable": "./target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer", // бинарь
+            "request": "attach", // позволяет не прошивать таргет при запуске
+            "loadFiles": false, 
+            "svdFile": "${workspaceRoot}/STM32L4x3.svd",
+            "servertype": "external", // Подключиться к внешнему отладочному интерфейсу
+            "gdbTarget": "localhost:2331", // адрес куда подключаться
+            "postAttachCommands": [
+                "skip -rfunction ^core::",
+                "skip -rfu ^compiler_builtins::",
+                "skip -rfu ^alloc::",
+                "break main",
+            ]
+        },
+        {
+            "name": "cortex-debug (Release)",
+            "type": "cortex-debug",
+            "cwd": "${workspaceRoot}",
+            "executable": "./target/thumbv7em-none-eabihf/release/stm32-usb-self-writer", // бинарь
+            "request": "attach", // позволяет не прошивать таргет при запуске
+            "loadFiles": false, 
+            "svdFile": "${workspaceRoot}/STM32L4x3.svd",
+            "servertype": "external", // Подключиться к внешнему отладочному интерфейсу
+            "gdbTarget": "localhost:2331", // адрес куда подключаться
+            "postAttachCommands": [
+                "skip -rfunction ^core::",
+                "skip -rfu ^compiler_builtins::",
+                "skip -rfu ^alloc::",
+                "break main",
+            ]
+        },
+        {
             "type": "gdb",
             "request": "attach",
             "name": "Attach (OpenOCD)", 
