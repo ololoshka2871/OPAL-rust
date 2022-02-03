@@ -14,7 +14,7 @@
             "executable": "./target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer", // бинарь
             "request": "attach", // позволяет не прошивать таргет при запуске
             "loadFiles": false, 
-            "svdFile": "${workspaceRoot}/STM32L4x3.svd",
+            "svdFile": "${workspaceRoot}/STM32L4x3-qspi.svd",
             "servertype": "external", // Подключиться к внешнему отладочному интерфейсу
             "gdbTarget": "localhost:2331", // адрес куда подключаться
             "postAttachCommands": [
@@ -31,7 +31,7 @@
             "executable": "./target/thumbv7em-none-eabihf/release/stm32-usb-self-writer", // бинарь
             "request": "attach", // позволяет не прошивать таргет при запуске
             "loadFiles": false, 
-            "svdFile": "${workspaceRoot}/STM32L4x3.svd",
+            "svdFile": "${workspaceRoot}/STM32L4x3-qspi.svd",
             "servertype": "external", // Подключиться к внешнему отладочному интерфейсу
             "gdbTarget": "localhost:2331", // адрес куда подключаться
             "postAttachCommands": [

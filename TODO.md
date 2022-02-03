@@ -590,7 +590,8 @@
             4-Type in memory location (e.g. 0x08000000).
             5-Type in memory length (e.g. 128).
             ```
-
+        [v] Пропатчить STM32L4x3.svd так, чтобы появился модуль QSPI в отладчике
+        
 [_] Modbus сервер, как альтернатива Protobuf, не вместе!
     [?] Подбор библиотеки - Чет там все сложно, но ориентировочно https://github.com/zzeroo/libmodbus-rs
     
