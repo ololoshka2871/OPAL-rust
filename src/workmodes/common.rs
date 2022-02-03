@@ -1,7 +1,10 @@
 use alloc::sync::Arc;
-use defmt::{write, Format};
 use freertos_rust::{Duration, DurationTicks, Mutex};
 
+use qspi_stm32lx3::{
+    qspi::{ClkPin, IO0Pin, IO1Pin, IO2Pin, IO3Pin, NCSPin, Qspi},
+    stm32l4x3,
+};
 use stm32l4xx_hal::{
     rcc::{PllConfig, PllDivider},
     time::Hertz,
@@ -47,9 +50,9 @@ impl HertzExt for Hertz {
     }
 }
 
-impl Format for Ticks {
+impl defmt::Format for Ticks {
     fn format(&self, fmt: defmt::Formatter) {
-        write!(fmt, "{:09}", self.0);
+        defmt::write!(fmt, "{:09}", self.0);
     }
 }
 
@@ -128,4 +131,33 @@ pub fn create_pseudo_idle_task() -> Result<(), freertos_rust::FreeRtosError> {
             })?;
     }
     Ok(())
+}
+
+pub fn create_qspi<CLK, NCS, IO0, IO1, IO2, IO3, RESET>(
+    pins: (CLK, NCS, IO0, IO1, IO2, IO3),
+    mut reset: RESET,
+    ahb3: &mut stm32l4xx_hal::rcc::AHB3,
+) -> Arc<Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>>
+where
+    CLK: ClkPin<stm32l4x3::QUADSPI>,
+    NCS: NCSPin<stm32l4x3::QUADSPI>,
+    IO0: IO0Pin<stm32l4x3::QUADSPI>,
+    IO1: IO1Pin<stm32l4x3::QUADSPI>,
+    IO2: IO2Pin<stm32l4x3::QUADSPI>,
+    IO3: IO3Pin<stm32l4x3::QUADSPI>,
+    RESET: stm32l4xx_hal::prelude::OutputPin,
+{
+    // reset flash
+    let _ = reset.set_low();
+    cortex_m::asm::delay(1);
+    let _ = reset.set_high();
+
+    Arc::new(Qspi::new(
+        unsafe { stm32l4x3::QUADSPI::new() },
+        pins,
+        unsafe { core::mem::transmute(ahb3) },
+        qspi_stm32lx3::qspi::QspiConfig::default()
+            .clock_prescaler(201)
+            .flash_size(26), // 2^(26 + 1) Bytes = 128M
+    ))
 }

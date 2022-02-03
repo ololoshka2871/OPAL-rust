@@ -1,5 +1,8 @@
 #![allow(dead_code)]
 
+// Нельзя использовать, поскольку структуры имеют pub(crate) поля
+//pub use stm32l4xx_hal::stm32l4::*;
+
 use core::marker;
 
 /// Raw register type
@@ -282,4 +285,3 @@ impl<FI> FieldReader<bool, FI> {
         self.bit()
     }
 }
-

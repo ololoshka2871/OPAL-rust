@@ -16,6 +16,12 @@ impl QUADSPI {
     pub const fn ptr() -> *const quadspi::RegisterBlock {
         Self::PTR
     }
+
+    pub unsafe fn new() -> Self {
+        Self{
+            _marker: PhantomData
+        }
+    }
 }
 impl Deref for QUADSPI {
     type Target = quadspi::RegisterBlock;

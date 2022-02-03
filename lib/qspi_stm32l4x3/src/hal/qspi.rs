@@ -5,8 +5,8 @@ use stm32l4xx_hal as hal;
 // Пины для L4x3 для QSPI
 use hal::gpio::{
     gpioa::{PA2, PA3, PA6, PA7},
-    gpiob::{PB0, PB1, PB10, PB11},
-    gpiod::{PD3, PD4, PD5, PD6, PD7},
+    gpiob::{PB0, PB1, /*PB10,*/ PB11},
+    /*gpiod::{PD3, PD4, PD5, PD6, PD7},*/
     gpioe::{PE10, PE11, PE12, PE13, PE14, PE15},
 };
 
@@ -377,10 +377,12 @@ impl<CLK, NCS, IO0, IO1, IO2, IO3> Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)> {
 
         while self.qspi.sr.read().busy().bit_is_set() {}
 
-        // Modify the prescaler and select flash bank 2 - flash bank 1 is currently unsupported.
+        // Modify the prescaler and select flash bank 1.
         self.qspi.cr.modify(|_, w| unsafe {
             w.prescaler()
                 .bits(config.clock_prescaler as u8)
+                .fsel().clear_bit() // select bank 1
+                .dfm().clear_bit() // dual flash mode disabled
                 .sshift()
                 .bit(config.sample_shift == SampleShift::HalfACycle)
         });
@@ -684,42 +686,26 @@ impl<CLK, NCS, IO0, IO1, IO2, IO3> Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)> {
     }
 }
 
+#[cfg(feature = "stm32l433")]
 pins!(
     QUADSPI,
     10,
-    CLK: [PE10, PB10],
-    nCS: [PE11, PB11],
-    IO0: [PE12, PB1],
-    IO1: [PE13, PB0],
-    IO2: [PE14, PA7],
-    IO3: [PE15, PA6]
+    CLK: [PA3, PE10],
+    nCS: [PA2, PB11, PE11],
+    IO0: [PB1, PE12],
+    IO1: [PB0, PE13],
+    IO2: [PA7, PE14],
+    IO3: [PA6, PE15]
 );
 
-#[cfg(not(any(feature = "stm32l475")))]
+#[cfg(feature = "stm32l443")]
 pins!(
     QUADSPI,
     10,
-    CLK: [PA3],
-    nCS: [PA2, PD3],
-    IO0: [PD4],
-    IO1: [PD5],
-    IO2: [PD6],
-    IO3: [PD7]
-);
-
-#[cfg(any(
-    feature = "stm32l476",
-    feature = "stm32l486",
-    feature = "stm32l496",
-    feature = "stm32l4a6"
-))]
-pins!(
-    QUADSPI,
-    10,
-    CLK: [],
-    nCS: [],
-    IO0: [PC1, PF8],
-    IO1: [PC2, PF9],
-    IO2: [PC4, PF7],
-    IO3: [PC5, PF6]
+    CLK: [PB10, PE10],
+    nCS: [PA2, PB11, PE11],
+    IO0: [PB1, PE12],
+    IO1: [PB0, PE13],
+    IO2: [PA7, PE14],
+    IO3: [PA6, PE15]
 );

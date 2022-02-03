@@ -3,7 +3,7 @@ use stm32l4xx_hal::stm32::{rcc, RCC};
 
 use crate::hal::Sealed;
 
-
+// нельзя использовать stm32l4xx_hal::rcc::bus_struct - приватная
 macro_rules! bus_struct {
     ($($busX:ident => ($EN:ident, $en:ident, $SMEN:ident, $smen:ident, $RST:ident, $rst:ident, $doc:literal),)+) => {
         $(
@@ -40,6 +40,8 @@ macro_rules! bus_struct {
 }
 
 /// Bus associated to peripheral
+ 
+// Дальше все связано с Sealed, поэтому тащим все с собой.
 pub trait RccBus: Sealed {
     /// Bus type;
     type Bus;

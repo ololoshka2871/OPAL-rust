@@ -3,6 +3,10 @@ use core::sync::atomic::AtomicBool;
 use alloc::{sync::Arc, vec::Vec};
 use freertos_rust::{FreeRtosError, Mutex, Task, TaskPriority};
 
+use qspi_stm32lx3::{
+    qspi::{ClkPin, IO0Pin, IO1Pin, IO2Pin, IO3Pin, NCSPin},
+    stm32l4x3::QUADSPI,
+};
 use stm32l4xx_hal::traits::flash;
 
 pub mod data_page;
@@ -129,8 +133,20 @@ pub fn flash_size_pages() -> u32 {
     internal_storage::flash_size_pages()
 }
 
-pub(crate) fn init(flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>) {
+pub(crate) fn init<CLK, NCS, IO0, IO1, IO2, IO3>(
+    flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>,
+    qspi: Arc<qspi_stm32lx3::qspi::Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>>,
+) where
+    CLK: ClkPin<QUADSPI>,
+    NCS: NCSPin<QUADSPI>,
+    IO0: IO0Pin<QUADSPI>,
+    IO1: IO1Pin<QUADSPI>,
+    IO2: IO2Pin<QUADSPI>,
+    IO3: IO3Pin<QUADSPI>,
+{
     internal_storage::init(flash);
+    qspi_diff_writer::init(qspi);
+
     let next_free_page = find_next_empty_page(0);
     if let Some(next_free_page) = next_free_page {
         defmt::info!("Memory: {} pages used", next_free_page);

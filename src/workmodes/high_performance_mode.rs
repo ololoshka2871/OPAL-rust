@@ -1,7 +1,8 @@
 use alloc::sync::Arc;
 use freertos_rust::{Duration, Mutex, Queue, Task, TaskPriority};
 use stm32l4xx_hal::gpio::{
-    Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA11, PA12, PA8, PD10, PD13,
+    Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA11, PA12, PA2, PA3, PA6, PA7, PA8, PB0,
+    PD10, PD13, PE12,
 };
 use stm32l4xx_hal::{
     adc::ADC,
@@ -96,6 +97,17 @@ pub struct HighPerformanceMode {
     adc_common: stm32l4xx_hal::device::ADC_COMMON,
     vbat_pin: PA1<Analog>,
 
+    qspi: Arc<
+        qspi_stm32lx3::qspi::Qspi<(
+            PA3<Alternate<PushPull, 10>>,
+            PA2<Alternate<PushPull, 10>>,
+            PE12<Alternate<PushPull, 10>>,
+            PB0<Alternate<PushPull, 10>>,
+            PA7<Alternate<PushPull, 10>>,
+            PA6<Alternate<PushPull, 10>>,
+        )>,
+    >,
+
     sensor_command_queue: Arc<freertos_rust::Queue<threads::sensor_processor::Command>>,
 
     output: Arc<Mutex<OutputStorage>>,
@@ -110,15 +122,9 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         let dma_channels = dp.DMA1.split(&mut rcc.ahb1);
 
         let mut gpioa = dp.GPIOA.split(&mut rcc.ahb2);
+        let mut gpiob = dp.GPIOB.split(&mut rcc.ahb2);
         let mut gpiod = dp.GPIOD.split(&mut rcc.ahb2);
-
-        {
-            unsafe {
-                (*stm32::RCC::ptr())
-                    .ahb3enr
-                    .modify(|_, w| w.qspien().set_bit());
-            }
-        }
+        let mut gpioe = dp.GPIOE.split(&mut rcc.ahb2);
 
         HighPerformanceMode {
             flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
@@ -141,6 +147,35 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             clocks: None,
 
             interrupt_controller: ic,
+
+            qspi: super::common::create_qspi(
+                (
+                    gpioa
+                        .pa3
+                        .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
+                    gpioa
+                        .pa2
+                        .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
+                    gpioe
+                        .pe12
+                        .into_alternate(&mut gpioe.moder, &mut gpioe.otyper, &mut gpioe.afrh),
+                    gpiob
+                        .pb0
+                        .into_alternate(&mut gpiob.moder, &mut gpiob.otyper, &mut gpiob.afrl),
+                    gpioa
+                        .pa7
+                        .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
+                    gpioa
+                        .pa6
+                        .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
+                ),
+                gpiod.pd11.into_push_pull_output_in_state(
+                    &mut gpiod.moder,
+                    &mut gpiod.otyper,
+                    PinState::Low,
+                ),
+                &mut rcc.ahb3,
+            ),
 
             rcc,
 
@@ -187,7 +222,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
     fn ini_static(&mut self) {
         crate::settings::init(self.flash(), self.crc());
-        crate::main_data_storage::init(self.flash());
+        crate::main_data_storage::init(self.flash(), self.qspi.clone());
     }
 
     // Работа от внешнего кварца HSE = 12 MHz

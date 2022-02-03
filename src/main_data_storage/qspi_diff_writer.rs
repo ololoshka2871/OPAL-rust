@@ -2,7 +2,13 @@ mod qspi_driver;
 
 use alloc::sync::Arc;
 use freertos_rust::{Duration, FreeRtosError, Mutex};
+use qspi_stm32lx3::qspi::{Qspi, QspiMode, QspiReadCommand};
 use self_recorder_packet::DataBlockPacker;
+
+use qspi_stm32lx3::{
+    qspi::{ClkPin, IO0Pin, IO1Pin, IO2Pin, IO3Pin, NCSPin},
+    stm32l4x3::QUADSPI,
+};
 
 use crate::{
     main_data_storage::PageAccessor,
@@ -93,4 +99,28 @@ impl WriteController<DataBlock> for CpuFlashDiffWriter {
     fn write(&mut self, page: DataBlock) -> write_controller::PageWriteResult {
         write_controller::PageWriteResult::Fail(0)
     }
+}
+
+pub fn init<CLK, NCS, IO0, IO1, IO2, IO3>(qspi: Arc<Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>>)
+where
+    CLK: ClkPin<QUADSPI>,
+    NCS: NCSPin<QUADSPI>,
+    IO0: IO0Pin<QUADSPI>,
+    IO1: IO1Pin<QUADSPI>,
+    IO2: IO2Pin<QUADSPI>,
+    IO3: IO3Pin<QUADSPI>,
+{
+    let get_id_command = QspiReadCommand {
+        instruction: Some((0x9f, QspiMode::SingleChannel)),
+        address: None,
+        alternative_bytes: None,
+        dummy_cycles: 0,
+        data_mode: QspiMode::SingleChannel,
+        receive_length: 3,
+        double_data_rate: false,
+    };
+
+    let mut id_arr: [u8; 3] = [0; 3];
+
+    qspi.transfer(get_id_command, &mut id_arr).unwrap();
 }
