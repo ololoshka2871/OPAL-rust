@@ -133,7 +133,6 @@ pub fn create_pseudo_idle_task() -> Result<(), freertos_rust::FreeRtosError> {
     Ok(())
 }
 
-/// Тут самые общие настройки, чтобы флешка точно прочиталась, далбше по ID будет оптимальная настройка
 pub fn create_qspi<CLK, NCS, IO0, IO1, IO2, IO3, RESET>(
     pins: (CLK, NCS, IO0, IO1, IO2, IO3),
     mut reset: RESET,
@@ -158,7 +157,5 @@ where
         pins,
         unsafe { core::mem::transmute(ahb3) },
         qspi_stm32lx3::qspi::QspiConfig::default()
-            .clock_prescaler(9) // realy 9 + 1
-            .chip_select_high_time(8),
     )
 }

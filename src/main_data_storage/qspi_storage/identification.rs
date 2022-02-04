@@ -3,6 +3,8 @@
 use core::fmt;
 
 /// 3-Byte JEDEC manufacturer and device identification.
+#[allow(unused)]
+#[derive(PartialEq)]
 pub struct Identification {
     /// Data collected
     /// - First byte is the manufacturer's ID code from eg JEDEC Publication No. 106AJ
@@ -37,11 +39,13 @@ impl Identification {
     }
 
     /// The JEDEC manufacturer code for this chip.
+    #[allow(unused)]
     pub fn mfr_code(&self) -> u8 {
         self.bytes[0]
     }
 
     /// The manufacturer-specific device ID for this chip.
+    #[allow(unused)]
     pub fn device_id(&self) -> &[u8] {
         self.bytes[1..].as_ref()
     }
@@ -50,6 +54,7 @@ impl Identification {
     ///
     /// For example the ARM Ltd identifier is `7F 7F 7F 7F 3B` (5 bytes), so
     /// the continuation count is 4.
+    #[allow(unused)]
     pub fn continuation_count(&self) -> u8 {
         self.continuations
     }

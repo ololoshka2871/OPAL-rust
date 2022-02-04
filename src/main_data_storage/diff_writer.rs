@@ -3,7 +3,6 @@ use freertos_rust::{Duration, FreeRtosError, Mutex};
 use self_recorder_packet::DataBlockPacker;
 
 use crate::{
-    main_data_storage::PageAccessor,
     sensors::freqmeter::master_counter::{MasterCounter, MasterTimerInfo},
     settings,
     threads::sensor_processor::FChannel,

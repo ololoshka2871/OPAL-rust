@@ -1,21 +1,21 @@
 use core::sync::atomic::AtomicBool;
 
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 use freertos_rust::{FreeRtosError, Task, TaskPriority};
 
-use qspi_stm32lx3::{
-    qspi::{ClkPin, IO0Pin, IO1Pin, IO2Pin, IO3Pin, NCSPin},
-    stm32l4x3::QUADSPI,
-};
 use stm32l4xx_hal::traits::flash;
 
 pub mod data_page;
 pub mod diff_writer;
 pub mod write_controller;
 
+pub mod storage;
+
 pub(crate) mod header_printer;
 //mod internal_storage;
 mod qspi_storage;
+
+use qspi_storage::qspi_driver::{ClkPin, IO0Pin, IO1Pin, IO2Pin, IO3Pin, NCSPin, QUADSPI};
 
 enum MemoryState {
     Undefined,
@@ -25,6 +25,7 @@ enum MemoryState {
 
 static mut NEXT_EMPTY_PAGE: MemoryState = MemoryState::Undefined;
 static mut ERASER_THREAD: (Option<Task>, AtomicBool) = (None, AtomicBool::new(false));
+static mut STORAGE_IMPL: Option<Box<dyn storage::Storage>> = None;
 
 pub trait PageAccessor {
     fn write(&mut self, data: Vec<u8>) -> Result<(), flash::Error>;
@@ -49,10 +50,12 @@ pub fn flash_erease() -> Result<(), FreeRtosError> {
             .name("FlashClr")
             .priority(TaskPriority(crate::config::FLASH_CLEANER_PRIO))
             .start(move |_| {
-                if let Err(e) = qspi_storage::flash_erease() {
-                    defmt::error!("Flash erase error: {}", defmt::Debug2Format(&e));
-                } else {
-                    defmt::info!("Flash erased succesfilly");
+                if let Some(s) = unsafe { &mut STORAGE_IMPL } {
+                    if let Err(e) = s.flash_erease() {
+                        defmt::error!("Flash erase error: {}", defmt::Debug2Format(&e));
+                    } else {
+                        defmt::info!("Flash erased succesfilly");
+                    }
                 }
 
                 unsafe {
@@ -114,39 +117,55 @@ pub fn find_next_empty_page(start: u32) -> Option<u32> {
     None
 }
 
-pub fn select_page(page: u32) -> Result<impl PageAccessor, ()> {
-    qspi_storage::select_page(page)
+pub fn select_page(page: u32) -> Result<Box<dyn PageAccessor>, ()> {
+    unsafe {
+        STORAGE_IMPL
+            .as_deref_mut()
+            .map_or(Err(()), |s| s.select_page(page))
+    }
 }
 
 pub fn flash_page_size() -> u32 {
-    qspi_storage::flash_page_size()
+    unsafe {
+        STORAGE_IMPL
+            .as_deref_mut()
+            .map_or(0, |s| s.flash_page_size())
+    }
 }
 
 pub fn flash_size() -> usize {
-    qspi_storage::flash_size()
+    unsafe { STORAGE_IMPL.as_deref_mut().map_or(0, |s| s.flash_size()) }
 }
 
 pub fn flash_size_pages() -> u32 {
-    qspi_storage::flash_size_pages()
+    unsafe {
+        STORAGE_IMPL
+            .as_deref_mut()
+            .map_or(0, |s| s.flash_size_pages())
+    }
 }
 
 pub(crate) fn init<CLK, NCS, IO0, IO1, IO2, IO3>(
     qspi: qspi_stm32lx3::qspi::Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>,
     qspi_base_clock_speed: stm32l4xx_hal::time::Hertz,
 ) where
-    CLK: ClkPin<QUADSPI>,
-    NCS: NCSPin<QUADSPI>,
-    IO0: IO0Pin<QUADSPI>,
-    IO1: IO1Pin<QUADSPI>,
-    IO2: IO2Pin<QUADSPI>,
-    IO3: IO3Pin<QUADSPI>,
+    CLK: ClkPin<QUADSPI> + 'static,
+    NCS: NCSPin<QUADSPI> + 'static,
+    IO0: IO0Pin<QUADSPI> + 'static,
+    IO1: IO1Pin<QUADSPI> + 'static,
+    IO2: IO2Pin<QUADSPI> + 'static,
+    IO3: IO3Pin<QUADSPI> + 'static,
 {
-    qspi_storage::init(qspi, qspi_base_clock_speed);
+    if let Ok(s) = qspi_storage::QSPIStorage::init(qspi, qspi_base_clock_speed) {
+        unsafe { STORAGE_IMPL = Some(Box::new(s)) };
 
-    let next_free_page = find_next_empty_page(0);
-    if let Some(next_free_page) = next_free_page {
-        defmt::info!("Memory: {} pages used", next_free_page);
+        let next_free_page = find_next_empty_page(0);
+        if let Some(next_free_page) = next_free_page {
+            defmt::info!("Memory: {} pages used", next_free_page);
+        } else {
+            defmt::warn!("Memory full!");
+        }
     } else {
-        defmt::warn!("Memory full!");
+        defmt::error!("Failed to initialise QSPI flash! storage blocked!");
     }
 }

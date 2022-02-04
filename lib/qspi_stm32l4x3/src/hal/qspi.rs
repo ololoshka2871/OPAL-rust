@@ -228,6 +228,7 @@ pub struct QspiReadCommand<'a> {
     pub instruction: Option<(u8, QspiMode)>,
     pub address: Option<(u32, QspiMode)>,
     pub alternative_bytes: Option<(&'a [u8], QspiMode)>,
+    /// check Command Set
     pub dummy_cycles: u8,
     pub data_mode: QspiMode,
     pub receive_length: u32,
