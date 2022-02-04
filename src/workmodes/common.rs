@@ -133,11 +133,12 @@ pub fn create_pseudo_idle_task() -> Result<(), freertos_rust::FreeRtosError> {
     Ok(())
 }
 
+/// Тут самые общие настройки, чтобы флешка точно прочиталась, далбше по ID будет оптимальная настройка
 pub fn create_qspi<CLK, NCS, IO0, IO1, IO2, IO3, RESET>(
     pins: (CLK, NCS, IO0, IO1, IO2, IO3),
     mut reset: RESET,
     ahb3: &mut stm32l4xx_hal::rcc::AHB3,
-) -> Arc<Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>>
+) -> Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>
 where
     CLK: ClkPin<stm32l4x3::QUADSPI>,
     NCS: NCSPin<stm32l4x3::QUADSPI>,
@@ -152,12 +153,12 @@ where
     cortex_m::asm::delay(1);
     let _ = reset.set_high();
 
-    Arc::new(Qspi::new(
+    Qspi::new(
         unsafe { stm32l4x3::QUADSPI::new() },
         pins,
         unsafe { core::mem::transmute(ahb3) },
         qspi_stm32lx3::qspi::QspiConfig::default()
-            .clock_prescaler(201)
-            .flash_size(26), // 2^(26 + 1) Bytes = 128M
-    ))
+            .clock_prescaler(9) // realy 9 + 1
+            .chip_select_high_time(8),
+    )
 }

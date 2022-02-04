@@ -6,6 +6,7 @@ pub mod logging;
 pub mod timer_period;
 pub mod usb_connection_checker;
 pub mod vusb_monitor;
+pub mod hex_slice;
 
 mod freertos_hooks;
 mod new_freertos_timer;

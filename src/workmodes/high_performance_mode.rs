@@ -97,16 +97,14 @@ pub struct HighPerformanceMode {
     adc_common: stm32l4xx_hal::device::ADC_COMMON,
     vbat_pin: PA1<Analog>,
 
-    qspi: Arc<
-        qspi_stm32lx3::qspi::Qspi<(
-            PA3<Alternate<PushPull, 10>>,
-            PA2<Alternate<PushPull, 10>>,
-            PE12<Alternate<PushPull, 10>>,
-            PB0<Alternate<PushPull, 10>>,
-            PA7<Alternate<PushPull, 10>>,
-            PA6<Alternate<PushPull, 10>>,
-        )>,
-    >,
+    qspi: qspi_stm32lx3::qspi::Qspi<(
+        PA3<Alternate<PushPull, 10>>,
+        PA2<Alternate<PushPull, 10>>,
+        PE12<Alternate<PushPull, 10>>,
+        PB0<Alternate<PushPull, 10>>,
+        PA7<Alternate<PushPull, 10>>,
+        PA6<Alternate<PushPull, 10>>,
+    )>,
 
     sensor_command_queue: Arc<freertos_rust::Queue<threads::sensor_processor::Command>>,
 
@@ -222,7 +220,6 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
     fn ini_static(&mut self) {
         crate::settings::init(self.flash(), self.crc());
-        crate::main_data_storage::init(self.flash(), self.qspi.clone());
     }
 
     // Работа от внешнего кварца HSE = 12 MHz
@@ -300,6 +297,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
     fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
         let sys_clk = unsafe { self.clocks.unwrap_unchecked().hclk() };
+
+        crate::main_data_storage::init(self.qspi, sys_clk);
 
         {
             defmt::trace!("Creating usb thread...");

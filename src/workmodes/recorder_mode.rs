@@ -346,16 +346,14 @@ pub struct RecorderMode {
     adc_common: stm32l4xx_hal::device::ADC_COMMON,
     vbat_pin: PA1<Analog>,
 
-    qspi: Arc<
-        qspi_stm32lx3::qspi::Qspi<(
-            PA3<Alternate<PushPull, 10>>,
-            PA2<Alternate<PushPull, 10>>,
-            PE12<Alternate<PushPull, 10>>,
-            PB0<Alternate<PushPull, 10>>,
-            PA7<Alternate<PushPull, 10>>,
-            PA6<Alternate<PushPull, 10>>,
-        )>,
-    >,
+    qspi: qspi_stm32lx3::qspi::Qspi<(
+        PA3<Alternate<PushPull, 10>>,
+        PA2<Alternate<PushPull, 10>>,
+        PE12<Alternate<PushPull, 10>>,
+        PB0<Alternate<PushPull, 10>>,
+        PA7<Alternate<PushPull, 10>>,
+        PA6<Alternate<PushPull, 10>>,
+    )>,
 
     led_pin: PD0<Output<PushPull>>,
     scb: cortex_m::peripheral::SCB,
@@ -478,7 +476,6 @@ impl WorkMode<RecorderMode> for RecorderMode {
 
     fn ini_static(&mut self) {
         crate::settings::init(self.flash(), self.crc());
-        crate::main_data_storage::init(self.flash(), self.qspi.clone());
     }
 
     // Работа от внешнего кварца HSE = 12 MHz
@@ -527,6 +524,8 @@ impl WorkMode<RecorderMode> for RecorderMode {
         let output = Arc::new(Mutex::new(OutputStorage::default()).unwrap());
 
         let sys_clk = unsafe { self.clocks.unwrap_unchecked().hclk() };
+
+        crate::main_data_storage::init(self.qspi, sys_clk);
         {
             use stm32l4xx_hal::adc::{Resolution, SampleTime};
 
@@ -585,7 +584,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
 
             processor.start(
                 self.scb,
-                crate::main_data_storage::cpu_flash_diff_writer::CpuFlashDiffWriter::new(
+                crate::main_data_storage::diff_writer::CpuFlashDiffWriter::new(
                     RecorderClockConfigProvider::xtal2master_freq_multiplier() as f32,
                     self.crc.clone(),
                 ),

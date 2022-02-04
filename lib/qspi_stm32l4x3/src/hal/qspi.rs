@@ -1,4 +1,5 @@
 //! Quad Serial Peripheral Interface (QSPI) bus for L4x3
+//! Support only bank 1 for now
 
 use stm32l4xx_hal as hal;
 

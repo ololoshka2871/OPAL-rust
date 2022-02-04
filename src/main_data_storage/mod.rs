@@ -1,7 +1,7 @@
 use core::sync::atomic::AtomicBool;
 
-use alloc::{sync::Arc, vec::Vec};
-use freertos_rust::{FreeRtosError, Mutex, Task, TaskPriority};
+use alloc::vec::Vec;
+use freertos_rust::{FreeRtosError, Task, TaskPriority};
 
 use qspi_stm32lx3::{
     qspi::{ClkPin, IO0Pin, IO1Pin, IO2Pin, IO3Pin, NCSPin},
@@ -10,14 +10,12 @@ use qspi_stm32lx3::{
 use stm32l4xx_hal::traits::flash;
 
 pub mod data_page;
+pub mod diff_writer;
 pub mod write_controller;
 
-pub mod cpu_flash_diff_writer;
-pub mod qspi_diff_writer;
-//pub mod test_writer;
-
 pub(crate) mod header_printer;
-mod internal_storage;
+//mod internal_storage;
+mod qspi_storage;
 
 enum MemoryState {
     Undefined,
@@ -51,9 +49,12 @@ pub fn flash_erease() -> Result<(), FreeRtosError> {
             .name("FlashClr")
             .priority(TaskPriority(crate::config::FLASH_CLEANER_PRIO))
             .start(move |_| {
-                let _ = internal_storage::flash_erease();
+                if let Err(e) = qspi_storage::flash_erease() {
+                    defmt::error!("Flash erase error: {}", defmt::Debug2Format(&e));
+                } else {
+                    defmt::info!("Flash erased succesfilly");
+                }
 
-                defmt::info!("Flash erased succesfilly");
                 unsafe {
                     NEXT_EMPTY_PAGE = MemoryState::Undefined;
                     ERASER_THREAD
@@ -114,28 +115,24 @@ pub fn find_next_empty_page(start: u32) -> Option<u32> {
 }
 
 pub fn select_page(page: u32) -> Result<impl PageAccessor, ()> {
-    internal_storage::select_page(page)
+    qspi_storage::select_page(page)
 }
 
 pub fn flash_page_size() -> u32 {
-    // MT25QU01GBBB8E12 Subsector = 4KB
-    //4096
-
-    // CPU own flash
-    internal_storage::INTERNAL_FLASH_PAGE_SIZE as u32
+    qspi_storage::flash_page_size()
 }
 
 pub fn flash_size() -> usize {
-    internal_storage::flash_size()
+    qspi_storage::flash_size()
 }
 
 pub fn flash_size_pages() -> u32 {
-    internal_storage::flash_size_pages()
+    qspi_storage::flash_size_pages()
 }
 
 pub(crate) fn init<CLK, NCS, IO0, IO1, IO2, IO3>(
-    flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>,
-    qspi: Arc<qspi_stm32lx3::qspi::Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>>,
+    qspi: qspi_stm32lx3::qspi::Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>,
+    qspi_base_clock_speed: stm32l4xx_hal::time::Hertz,
 ) where
     CLK: ClkPin<QUADSPI>,
     NCS: NCSPin<QUADSPI>,
@@ -144,8 +141,7 @@ pub(crate) fn init<CLK, NCS, IO0, IO1, IO2, IO3>(
     IO2: IO2Pin<QUADSPI>,
     IO3: IO3Pin<QUADSPI>,
 {
-    internal_storage::init(flash);
-    qspi_diff_writer::init(qspi);
+    qspi_storage::init(qspi, qspi_base_clock_speed);
 
     let next_free_page = find_next_empty_page(0);
     if let Some(next_free_page) = next_free_page {
