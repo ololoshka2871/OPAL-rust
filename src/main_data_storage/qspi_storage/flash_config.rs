@@ -35,7 +35,7 @@ pub static FLASH_CONFIGS: [FlashConfig; 1] = [
     // MT25QU01GBBB8E12
     FlashConfig {
         vendor_id: 0x20,
-        capacity_code: 0x21,
+        capacity_code: 21,
         vendor_name: VENDORS[0],
     },
 ];

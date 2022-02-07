@@ -1,12 +1,12 @@
+pub mod flash_config;
 mod identification;
 pub mod qspi_driver;
-pub mod flash_config;
 
 use identification::Identification;
 
 use core::usize;
 
-use alloc::{vec::Vec, boxed::Box};
+use alloc::{boxed::Box, vec::Vec};
 use stm32l4xx_hal::traits::flash;
 
 use self::qspi_driver::QSpiDriver;
