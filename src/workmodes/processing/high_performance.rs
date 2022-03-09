@@ -116,13 +116,16 @@ impl RawValueProcessor for HighPerformanceProcessor {
                 raw_adc_value,
                 self.sysclk,
             ),
-            AChannel::Vbat => super::process_vbat(
-                self.output.as_ref(),
-                current_period_ticks,
-                adc.to_millivolts(raw_adc_value),
-                raw_adc_value,
-                self.sysclk,
-            ),
+            AChannel::Vbat => {
+                let res = super::process_vbat(
+                    self.output.as_ref(),
+                    current_period_ticks,
+                    adc.to_millivolts(raw_adc_value),
+                    raw_adc_value,
+                    self.sysclk,
+                );
+                (res.0, res.2)
+            }
         }
     }
 }

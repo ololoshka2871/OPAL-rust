@@ -5,13 +5,14 @@ use alloc::{
     string::{String, ToString},
 };
 
-use freertos_rust::Duration;
+use freertos_rust::{Duration, Queue};
 use my_proc_macro::store_coeff;
 
 use crate::{
     config::XTAL_FREQ,
     protobuf::PASSWORD_SIZE,
     settings::{SettingActionError, MAX_MT, MIN_MT},
+    threads::sensor_processor::{Channel, Command},
 };
 
 const F_REF_DELTA: u32 = 500;
@@ -256,7 +257,10 @@ fn verify_parameters(
 
 pub fn update_settings(
     w: &super::messages::WriteSettingsReq,
+    cq: &Queue<Command>,
 ) -> Result<bool, SettingActionError<String>> {
+    use crate::threads::sensor_processor::{AChannel, FChannel};
+
     verify_parameters(w)?;
 
     crate::settings::settings_action(Duration::ms(1), |(ws, ts)| {
@@ -275,6 +279,33 @@ pub fn update_settings(
         store_coeff!(ws.TMesureTime_ms <= w; set_t_mesure_time_ms; need_write);
 
         store_coeff!(ws.Fref <= w; set_fref; need_write);
+
+        //-------------------------send enable signal--------------------------
+
+        fn enable_ch(cq: &Queue<Command>, ch: Channel) {
+            let cmd = Command::Start(ch, 0);
+            let _ = cq.send(cmd, Duration::infinite()).map_err(|_e| {
+                defmt::error!("Failed to enable {} channel", ch,);
+            });
+        }
+
+        if !ws.P_enabled & w.set_p_enabled() {
+            enable_ch(cq, Channel::FChannel(FChannel::Pressure));
+        }
+
+        if !ws.T_enabled & w.set_t_enabled() {
+            enable_ch(cq, Channel::FChannel(FChannel::Temperature));
+        }
+
+        if !ws.TCPUEnabled & w.set_tcpu_enabled() {
+            enable_ch(cq, Channel::AChannel(AChannel::TCPU));
+        }
+
+        if !ws.VBatEnabled & w.set_v_bat_enable() {
+            enable_ch(cq, Channel::AChannel(AChannel::Vbat));
+        }
+
+        //---------------------------------------------------------------------
 
         store_coeff!(ws.P_enabled <= w; set_p_enabled; need_write);
         store_coeff!(ws.T_enabled <= w; set_t_enabled; need_write);

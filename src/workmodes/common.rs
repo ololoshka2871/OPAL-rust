@@ -156,6 +156,6 @@ where
         unsafe { stm32l4x3::QUADSPI::new() },
         pins,
         unsafe { core::mem::transmute(ahb3) },
-        qspi_stm32lx3::qspi::QspiConfig::default()
+        qspi_stm32lx3::qspi::QspiConfig::default(),
     )
 }

@@ -79,7 +79,8 @@ where
 
         res.config = config;
         if let Some(config) = config {
-            res.qspi.apply_config(config.to_qspi_config(qspi_base_clock_speed));
+            res.qspi
+                .apply_config(config.to_qspi_config(qspi_base_clock_speed));
             defmt::info!("Found QSPI flash: {}", config);
             let nid = res.get_jedec_id()?;
             if nid != id {

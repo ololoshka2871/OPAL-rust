@@ -1,12 +1,14 @@
-use core::{cmp::max, ops::DerefMut};
+use core::{cell::Cell, cmp::max, ops::DerefMut};
 
 use alloc::sync::Arc;
 use freertos_rust::{CurrentTask, Duration, FreeRtosError, Mutex, Queue, Task, TaskPriority};
+use lazy_static::__Deref;
 use stm32l4xx_hal::{adc::ADC, prelude::OutputPin, time::Hertz};
 
 use crate::{
     main_data_storage::{
         data_page::DataPage,
+        select_page,
         write_controller::{PageWriteResult, WriteController},
     },
     sensors::analog::AController,
@@ -105,9 +107,7 @@ impl RecorderProcessor {
 
         let cfg = self.ch_cfg.clone();
         let fm = self.fref_multiplier;
-
         let adaptate_f = self.adaptate_f.clone();
-
         Task::new()
             .name("RecCtrl")
             .stack_size(1024)
@@ -424,10 +424,11 @@ impl RecorderProcessor {
 
             // 3_а. Шапка записана, аналоговые каналы отключаются сами см. process_adc_result()
 
+            // Если батарейка разряжена - выключаемся
             let _ = crate::settings::settings_action::<_, _, _, ()>(
                 Duration::infinite(),
                 |(settings, _)| {
-                    if v_bat < settings.VbatWorkRange.minimum {
+                    if settings.VBatEnabled && v_bat < settings.VbatWorkRange.minimum {
                         super::halt_cpu(
                             &mut scb,
                             "Battery low, power down after 1s",
@@ -619,13 +620,16 @@ impl RawValueProcessor for RecorderProcessor {
                 raw_adc_value,
                 self.sysclk,
             ),
-            AChannel::Vbat => super::process_vbat(
-                self.output.as_ref(),
-                current_period_ticks,
-                adc.to_millivolts(raw_adc_value),
-                raw_adc_value,
-                self.sysclk,
-            ),
+            AChannel::Vbat => {
+                let result = super::process_vbat(
+                    self.output.as_ref(),
+                    current_period_ticks,
+                    adc.to_millivolts(raw_adc_value),
+                    raw_adc_value,
+                    self.sysclk,
+                );
+                (result.0, result.2)
+            }
         };
 
         // запрет цыклического выполнения 1 измерение в шапку и все.

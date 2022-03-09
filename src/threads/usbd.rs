@@ -33,6 +33,7 @@ pub fn usbd(
     interrupt_controller: Arc<dyn support::interrupt_controller::IInterruptController>,
     interrupt_prio: u8,
     output: Arc<Mutex<crate::workmodes::output_storage::OutputStorage>>,
+    cq: Arc<freertos_rust::Queue<super::sensor_processor::Command>>,
 ) -> ! {
     defmt::info!("Usb thread started!");
 
@@ -90,7 +91,7 @@ pub fn usbd(
             .name("Protobuf")
             .stack_size(2048)
             .priority(TaskPriority(crate::config::PROTOBUF_TASK_PRIO))
-            .start(move |_| protobuf_server::protobuf_server(sn, output))
+            .start(move |_| protobuf_server::protobuf_server(sn, output, cq))
             .expect("Failed to create protobuf server")
     };
 

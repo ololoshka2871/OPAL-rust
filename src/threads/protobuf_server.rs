@@ -75,6 +75,7 @@ impl<'a, B: usb_device::bus::UsbBus> SerialStream<'a, B> {
 pub fn protobuf_server<B: usb_device::bus::UsbBus>(
     serial_container: Arc<Mutex<SerialPort<B>>>,
     output: Arc<Mutex<OutputStorage>>,
+    cq: Arc<freertos_rust::Queue<super::sensor_processor::Command>>,
 ) -> ! {
     loop {
         let msg_size = match protobuf::recive_md_header(&mut SerialStream::new(
@@ -101,11 +102,16 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
 
         let id = request.id;
 
-        //defmt::info!("Protobuf: Request:\n{}", defmt::Debug2Format(&request));
+        defmt::trace!("Protobuf: Request:\n{}", defmt::Debug2Format(&request));
 
         let response = {
             let id = request.id;
-            match protobuf::process_requiest(request, protobuf::new_response(id), &output) {
+            match protobuf::process_requiest(
+                request,
+                protobuf::new_response(id),
+                &output,
+                cq.as_ref(),
+            ) {
                 Ok(r) => r,
                 Err(_) => {
                     defmt::error!("Failed to generate response");
@@ -114,7 +120,7 @@ pub fn protobuf_server<B: usb_device::bus::UsbBus>(
             }
         };
 
-        //defmt::info!("Protobuf: Response:\n{}", defmt::Debug2Format(&response));
+        defmt::trace!("Protobuf: Response:\n{}", defmt::Debug2Format(&response));
 
         if let Err(e) = write_responce(serial_container.clone(), response) {
             print_error(e);

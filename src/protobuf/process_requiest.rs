@@ -7,6 +7,7 @@ pub fn process_requiest(
     req: super::messages::Request,
     mut resp: super::messages::Response,
     output: &Arc<Mutex<OutputStorage>>,
+    cq: &freertos_rust::Queue<crate::threads::sensor_processor::Command>,
 ) -> Result<super::messages::Response, ()> {
     if !(req.device_id == super::messages::Info::PressureSelfWriterId as u32
         || req.device_id == super::messages::Info::IdDiscover as u32)
@@ -27,7 +28,7 @@ pub fn process_requiest(
     }
 
     if let Some(write_settings) = req.write_settings {
-        match super::process_settings::update_settings(&write_settings) {
+        match super::process_settings::update_settings(&write_settings, cq) {
             Ok(need_to_write) => {
                 if let Err(e) = start_writing_settings(need_to_write) {
                     free_rtos_error(e);

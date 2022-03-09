@@ -255,9 +255,9 @@ pub fn process_t_cpu(
 ) -> (bool, Option<u32>) {
     static mut TCPU_OVER_MONITOR: OverMonitor<{ Ordering::Greater }> = OverMonitor(0);
 
-    //defmt::trace!("CPU Temperature {} ({})", celsius_degree, raw);
+    defmt::trace!("CPU Temperature {} ({})", celsius_degree, raw);
 
-    let (overheat_rised, t_mt) = read_settings(|(ws, _)| {
+    let (overheat_rised, t_mt, continue_work) = read_settings(|(ws, _)| {
         let overheat =
             unsafe { TCPU_OVER_MONITOR.check(celsius_degree, ws.TCPUWorkRange.absolute_maximum) };
 
@@ -266,11 +266,16 @@ pub fn process_t_cpu(
             ws.monitoring.CPUOvarheat = true;
         }
 
-        Ok((overheat_rised, ws.TMesureTime_ms))
+        Ok((overheat_rised, ws.TMesureTime_ms, ws.TCPUEnabled))
     });
     let _ = output.lock(Duration::infinite()).map(|mut guard| {
-        guard.t_cpu = celsius_degree;
-        guard.t_cpu_adc = raw;
+        if continue_work {
+            guard.t_cpu = celsius_degree;
+            guard.t_cpu_adc = raw;
+        } else {
+            guard.t_cpu = 0.0;
+            guard.t_cpu_adc = 0;
+        }
     });
 
     if overheat_rised {
@@ -278,7 +283,10 @@ pub fn process_t_cpu(
         let _ = crate::settings::start_writing_settings(true);
     }
 
-    (true, analog_period(current_period_ticks, t_mt, sys_clk))
+    (
+        continue_work,
+        analog_period(current_period_ticks, t_mt, sys_clk),
+    )
 }
 
 pub fn process_vbat(
@@ -287,36 +295,43 @@ pub fn process_vbat(
     vbat_input_mv: u16,
     raw: u16,
     sys_clk: Hertz,
-) -> (bool, Option<u32>) {
+) -> (bool, bool, Option<u32>) {
     static mut VBAT_OVER_MONITOR: OverMonitor<{ Ordering::Greater }> = OverMonitor(0);
     static mut VBAT_UNDER_MONITOR: OverMonitor<{ Ordering::Less }> = OverMonitor(0);
 
-    let (vbat, overvoltage_raised, undervoltage_detected, mt) = read_settings(|(ws, _)| {
-        let v_bat = vbat_input_mv as f32 / 1000.0
-            * (crate::config::VBAT_DEVIDER_R1 + crate::config::VBAT_DEVIDER_R2)
-            / crate::config::VBAT_DEVIDER_R2;
+    let (vbat, overvoltage_raised, undervoltage_detected, mt, vbat_enabled) =
+        read_settings(|(ws, _)| {
+            let vbat_enabled = ws.VBatEnabled;
+            let v_bat = if vbat_enabled {
+                vbat_input_mv as f32 / 1000.0
+                    * (crate::config::VBAT_DEVIDER_R1 + crate::config::VBAT_DEVIDER_R2)
+                    / crate::config::VBAT_DEVIDER_R2
+            } else {
+                0.0
+            };
 
-        let overvoltage =
-            unsafe { VBAT_OVER_MONITOR.check(v_bat, ws.VbatWorkRange.absolute_maximum) };
-        let overvoltage_raised = overvoltage && !ws.monitoring.OverPower;
-        if overvoltage {
-            ws.monitoring.OverPower = true;
-        }
+            let overvoltage =
+                unsafe { VBAT_OVER_MONITOR.check(v_bat, ws.VbatWorkRange.absolute_maximum) };
+            let overvoltage_raised = overvoltage && !ws.monitoring.OverPower;
+            if overvoltage {
+                ws.monitoring.OverPower = true;
+            }
 
-        let undervoltage = unsafe { VBAT_UNDER_MONITOR.check(v_bat, ws.VbatWorkRange.minimum) };
+            let undervoltage = unsafe { VBAT_UNDER_MONITOR.check(v_bat, ws.VbatWorkRange.minimum) };
 
-        Ok((
-            v_bat,
-            overvoltage_raised,
-            undervoltage,
-            min(ws.PMesureTime_ms, ws.TMesureTime_ms),
-        ))
-    });
-    //defmt::trace!("Vbat {} mv ({} mv / {})", vbat, vbat_input_mv, raw);
+            Ok((
+                v_bat,
+                overvoltage_raised,
+                undervoltage,
+                min(ws.PMesureTime_ms, ws.TMesureTime_ms),
+                vbat_enabled,
+            ))
+        });
+    defmt::trace!("Vbat {} mv ({} mv / {})", vbat, vbat_input_mv, raw);
 
     let _ = output.lock(Duration::infinite()).map(|mut guard| {
         guard.vbat = vbat;
-        guard.vbat_adc = raw;
+        guard.vbat_adc = if vbat_enabled { raw } else { 0 };
     });
 
     if overvoltage_raised {
@@ -325,7 +340,8 @@ pub fn process_vbat(
     }
 
     (
-        !undervoltage_detected,
+        vbat_enabled,
+        undervoltage_detected,
         analog_period(current_period_ticks, mt, sys_clk),
     )
 }

@@ -307,6 +307,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 pin_dp: self.usb_dp,
                 pin_dm: self.usb_dm,
             };
+            let cq = self.sensor_command_queue.clone();
             let ic = self.interrupt_controller.clone();
             let output = self.output.clone();
             Task::new()
@@ -314,7 +315,13 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 .stack_size(1024)
                 .priority(TaskPriority(crate::config::USBD_TASK_PRIO))
                 .start(move |_| {
-                    threads::usbd::usbd(usbperith, ic, crate::config::USB_INTERRUPT_PRIO, output)
+                    threads::usbd::usbd(
+                        usbperith,
+                        ic,
+                        crate::config::USB_INTERRUPT_PRIO,
+                        output,
+                        cq,
+                    )
                 })?;
         }
         // --------------------------------------------------------------------
