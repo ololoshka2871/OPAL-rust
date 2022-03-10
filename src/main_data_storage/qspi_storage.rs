@@ -9,7 +9,7 @@ use core::usize;
 use alloc::{boxed::Box, vec::Vec};
 use stm32l4xx_hal::traits::flash;
 
-use self::qspi_driver::QSpiDriver;
+use self::qspi_driver::{FlashDriver, QSpiDriver};
 
 use super::PageAccessor;
 

@@ -1,14 +1,12 @@
-use core::{cell::Cell, cmp::max, ops::DerefMut};
+use core::{cmp::max, ops::DerefMut};
 
 use alloc::sync::Arc;
 use freertos_rust::{CurrentTask, Duration, FreeRtosError, Mutex, Queue, Task, TaskPriority};
-use lazy_static::__Deref;
 use stm32l4xx_hal::{adc::ADC, prelude::OutputPin, time::Hertz};
 
 use crate::{
     main_data_storage::{
         data_page::DataPage,
-        select_page,
         write_controller::{PageWriteResult, WriteController},
     },
     sensors::analog::AController,

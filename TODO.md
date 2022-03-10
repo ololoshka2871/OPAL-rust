@@ -588,6 +588,10 @@
                 Qspi::apply_config()
         [v] Раздельное с мьютексом владение флешкой, поскольку в режиме USB нужно чтобы можно было стереть 
             флешку
+        [v] Чтение JEDEC ID
+        [_] Переключение в QuardSPI
+            [v] Регистры
+            [_] Чтение JEDEC ID в режиме QUARD SPI
 
     [v] Переход на отладку при помощи плагина cortex-debug, там есть дамп памяти и загрузка svd
         [v] [Дамп памяти](https://github.com/Microsoft/vscode-cpptools/issues/1503#issuecomment-767481312)

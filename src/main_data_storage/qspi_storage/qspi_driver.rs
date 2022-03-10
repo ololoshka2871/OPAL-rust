@@ -1,3 +1,4 @@
+use qspi_stm32lx3::qspi::QspiWriteCommand;
 #[cfg(any(feature = "stm32l433", feature = "stm32l443"))]
 pub use qspi_stm32lx3::{qspi, stm32l4x3::QUADSPI};
 
@@ -15,7 +16,7 @@ use super::flash_config::FlashConfig;
 
 #[allow(unused)]
 #[repr(u8)]
-enum Opcode {
+pub enum Opcode {
     /// Read the 8-bit legacy device ID.
     ReadDeviceId = 0xAB,
     /// Read the 8-bit manufacturer and device IDs.
@@ -35,6 +36,19 @@ enum Opcode {
     SectorErase = 0x20,
     BlockErase = 0xD8,
     ChipErase = 0xC7,
+    /// Read 16-bit manufacturer ID and 8-bit device ID. MultiIO
+    ReadJedecIdMIO = 0xAF,
+    /// Read flags register
+    ReadFlagStatus = 0x70,
+}
+
+pub trait FlashDriver {
+    fn get_jedec_id(&mut self) -> Result<super::Identification, QspiError>;
+    fn get_jedec_id_qio(&mut self) -> Result<super::Identification, QspiError>;
+    fn get_capacity(&self) -> usize;
+    fn erase(&mut self) -> Result<(), QspiError>;
+    fn raw_read(&mut self, command: QspiReadCommand, buffer: &mut [u8]) -> Result<(), QspiError>;
+    fn raw_write(&mut self, command: QspiWriteCommand) -> Result<(), QspiError>;
 }
 
 pub struct QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
@@ -63,7 +77,12 @@ where
         mut qspi: Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>,
         qspi_base_clock_speed: stm32l4xx_hal::time::Hertz,
     ) -> Result<Self, QspiError> {
-        qspi.apply_config(QspiConfig::default() /*TODO failsafe config*/);
+        qspi.apply_config(
+            QspiConfig::default()
+                /* failsafe config */
+                .clock_prescaler(128)
+                .clock_mode(qspi::ClockMode::Mode3),
+        );
 
         let mut res = Self { qspi, config: None };
 
@@ -79,14 +98,20 @@ where
 
         res.config = config;
         if let Some(config) = config {
+            defmt::info!("Found flash: {}", config);
+
             res.qspi
                 .apply_config(config.to_qspi_config(qspi_base_clock_speed));
-            defmt::info!("Found QSPI flash: {}", config);
-            let nid = res.get_jedec_id()?;
+
+            (config.flash_init)(&mut res)?;
+
+            // проверка потери связи
+            let nid = res.get_jedec_id_qio()?;
             if nid != id {
-                defmt::error!("Failed to apply QSPI config, connection lost");
+                defmt::error!("Failed to init flash");
                 Err(QspiError::Unknown)
             } else {
+                defmt::info!("Initialised QSPI flash: {}", config);
                 Ok(res)
             }
         } else {
@@ -95,13 +120,21 @@ where
         }
     }
 
-    pub fn get_jedec_id(&mut self) -> Result<super::Identification, QspiError> {
+    pub fn get_jedec_id_cfg(&mut self, use_qspi: bool) -> Result<super::Identification, QspiError> {
         let get_id_command = QspiReadCommand {
-            instruction: Some((Opcode::ReadJedecId as u8, QspiMode::SingleChannel)),
+            instruction: if use_qspi {
+                Some((Opcode::ReadJedecIdMIO as u8, QspiMode::QuadChannel))
+            } else {
+                Some((Opcode::ReadJedecId as u8, QspiMode::SingleChannel))
+            },
             address: None,
             alternative_bytes: None,
             dummy_cycles: 0,
-            data_mode: QspiMode::SingleChannel,
+            data_mode: if use_qspi {
+                QspiMode::QuadChannel
+            } else {
+                QspiMode::SingleChannel
+            },
             receive_length: 3,
             double_data_rate: false,
         };
@@ -111,12 +144,38 @@ where
 
         Ok(super::Identification::from_jedec_id(&id_arr))
     }
+}
 
-    pub fn get_capacity(&self) -> usize {
+impl<CLK, NCS, IO0, IO1, IO2, IO3> FlashDriver for QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
+where
+    CLK: ClkPin<QUADSPI>,
+    NCS: NCSPin<QUADSPI>,
+    IO0: IO0Pin<QUADSPI>,
+    IO1: IO1Pin<QUADSPI>,
+    IO2: IO2Pin<QUADSPI>,
+    IO3: IO3Pin<QUADSPI>,
+{
+    fn get_jedec_id(&mut self) -> Result<super::Identification, QspiError> {
+        self.get_jedec_id_cfg(false)
+    }
+
+    fn get_jedec_id_qio(&mut self) -> Result<super::Identification, QspiError> {
+        self.get_jedec_id_cfg(true)
+    }
+
+    fn get_capacity(&self) -> usize {
         unsafe { self.config.unwrap_unchecked().capacity() }
     }
 
-    pub fn erase(&mut self) -> Result<(), QspiError> {
+    fn erase(&mut self) -> Result<(), QspiError> {
         Err(QspiError::Unknown)
+    }
+
+    fn raw_read(&mut self, command: QspiReadCommand, buffer: &mut [u8]) -> Result<(), QspiError> {
+        self.qspi.transfer(command, buffer)
+    }
+
+    fn raw_write(&mut self, command: QspiWriteCommand) -> Result<(), QspiError> {
+        self.qspi.write(command)
     }
 }
