@@ -591,6 +591,13 @@
         [v] Чтение JEDEC ID
         [_] Переключение в QuardSPI
             [v] Регистры
+            [v] По идее флешка сразу должна переключиться в QSPI как только я задал конфиг однако она не 
+                принимает изменения.
+                [v] Изменять натройкиконтроллера QSPI следует сразу после того, как переключили флешку.
+                [v] Разделить функцию конфигурации на 2 части - preapre и finalise_config
+            [_] Туториал: драйвер QSPI флешки для openocd: https://visualgdb.com/tutorials/arm/stm32/flash/
+            [v] Для записи в конфигурационный регистр есть примечание 8
+                - The WRITE ENABLE command must be issued first before this operation can be executed.
             [_] Чтение JEDEC ID в режиме QUARD SPI
 
     [v] Переход на отладку при помощи плагина cortex-debug, там есть дамп памяти и загрузка svd

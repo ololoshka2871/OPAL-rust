@@ -49,6 +49,8 @@ pub trait FlashDriver {
     fn erase(&mut self) -> Result<(), QspiError>;
     fn raw_read(&mut self, command: QspiReadCommand, buffer: &mut [u8]) -> Result<(), QspiError>;
     fn raw_write(&mut self, command: QspiWriteCommand) -> Result<(), QspiError>;
+    fn config(&self) -> &FlashConfig;
+    fn apply_qspi_config(&mut self, cfg: QspiConfig);
 }
 
 pub struct QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
@@ -80,7 +82,7 @@ where
         qspi.apply_config(
             QspiConfig::default()
                 /* failsafe config */
-                .clock_prescaler(128)
+                .clock_prescaler((qspi_base_clock_speed.0 / 1_000_000) as u8)
                 .clock_mode(qspi::ClockMode::Mode3),
         );
 
@@ -100,16 +102,9 @@ where
         if let Some(config) = config {
             defmt::info!("Found flash: {}", config);
 
-            res.qspi
-                .apply_config(config.to_qspi_config(qspi_base_clock_speed));
-
-            (config.flash_init)(&mut res)?;
-
-            // проверка потери связи
-            let nid = res.get_jedec_id_qio()?;
-            if nid != id {
-                defmt::error!("Failed to init flash");
-                Err(QspiError::Unknown)
+            if let Err(e) = config.configure(&mut res, qspi_base_clock_speed) {
+                defmt::error!("Failed to init flash!");
+                Err(e)
             } else {
                 defmt::info!("Initialised QSPI flash: {}", config);
                 Ok(res)
@@ -177,5 +172,13 @@ where
 
     fn raw_write(&mut self, command: QspiWriteCommand) -> Result<(), QspiError> {
         self.qspi.write(command)
+    }
+
+    fn config(&self) -> &FlashConfig {
+        self.config.unwrap()
+    }
+
+    fn apply_qspi_config(&mut self, cfg: QspiConfig) {
+        self.qspi.apply_config(cfg)
     }
 }

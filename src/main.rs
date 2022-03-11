@@ -44,6 +44,9 @@ static GLOBAL: freertos_rust::FreeRtosAllocator = freertos_rust::FreeRtosAllocat
 
 #[entry]
 fn main() -> ! {
+    #[cfg(debug_assertions)]
+    cortex_m::asm::bkpt();
+
     defmt::trace!("++ Start up! ++");
 
     let p = unsafe { cortex_m::Peripherals::take().unwrap_unchecked() };
