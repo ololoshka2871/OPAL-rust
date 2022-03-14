@@ -106,8 +106,14 @@ where
                 defmt::error!("Failed to init flash!");
                 Err(e)
             } else {
-                defmt::info!("Initialised QSPI flash: {}", config);
-                Ok(res)
+                let newid = res.get_jedec_id_qio()?;
+                if newid == id {
+                    defmt::info!("Initialised QSPI flash: {}", config);
+                    Ok(res)
+                } else {
+                    defmt::error!("Failed to verify id in QSPI mode");
+                    Err(QspiError::Unknown)
+                }
             }
         } else {
             defmt::error!("Unknown QSPI flash JDEC ID: {}", defmt::Debug2Format(&id));

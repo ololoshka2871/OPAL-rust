@@ -98,47 +98,6 @@ fn get_non_volatile_cfg_reg(
 }
 
 pub fn flash_prepare_qspi(driver: &mut dyn FlashDriver) -> Result<(), QspiError> {
-    /*
-    // status
-    let get_status = QspiReadCommand {
-        instruction: Some((Opcode::ReadStatus as u8, QspiMode::SingleChannel)),
-        address: None,
-        alternative_bytes: None,
-        dummy_cycles: dumy_cycles,
-        data_mode: QspiMode::SingleChannel,
-        receive_length: 1,
-        double_data_rate: false,
-    };
-    let mut status_arr = [0; 1];
-    driver.raw_read(get_status, &mut status_arr)?;
-
-    defmt::debug!(
-        "Flash status: {}",
-        defmt::Debug2Format(&crate::support::hex_slice::HexSlice(status_arr))
-    );
-
-    // Flags
-    let get_flags = QspiReadCommand {
-        instruction: Some((
-            EnchantedVolatileRegisterCommands::WRITE.bits(),
-            QspiMode::SingleChannel,
-        )),
-        address: None,
-        alternative_bytes: None,
-        dummy_cycles: dumy_cycles,
-        data_mode: QspiMode::SingleChannel,
-        receive_length: 1,
-        double_data_rate: false,
-    };
-    let mut flags_arr = [0; 1];
-    driver.raw_read(get_flags, &mut flags_arr)?;
-
-    defmt::debug!(
-        "Flash flags: {}",
-        defmt::Debug2Format(&crate::support::hex_slice::HexSlice(flags_arr))
-    );
-    */
-
     let cfg = get_non_volatile_cfg_reg(driver, false)?;
     defmt::debug!("Current volatile enc. cfg: 0x{:X}", cfg.bits());
 
@@ -175,8 +134,6 @@ pub fn flash_prepare_qspi(driver: &mut dyn FlashDriver) -> Result<(), QspiError>
         double_data_rate: false,
     };
 
-    #[cfg(debug_assertions)]
-    cortex_m::asm::bkpt();
     driver.raw_write(set_qspi_cmd)
 }
 
