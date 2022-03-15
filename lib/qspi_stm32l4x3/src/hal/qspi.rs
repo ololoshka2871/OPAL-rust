@@ -11,10 +11,10 @@ use hal::gpio::{
     gpioe::{PE10, PE11, PE12, PE13, PE14, PE15},
 };
 
-use hal::gpio::{Alternate, PushPull, Speed};
 use crate::hal::rcc::{Enable, AHB3};
 use crate::stm32l4x3::QUADSPI;
 use core::ptr;
+use hal::gpio::{Alternate, PushPull, Speed};
 
 #[doc(hidden)]
 mod private {
@@ -383,8 +383,10 @@ impl<CLK, NCS, IO0, IO1, IO2, IO3> Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)> {
         self.qspi.cr.modify(|_, w| unsafe {
             w.prescaler()
                 .bits(config.clock_prescaler as u8)
-                .fsel().clear_bit() // select bank 1
-                .dfm().clear_bit() // dual flash mode disabled
+                .fsel()
+                .clear_bit() // select bank 1
+                .dfm()
+                .clear_bit() // dual flash mode disabled
                 .sshift()
                 .bit(config.sample_shift == SampleShift::HalfACycle)
         });
@@ -684,6 +686,156 @@ impl<CLK, NCS, IO0, IO1, IO2, IO3> Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)> {
                     .bit(self.config.sample_shift == SampleShift::HalfACycle)
             });
         }
+        Ok(())
+    }
+
+    pub fn start_memory_mapping(&self, command: QspiWriteCommand) -> Result<(), QspiError> {
+        if self.is_busy() {
+            return Err(QspiError::Busy);
+        }
+
+        // stop module
+        self.qspi.cr.modify(|_, w| w.en().clear_bit());
+
+        // Clear the transfer complete flag.
+        self.qspi.fcr.modify(|_, w| w.ctcf().set_bit());
+
+        let mut dmode: u8 = 0;
+        let mut instruction: u8 = 0;
+        let mut imode: u8 = 0;
+        let mut admode: u8 = 0;
+        let mut adsize: u8 = 0;
+        let mut abmode: u8 = 0;
+        let mut absize: u8 = 0;
+
+        // data size - max
+        self.qspi.dlr.write(|w| unsafe { w.dl().bits(u32::MAX) });
+        
+        // Write the length and format of data
+        if let Some((_, mode)) = command.data {
+            /*
+            self.qspi
+                .dlr
+                .write(|w| unsafe { w.dl().bits(data.len() as u32 - 1) });
+            */
+            if self.config.qpi_mode {
+                dmode = QspiMode::QuadChannel as u8;
+            } else {
+                dmode = mode as u8;
+            }
+        }
+        
+        // Write instruction mode
+        if let Some((inst, mode)) = command.instruction {
+            if self.config.qpi_mode {
+                imode = QspiMode::QuadChannel as u8;
+            } else {
+                imode = mode as u8;
+            }
+            instruction = inst;
+        }
+
+        // Note Address mode
+        if let Some((_, mode)) = command.address {
+            if self.config.qpi_mode {
+                admode = QspiMode::QuadChannel as u8;
+            } else {
+                admode = mode as u8;
+            }
+            adsize = self.config.address_size as u8;
+        }
+
+        // Write Alternative bytes
+        if let Some((a_bytes, mode)) = command.alternative_bytes {
+            if self.config.qpi_mode {
+                abmode = QspiMode::QuadChannel as u8;
+            } else {
+                abmode = mode as u8;
+            }
+
+            absize = a_bytes.len() as u8 - 1;
+
+            self.qspi.abr.write(|w| {
+                let mut reg_byte: u32 = 0;
+                for (i, element) in a_bytes.iter().rev().enumerate() {
+                    reg_byte |= (*element as u32) << (i * 8);
+                }
+                unsafe { w.alternate().bits(reg_byte) }
+            });
+        }
+
+        if command.double_data_rate {
+            self.qspi.cr.modify(|_, w| w.sshift().bit(false));
+        }
+
+        // Write CCR register with instruction etc.
+        self.qspi.ccr.modify(|_, w| unsafe {
+            //w.sioo() - ?
+            w.fmode()
+                .bits(0b11) // memory mapped mode
+                .admode()
+                .bits(admode)
+                .adsize()
+                .bits(adsize)
+                .abmode()
+                .bits(abmode)
+                .absize()
+                .bits(absize)
+                .ddrm()
+                .bit(command.double_data_rate)
+                .dcyc()
+                .bits(command.dummy_cycles)
+                .dmode()
+                .bits(dmode)
+                .imode()
+                .bits(imode)
+                .instruction()
+                .bits(instruction)
+        });
+
+        /* 
+        // in QSPI mode address from address bus, so ignore this
+        // Write address, triggers send
+        if let Some((addr, _)) = command.address {
+            self.qspi.ar.write(|w| unsafe { w.address().bits(addr) });
+        }
+        */
+
+        /*
+        // Write data to the FIFO
+        if let Some((data, _)) = command.data {
+            for byte in data {
+                while self.qspi.sr.read().ftf().bit_is_clear() {}
+                unsafe {
+                    ptr::write_volatile(&self.qspi.dr as *const _ as *mut u8, *byte);
+                }
+            }
+        }
+        */
+
+        //while self.qspi.sr.read().tcf().bit_is_clear() {}
+
+        //self.qspi.fcr.write(|w| w.ctcf().set_bit());
+
+        //if self.is_busy() {}
+
+        if command.double_data_rate {
+            self.qspi.cr.modify(|_, w| {
+                w.sshift()
+                    .bit(self.config.sample_shift == SampleShift::HalfACycle)
+            });
+        }
+
+        // enable module
+        self.qspi.cr.modify(|_, w| w.en().set_bit());
+
+        /*
+        // Transfer error
+        if self.qspi.sr.read().tef().bit_is_set() {
+            return Err(QspiError::Unknown);
+        }
+        */
+
         Ok(())
     }
 }

@@ -138,6 +138,7 @@ pub fn flash_prepare_qspi(driver: &mut dyn FlashDriver) -> Result<(), QspiError>
 }
 
 pub fn flash_finalise_config(driver: &mut dyn FlashDriver) -> Result<(), QspiError> {
+    // 3. verify QSPI mode works
     let result = get_non_volatile_cfg_reg(driver, true)?;
 
     if result
@@ -150,7 +151,12 @@ pub fn flash_finalise_config(driver: &mut dyn FlashDriver) -> Result<(), QspiErr
             result.bits()
         );
         return Err(QspiError::Unknown);
-    } else {
-        Ok(())
     }
+
+    // 4. Factory defaults
+    // Adress size - 3 bytes
+    // DDR - disabled
+    // dummy cycles - default
+
+    Ok(())
 }

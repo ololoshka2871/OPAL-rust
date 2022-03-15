@@ -23,7 +23,7 @@ enum MemoryState {
     FullUsed,
 }
 
-static mut STORAGE_IMPL: Option<Box<dyn storage::Storage>> = None;
+static mut STORAGE_IMPL: Option<Box<dyn storage::Storage + 'static>> = None;
 static mut ERASE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
 lazy_static! {
@@ -113,16 +113,15 @@ pub fn find_next_empty_page(start: u32) -> Option<u32> {
     None
 }
 
-pub fn select_page(page: u32) -> Result<Box<dyn PageAccessor>, ()> {
-    let res = lock_storage(Duration::ms(1), |s| {
-        s.as_deref_mut().map_or(Err(()), |s| s.select_page(page))
-    });
-
-    if let Ok(accessor) = res {
-        accessor
-    } else {
-        Err(())
-    }
+pub fn select_page<'a>(page: u32) -> Result<Box<dyn PageAccessor + 'a>, flash::Error> {
+    lock_storage(Duration::ms(1), |s| {
+        if let Some(s) = s.as_deref_mut() {
+            s.select_page(page)
+        } else {
+            Err(flash::Error::Illegal)
+        }
+    })
+    .unwrap_or_else(|e| Err(e))
 }
 
 pub fn flash_page_size() -> u32 {
@@ -172,7 +171,7 @@ pub(crate) fn init<CLK, NCS, IO0, IO1, IO2, IO3>(
     IO2: IO2Pin<QUADSPI> + 'static,
     IO3: IO3Pin<QUADSPI> + 'static,
 {
-    if let Ok(s) = qspi_storage::QSPIStorage::init(qspi, qspi_base_clock_speed) {
+    if let Ok(s) = qspi_storage::QSPIStorage::<'static>::init(qspi, qspi_base_clock_speed) {
         if lock_storage(Duration::infinite(), |sph| {
             *sph = Some(Box::new(s));
         })
@@ -192,13 +191,14 @@ pub(crate) fn init<CLK, NCS, IO0, IO1, IO2, IO3>(
     }
 }
 
-fn lock_storage<T, D: DurationTicks, F: FnOnce(&mut Option<Box<dyn storage::Storage>>) -> T>(
-    duration: D,
-    f: F,
-) -> Result<T, ()> {
+fn lock_storage<T, D, F>(duration: D, f: F) -> Result<T, flash::Error>
+where
+    D: DurationTicks,
+    F: FnOnce(&mut Option<Box<dyn storage::Storage<'static> + 'static>>) -> T,
+{
     if let Ok(_) = STORAGE_LOCK.lock(duration) {
         Ok(unsafe { f(&mut STORAGE_IMPL) })
     } else {
-        Err(())
+        Err(flash::Error::Busy)
     }
 }

@@ -40,6 +40,10 @@ pub enum Opcode {
     ReadJedecIdMIO = 0xAF,
     /// Read flags register
     ReadFlagStatus = 0x70,
+    /// QIO fast read 3 byte address
+    QIOFastRead = 0xEB,
+    /// Write address extander register
+    WriteAddrExtanderReg = 0xC5,
 }
 
 pub trait FlashDriver {
@@ -51,6 +55,8 @@ pub trait FlashDriver {
     fn raw_write(&mut self, command: QspiWriteCommand) -> Result<(), QspiError>;
     fn config(&self) -> &FlashConfig;
     fn apply_qspi_config(&mut self, cfg: QspiConfig);
+    fn set_memory_mapping_mode(&mut self, enable: bool) -> Result<(), QspiError>;
+    fn set_addr_extender(&mut self, extender_value: u8) -> Result<(), QspiError>;
 }
 
 pub struct QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
@@ -64,6 +70,7 @@ where
 {
     qspi: Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>,
     config: Option<&'static FlashConfig>,
+    mamory_mapped: bool,
 }
 
 impl<CLK, NCS, IO0, IO1, IO2, IO3> QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
@@ -86,7 +93,11 @@ where
                 .clock_mode(qspi::ClockMode::Mode3),
         );
 
-        let mut res = Self { qspi, config: None };
+        let mut res = Self {
+            qspi,
+            config: None,
+            mamory_mapped: false,
+        };
 
         let id = res.get_jedec_id()?;
 
@@ -186,5 +197,52 @@ where
 
     fn apply_qspi_config(&mut self, cfg: QspiConfig) {
         self.qspi.apply_config(cfg)
+    }
+
+    fn set_memory_mapping_mode(&mut self, enable: bool) -> Result<(), QspiError> {
+        if enable == self.mamory_mapped {
+            return Ok(());
+        }
+
+        if let Some(cfg) = self.config {
+            if enable {
+                const DUMMY: [u8; 1] = [0];
+                let enable_mapping_cmd = QspiWriteCommand {
+                    instruction: Some((Opcode::QIOFastRead as u8, QspiMode::QuadChannel)),
+                    address: Some((0, QspiMode::QuadChannel)),
+                    alternative_bytes: None,
+                    dummy_cycles: cfg.qspi_dumy_cycles,
+                    data: Some((&DUMMY, QspiMode::QuadChannel)),
+                    double_data_rate: false,
+                };
+
+                self.qspi.start_memory_mapping(enable_mapping_cmd)?;
+            } else {
+                self.qspi.abort_transmission();
+            }
+            self.mamory_mapped = enable;
+
+            Ok(())
+        } else {
+            Err(QspiError::Unknown)
+        }
+    }
+
+    fn set_addr_extender(&mut self, extender_value: u8) -> Result<(), QspiError> {
+        if self.mamory_mapped {
+            self.set_memory_mapping_mode(false)?;
+        }
+
+        let data = [extender_value];
+        let set_extender_cmd = QspiWriteCommand {
+            instruction: Some((Opcode::WriteAddrExtanderReg as u8, QspiMode::QuadChannel)),
+            address: None,
+            alternative_bytes: None,
+            dummy_cycles: 0, // internal register, no wait
+            data: Some((&data, QspiMode::QuadChannel)),
+            double_data_rate: false,
+        };
+
+        self.qspi.write(set_extender_cmd)
     }
 }

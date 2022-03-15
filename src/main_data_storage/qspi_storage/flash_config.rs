@@ -89,7 +89,7 @@ pub static FLASH_CONFIGS: [FlashConfig; 1] = [
         address_size: AddressSize::Addr32Bit,
         qspi_flash_size_code: 26,
         qspi_max_freq: Hertz(20_000_000),
-        qspi_dumy_cycles: 1,
+        qspi_dumy_cycles: 10, // QUAD INPUT/OUTPUT FAST READ command (factory-default)
 
         flash_prepare_qspi: Some(MT25QU01GBBB8E12::flash_prepare_qspi),
         special_qspi_config: None,
