@@ -99,9 +99,9 @@ impl EntryBuilder {
 
     pub fn read_cb(
         mut self,
-        cb: unsafe extern "C" fn(dest: *mut u8, size: i32, offset: u32, userdata: usize),
+        cb: Option<unsafe extern "C" fn(dest: *mut u8, size: i32, offset: u32, userdata: usize)>,
     ) -> Self {
-        self.entry.readcb = Some(cb);
+        self.entry.readcb = cb;
         self
     }
 
@@ -117,8 +117,6 @@ impl EntryBuilder {
     //-------------
 
     pub fn build(self) -> emfat_entry {
-        // files mast provide at leas 1 callback
-        assert!(!(!self.entry.dir && self.entry.readcb == None && self.entry.writecb == None));
         self.entry
     }
 }

@@ -50,9 +50,9 @@ pub(crate) unsafe extern "C" fn unpack_reader(
 
 //pub (crate) unsafe extern "C" fn null_read(_dest: *mut u8, _size: i32, _offset: u32, _userdata: usize) {}
 
-pub(crate) unsafe fn store_block_data(s: String, dest: *mut u8, size: i32, _offset: u32) {
+pub(crate) unsafe fn store_block_data(s: String, dest: *mut u8, size: i32, offset: u32) {
     let src = s.as_bytes();
-    let offset = _offset as usize;
+    let offset = offset as usize;
     if src.len() > offset {
         let src = &src[offset..];
         let to_write = core::cmp::min(size as usize, src.len());
@@ -143,9 +143,10 @@ pub(crate) unsafe extern "C" fn flash_read(
 ) {
     use crate::main_data_storage::*;
 
-    if let Ok(page) = select_page(offset / flash_page_size()) {
+    let page_size = flash_page_size();
+    if let Ok(page) = select_page(offset / page_size) {
         page.read_to(
-            (offset % flash_page_size()) as usize,
+            (offset % page_size) as usize,
             core::slice::from_raw_parts_mut(dest, size as usize),
         );
     }

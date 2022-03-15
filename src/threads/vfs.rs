@@ -61,7 +61,7 @@ impl EMfatStorage {
                 .offset(0)
                 .size(README_COMPRESSED.original_size)
                 .max_size(README_COMPRESSED.original_size)
-                .read_cb(unpack_reader)
+                .read_cb(Some(unpack_reader))
                 .user_data(&README_COMPRESSED as *const CompressedData as usize)
                 .build(),
         );
@@ -75,7 +75,7 @@ impl EMfatStorage {
                 .offset(0)
                 .size(DRIVER_INF_COMPRESSED.original_size)
                 .max_size(DRIVER_INF_COMPRESSED.original_size)
-                .read_cb(unpack_reader)
+                .read_cb(Some(unpack_reader))
                 .user_data(&DRIVER_INF_COMPRESSED as *const CompressedData as usize)
                 .build(),
         );
@@ -89,7 +89,7 @@ impl EMfatStorage {
                 .offset(0)
                 .size(PROTO_COMPRESSED.original_size)
                 .max_size(PROTO_COMPRESSED.original_size)
-                .read_cb(unpack_reader)
+                .read_cb(Some(unpack_reader))
                 .user_data(&PROTO_COMPRESSED as *const CompressedData as usize)
                 .build(),
         );
@@ -103,7 +103,7 @@ impl EMfatStorage {
                 .offset(0)
                 .size(2048) // noauto, размер может меняться - это генерированный текст
                 .max_size(2048)
-                .read_cb(settings_read)
+                .read_cb(Some(settings_read))
                 .build(),
         );
 
@@ -116,21 +116,21 @@ impl EMfatStorage {
                 .offset(0)
                 .size(512) // noauto, размер может меняться - это генерированный текст
                 .max_size(2048)
-                .read_cb(meminfo_read)
+                .read_cb(Some(meminfo_read))
                 .build(),
         );
 
         defmt::trace!("EmFat: .. /data.hs");
-        let flash_size = crate::main_data_storage::flash_size();
+        let flash_size = crate::main_data_storage::flash_size() / 16 /*FIXME*/;
         res.push(
             EntryBuilder::new()
                 .name(c_str!("data.hs"))
                 .dir(false)
                 .lvl(1)
                 .offset(0)
-                .size(flash_size) // noauto, размер может меняться - это генерированный текст
+                .size(flash_size)
                 .max_size(flash_size)
-                .read_cb(flash_read)
+                .read_cb(Some(flash_read))
                 .build(),
         );
 
@@ -194,7 +194,7 @@ impl BlockDevice for EMfatStorage {
     const BLOCK_BYTES: usize = 512;
 
     fn read_block(&mut self, lba: u32, block: &mut [u8]) -> Result<(), BlockDeviceError> {
-        //defmt::trace!("SCSI: Read LBA block {}", lba);
+        //defmt::debug!("SCSI: Read LBA block {}", lba);
         unsafe {
             emfat_rust::emfat_read(&mut self.ctx, block.as_mut_ptr(), lba, 1);
         }

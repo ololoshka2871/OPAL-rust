@@ -7,11 +7,11 @@ pub mod storage;
 pub(crate) mod header_printer;
 mod qspi_storage;
 
-use core::{marker::PhantomData, sync::atomic::AtomicBool};
+use core::sync::atomic::AtomicBool;
 use lazy_static::lazy_static;
 
 use alloc::{boxed::Box, vec::Vec};
-use freertos_rust::{Duration, DurationTicks, FreeRtosError, Mutex, Task, TaskPriority};
+use freertos_rust::{Duration, FreeRtosError, Mutex, Task, TaskPriority};
 
 use stm32l4xx_hal::traits::flash;
 
@@ -27,7 +27,6 @@ static mut STORAGE_IMPL: Option<Box<dyn storage::Storage + 'static>> = None;
 static mut ERASE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
 lazy_static! {
-    static ref STORAGE_LOCK: Mutex<PhantomData<u8>> = Mutex::new(PhantomData).unwrap();
     static ref NEXT_EMPTY_PAGE: Mutex<MemoryState> = Mutex::new(MemoryState::Undefined).unwrap();
 }
 
@@ -48,15 +47,11 @@ pub fn flash_erease() -> Result<(), FreeRtosError> {
             .name("FlashClr")
             .priority(TaskPriority(crate::config::FLASH_CLEANER_PRIO))
             .start(move |_| {
-                let _ = lock_storage(Duration::infinite(), |s| {
-                    if let Some(s) = s.as_deref_mut() {
-                        if let Err(e) = s.flash_erease() {
-                            defmt::error!("Flash erase error: {}", defmt::Debug2Format(&e));
-                        } else {
-                            defmt::info!("Flash erased succesfilly");
-                        }
+                let _ = lock_storage(|s| {
+                    if let Err(e) = s.flash_erease() {
+                        defmt::error!("Flash erase error: {}", defmt::Debug2Format(&e));
                     } else {
-                        defmt::error!("Erase canceled");
+                        defmt::info!("Flash erased succesfilly");
                     }
                 });
 
@@ -114,50 +109,19 @@ pub fn find_next_empty_page(start: u32) -> Option<u32> {
 }
 
 pub fn select_page<'a>(page: u32) -> Result<Box<dyn PageAccessor + 'a>, flash::Error> {
-    lock_storage(Duration::ms(1), |s| {
-        if let Some(s) = s.as_deref_mut() {
-            s.select_page(page)
-        } else {
-            Err(flash::Error::Illegal)
-        }
-    })
-    .unwrap_or_else(|e| Err(e))
+    lock_storage(|s| s.select_page(page)).unwrap_or_else(|e| Err(e))
 }
 
 pub fn flash_page_size() -> u32 {
-    let res = lock_storage(Duration::zero(), |s| {
-        s.as_deref_mut().map_or(0, |s| s.flash_page_size())
-    });
-
-    if let Ok(page_size) = res {
-        page_size
-    } else {
-        0
-    }
+    lock_storage(|s| s.flash_page_size()).unwrap_or(0)
 }
 
 pub fn flash_size() -> usize {
-    let res = lock_storage(Duration::zero(), |s| {
-        s.as_deref_mut().map_or(0, |s| s.flash_size())
-    });
-
-    if let Ok(size) = res {
-        size
-    } else {
-        0
-    }
+    lock_storage(|s| s.flash_size()).unwrap_or(0)
 }
 
 pub fn flash_size_pages() -> u32 {
-    let res = lock_storage(Duration::zero(), |s| {
-        s.as_deref_mut().map_or(0, |s| s.flash_size_pages())
-    });
-
-    if let Ok(pages) = res {
-        pages
-    } else {
-        0
-    }
+    lock_storage(|s| s.flash_size_pages()).unwrap_or(0)
 }
 
 pub(crate) fn init<CLK, NCS, IO0, IO1, IO2, IO3>(
@@ -172,33 +136,26 @@ pub(crate) fn init<CLK, NCS, IO0, IO1, IO2, IO3>(
     IO3: IO3Pin<QUADSPI> + 'static,
 {
     if let Ok(s) = qspi_storage::QSPIStorage::<'static>::init(qspi, qspi_base_clock_speed) {
-        if lock_storage(Duration::infinite(), |sph| {
-            *sph = Some(Box::new(s));
-        })
-        .is_ok()
-        {
-            let next_free_page = find_next_empty_page(0);
-            if let Some(next_free_page) = next_free_page {
-                defmt::info!("Memory: {} pages used", next_free_page);
-            } else {
-                defmt::warn!("Memory full!");
-            }
+        unsafe { STORAGE_IMPL.replace(Box::new(s)) };
+
+        let next_free_page = find_next_empty_page(0);
+        if let Some(next_free_page) = next_free_page {
+            defmt::info!("Memory: {} pages used", next_free_page);
         } else {
-            unreachable!();
+            defmt::warn!("Memory full!");
         }
     } else {
         defmt::error!("Failed to initialise QSPI flash! storage blocked!");
     }
 }
 
-fn lock_storage<T, D, F>(duration: D, f: F) -> Result<T, flash::Error>
+fn lock_storage<T, F>(f: F) -> Result<T, flash::Error>
 where
-    D: DurationTicks,
-    F: FnOnce(&mut Option<Box<dyn storage::Storage<'static> + 'static>>) -> T,
+    F: FnOnce(&mut dyn storage::Storage<'static>) -> T,
 {
-    if let Ok(_) = STORAGE_LOCK.lock(duration) {
-        Ok(unsafe { f(&mut STORAGE_IMPL) })
+    if let Some(s) = unsafe { &mut STORAGE_IMPL } {
+        Ok(f(s.as_mut()))
     } else {
-        Err(flash::Error::Busy)
+        Err(flash::Error::Illegal)
     }
 }
