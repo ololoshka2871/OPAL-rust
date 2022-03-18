@@ -1,4 +1,4 @@
-use alloc::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
 use freertos_rust::Mutex;
 
 use crate::workmodes::output_storage::OutputStorage;
@@ -13,6 +13,7 @@ pub fn monitord<D: freertos_rust::DurationTicks>(
 
     static HEADER: &str = "FreeRTOS threadinfo:\n   ID | Name       | State     | Priority | Stack left | CPU Abs.   |  %\n";
 
+    let mut prev_statistics: Option<FreeRtosSchedulerState> = None;
     loop {
         let mut staticstics: FreeRtosSchedulerState;
         freertos_rust::CurrentTask::delay(period);
@@ -26,10 +27,34 @@ pub fn monitord<D: freertos_rust::DurationTicks>(
             .tasks
             .sort_by(|a, b| a.task_number.cmp(&b.task_number));
 
+        let (diffs, runtime_from_last_call) = if let Some(prev_stat) = &prev_statistics {
+            let total_run_time_diff = if prev_stat.total_run_time < staticstics.total_run_time {
+                staticstics.total_run_time - prev_stat.total_run_time
+            } else {
+                u32::MAX - prev_stat.total_run_time + staticstics.total_run_time + 1
+            };
+            let run_time_counter_diffs = staticstics
+                .tasks
+                .iter_mut()
+                .zip(prev_stat.tasks.iter())
+                .map(|(s, ps)| s.run_time_counter - ps.run_time_counter)
+                .collect::<Vec<u32>>();
+            (run_time_counter_diffs, total_run_time_diff)
+        } else {
+            let run_time_counter_diffs = staticstics
+                .tasks
+                .iter_mut()
+                .map(|s| s.run_time_counter)
+                .collect::<Vec<u32>>();
+
+            (run_time_counter_diffs, staticstics.total_run_time)
+        };
+
         let mut stat = staticstics
             .tasks
             .iter()
-            .fold(HEADER.to_string(), |mut acc, task| {
+            .zip(diffs.iter())
+            .fold(HEADER.to_string(), |mut acc, (task, diff)| {
                 let s = format!(
                     "└─ {id: <2} | {name: <10} | {state: <9} | {priority: <8} | {stack: >10} | {cpu_abs: >10} | {cpu_rel: >4}\n",
                     id = task.task_number,
@@ -38,8 +63,8 @@ pub fn monitord<D: freertos_rust::DurationTicks>(
                     priority = task.current_priority.0,
                     stack = task.stack_high_water_mark,
                     cpu_abs = task.run_time_counter,
-                    cpu_rel = if staticstics.total_run_time > 0 && task.run_time_counter <= staticstics.total_run_time {
-                        let p = (((task.run_time_counter as u64) * 100) / staticstics.total_run_time as u64) as u32;
+                    cpu_rel = if runtime_from_last_call > 0 && *diff <= runtime_from_last_call {
+                        let p = ((diff * 100) / runtime_from_last_call) as u32;
                         let ps = if p == 0 && task.run_time_counter > 0 {
                             "<1".to_string()
                         } else {
@@ -53,6 +78,8 @@ pub fn monitord<D: freertos_rust::DurationTicks>(
                 acc.push_str(s.as_str());
                 acc
             });
+
+        prev_statistics.replace(staticstics);
 
         //stat.push_str(format!("Total run time: {}", staticstics.total_run_time).as_str());
 

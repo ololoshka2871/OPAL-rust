@@ -2,6 +2,7 @@ pub mod filter;
 pub mod free_rtos_error_ext;
 pub mod hex_slice;
 pub mod interrupt_controller;
+pub mod led;
 pub mod len_in_u64_aligned;
 pub mod logging;
 pub mod timer_period;

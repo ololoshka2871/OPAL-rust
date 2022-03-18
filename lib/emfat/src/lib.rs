@@ -65,6 +65,11 @@ impl EntryBuilder {
         self
     }
 
+    pub fn name_ptr(mut self, name: *const u8) -> Self {
+        self.entry.name = name;
+        self
+    }
+
     pub fn dir(mut self, is_dir: bool) -> Self {
         self.entry.dir = is_dir;
         self

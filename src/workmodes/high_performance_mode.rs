@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 use freertos_rust::{Duration, Mutex, Queue, Task, TaskPriority};
 use stm32l4xx_hal::gpio::{
     Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA11, PA12, PA2, PA3, PA6, PA7, PA8, PB0,
-    PD10, PD13, PE12,
+    PC10, PD10, PD13, PE12,
 };
 use stm32l4xx_hal::{
     adc::ADC,
@@ -93,6 +93,8 @@ pub struct HighPerformanceMode {
     timer1: stm32l4xx_hal::stm32l4::stm32l4x3::TIM1,
     timer2: stm32l4xx_hal::stm32l4::stm32l4x3::TIM2,
 
+    led_pin: PC10<Output<PushPull>>,
+
     adc: stm32l4xx_hal::stm32::ADC1,
     adc_common: stm32l4xx_hal::device::ADC_COMMON,
     vbat_pin: PA1<Analog>,
@@ -121,6 +123,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         let mut gpioa = dp.GPIOA.split(&mut rcc.ahb2);
         let mut gpiob = dp.GPIOB.split(&mut rcc.ahb2);
+        let mut gpioc = dp.GPIOC.split(&mut rcc.ahb2);
         let mut gpiod = dp.GPIOD.split(&mut rcc.ahb2);
         let mut gpioe = dp.GPIOE.split(&mut rcc.ahb2);
 
@@ -207,6 +210,11 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             dma1_ch6: dma_channels.6,
             timer1: dp.TIM1,
             timer2: dp.TIM2,
+
+            led_pin: gpioc
+                .pc10
+                .into_push_pull_output_in_state(&mut gpioc.moder, &mut gpioc.otyper, PinState::High)
+                .set_speed(Speed::Low),
 
             adc: dp.ADC1,
             adc_common: dp.ADC_COMMON,
@@ -297,6 +305,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
     fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
         let sys_clk = unsafe { self.clocks.unwrap_unchecked().hclk() };
+
+        crate::support::led::led_init(self.led_pin);
 
         crate::main_data_storage::init(self.qspi, sys_clk);
 

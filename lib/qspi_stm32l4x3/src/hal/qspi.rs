@@ -353,6 +353,10 @@ impl<CLK, NCS, IO0, IO1, IO2, IO3> Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)> {
         unit
     }
 
+    pub fn dmode(&self) -> u8 {
+        self.qspi.ccr.read().dmode().bits()
+    }
+
     pub fn is_busy(&self) -> bool {
         self.qspi.sr.read().busy().bit_is_set()
     }

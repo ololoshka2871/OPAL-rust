@@ -70,7 +70,6 @@ where
 {
     qspi: Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>,
     config: Option<&'static FlashConfig>,
-    mamory_mapped: bool,
 }
 
 impl<CLK, NCS, IO0, IO1, IO2, IO3> QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
@@ -93,11 +92,7 @@ where
                 .clock_mode(qspi::ClockMode::Mode3),
         );
 
-        let mut res = Self {
-            qspi,
-            config: None,
-            mamory_mapped: false,
-        };
+        let mut res = Self { qspi, config: None };
 
         let id = res.get_jedec_id()?;
 
@@ -156,6 +151,10 @@ where
 
         Ok(super::Identification::from_jedec_id(&id_arr))
     }
+
+    fn is_mamory_mapped(&self) -> bool {
+        self.qspi.dmode() == 0b11
+    }
 }
 
 impl<CLK, NCS, IO0, IO1, IO2, IO3> FlashDriver for QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
@@ -200,7 +199,7 @@ where
     }
 
     fn set_memory_mapping_mode(&mut self, enable: bool) -> Result<(), QspiError> {
-        if enable == self.mamory_mapped {
+        if enable != self.is_mamory_mapped() {
             return Ok(());
         }
 
@@ -220,7 +219,6 @@ where
             } else {
                 self.qspi.abort_transmission();
             }
-            self.mamory_mapped = enable;
 
             Ok(())
         } else {
@@ -229,7 +227,7 @@ where
     }
 
     fn set_addr_extender(&mut self, extender_value: u8) -> Result<(), QspiError> {
-        if self.mamory_mapped {
+        if self.is_mamory_mapped() {
             self.set_memory_mapping_mode(false)?;
         }
 
