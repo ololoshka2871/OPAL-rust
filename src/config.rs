@@ -28,7 +28,7 @@ pub const DMA_IRQ_PRIO: u8 = IRQ_HIGEST_PRIO + 5;
 pub const PSEOUDO_IDLE_TASK_PRIO: u8 = 1;
 
 /// usbd task prio
-pub const USBD_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 7;
+pub const USBD_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 3;
 
 /// protobuf task prio
 pub const PROTOBUF_TASK_PRIO: u8 = USBD_TASK_PRIO - 1; // иначе не работает
