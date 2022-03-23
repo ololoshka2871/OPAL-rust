@@ -95,7 +95,7 @@ extern void vAssertCalled( unsigned long ulLine, const char * const pcFileName )
 #define configUSE_TICK_HOOK				0
 #define configCPU_CLOCK_HZ				( 3000000UL ) //also systick runs at this frequency
 #define configTICK_RATE_HZ				( ( TickType_t ) 1000 ) //1000=1ms per tick, 100=10ms per tick
-#define configMAX_PRIORITIES			( 5 )
+#define configMAX_PRIORITIES			( 9 )
 #define configMINIMAL_STACK_SIZE		( ( unsigned short ) 80 )
 #define configTOTAL_HEAP_SIZE			( ( size_t ) ( 32 * 1024 ) ) // was 15
 #define configMAX_TASK_NAME_LEN			( 16 )

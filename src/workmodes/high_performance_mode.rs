@@ -334,7 +334,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                     )
                 })?;
         }
-        // --------------------------------------------------------------------
+        /* --------------------------------------------------------------------
         {
             use stm32l4xx_hal::adc::{Resolution, SampleTime};
 
@@ -397,7 +397,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                     threads::sensor_processor::sensor_processor(sp, cq, ic, processor, sys_clk)
                 })?;
         }
-        // --------------------------------------------------------------------
+        // --------------------------------------------------------------------*/
 
         crate::workmodes::common::create_monitor(sys_clk, self.output.clone())?;
 

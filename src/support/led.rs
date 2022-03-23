@@ -1,7 +1,9 @@
+#![allow(dead_code)]
+
 use core::convert::Infallible;
 
 use alloc::boxed::Box;
-use stm32l4xx_hal::{gpio::PinState, prelude::OutputPin};
+use stm32l4xx_hal::prelude::OutputPin;
 
 struct MyPin(pub Box<dyn OutputPin<Error = Infallible>>);
 
@@ -18,8 +20,24 @@ where
     }
 }
 
-pub fn led_set(state: PinState) {
+/// can call from any place
+/// --Rust--
+/// extern "C" {
+///     pub fn led_set(state: u8);
+/// }
+///
+/// --or (C/C++)--
+///
+/// extern void led_set(uint8_t state);
+/// ...
+/// unsafe { led_set(0); }
+#[no_mangle]
+pub extern "C" fn led_set(state: u8) {
     if let Some(l) = unsafe { LED.as_mut() } {
-        let _ = l.0.set_state(state);
+        let _ = if state == 0 {
+            l.0.set_high() // led OFF
+        } else {
+            l.0.set_low() // led ON
+        };
     }
 }

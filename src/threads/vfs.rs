@@ -1,12 +1,13 @@
 mod callbacks;
 mod static_data;
 
-use core::usize;
+use core::{ops::Add, usize};
 
 use alloc::vec::Vec;
 
 use emfat_rust::{emfat_entry, emfat_t, EntryBuilder};
 
+use freertos_rust::{CurrentTask, Duration, DurationImpl};
 use heatshrink_rust::CompressedData;
 use my_proc_macro::c_str;
 use usbd_scsi::{BlockDevice, BlockDeviceError};
@@ -120,8 +121,9 @@ impl EMfatStorage {
                 .build(),
         );
 
+        /*
         defmt::trace!("EmFat: .. /data.hs");
-        let flash_size = crate::main_data_storage::flash_size() / 16 /*FIXME*/;
+        let flash_size = crate::main_data_storage::flash_size();
         res.push(
             EntryBuilder::new()
                 .name(c_str!("data.hs"))
@@ -133,6 +135,7 @@ impl EMfatStorage {
                 .read_cb(Some(flash_read))
                 .build(),
         );
+        */
 
         /*
         let mut master = alloc::boxed::Box::new(
@@ -195,9 +198,52 @@ impl BlockDevice for EMfatStorage {
 
     fn read_block(&mut self, lba: u32, block: &mut [u8]) -> Result<(), BlockDeviceError> {
         //defmt::debug!("SCSI: Read LBA block {}", lba);
+
+        //crate::support::led::led_set((lba & 1) as u8);
+
+        /*
+        CurrentTask::delay(crate::workmodes::common::HertzExt::duration_ms(
+            &stm32l4xx_hal::time::Hertz(74000000),
+            100,
+        ));
+        */
+
+        /*
+        block.fill(0xFF);
+        */
+        /*
+        if lba == 2 {
+            cortex_m::asm::bkpt();
+        }*/
+
+        /*
+        const BUF_START: usize = 0;
+        const BUF_END: usize = 512;
+
+        let mut bk = alloc::vec![0u8; BUF_END - BUF_START];
+        bk.copy_from_slice(&block[BUF_START..BUF_END]);
+        core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+
+        for i in 0..block.len() / 4 {
+            let v = (lba << 8) | i as u32;
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &v as *const u32 as *const u8,
+                    block.as_mut_ptr().add(i * 4),
+                    4,
+                )
+            };
+        }
+
+        core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+
+        (&mut block[BUF_START..BUF_END]).copy_from_slice(&bk[..]);
+        */
+
         unsafe {
             emfat_rust::emfat_read(&mut self.ctx, block.as_mut_ptr(), lba, 1);
         }
+
         Ok(())
     }
 

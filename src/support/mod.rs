@@ -4,6 +4,7 @@ pub mod hex_slice;
 pub mod interrupt_controller;
 pub mod led;
 pub mod len_in_u64_aligned;
+pub mod log_anywhere;
 pub mod logging;
 pub mod timer_period;
 pub mod usb_connection_checker;

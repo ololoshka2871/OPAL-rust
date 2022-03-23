@@ -62,11 +62,13 @@ pub fn usbd(
         "L442",
     );
 
+    /*
     defmt::info!("Allocating ACM device");
     let serial = SerialPort::new(unsafe { USB_BUS.as_ref().unwrap_unchecked() });
 
     let serial_container =
         Arc::new(Mutex::new(serial).expect("Failed to create serial guard mutex"));
+        */
 
     let vid_pid = UsbVidPid(0x0483, 0x5720);
     defmt::info!("Building usb device: vid={} pid={}", &vid_pid.0, &vid_pid.1);
@@ -84,6 +86,7 @@ pub fn usbd(
 
     defmt::info!("USB ready!");
 
+    /*
     let protobuf_srv = {
         let sn = serial_container.clone();
         defmt::trace!("Creating protobuf server thread...");
@@ -94,14 +97,16 @@ pub fn usbd(
             .start(move |_| protobuf_server::protobuf_server(sn, output, cq))
             .expect("Failed to create protobuf server")
     };
+    */
 
     loop {
         // Важно! Список передаваемый сюда в том же порядке,
         // что были инициализированы интерфейсы
-        let res = match serial_container.lock(Duration::ms(1)) {
+        let res = /*match serial_container.lock(Duration::ms(1)) {
             Ok(mut serial) => usb_dev.poll(&mut [&mut scsi, serial.deref_mut()]),
             Err(_) => true,
-        };
+        };*/
+        usb_dev.poll(&mut [&mut scsi]);
 
         if !res {
             // block until usb interrupt
@@ -117,7 +122,7 @@ pub fn usbd(
 
             interrupt_controller.mask(Interrupt::USB_FS.into());
         } else {
-            protobuf_srv.notify(freertos_rust::TaskNotification::Increment);
+            //protobuf_srv.notify(freertos_rust::TaskNotification::Increment);
         }
     }
 }
@@ -131,7 +136,7 @@ unsafe fn USB_FS() {
     if let Some(usbd) = USBD_THREAD.as_ref() {
         // Результат не особо важен
         // инкремент нотификационного значения
-        let _ = usbd.notify_from_isr(&interrupt_ctx, freertos_rust::TaskNotification::Increment);
+        let _ = usbd.notify_from_isr(&interrupt_ctx, freertos_rust::TaskNotification::SetValue(1));
     }
 
     // Как только прерывание случилось, мы посылаем сигнал потоку
