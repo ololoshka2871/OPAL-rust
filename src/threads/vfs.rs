@@ -23,10 +23,10 @@ struct StaticBinData {
 // terminate strings with '\0' c_str("text") for strlen() compatible
 
 impl EMfatStorage {
-    pub fn new(disk_label: &str) -> EMfatStorage {
-        let mut res = EMfatStorage {
+    pub fn new(disk_label: &str) -> Self {
+        let mut res = Self {
             ctx: unsafe { core::mem::MaybeUninit::zeroed().assume_init() },
-            fstable: EMfatStorage::build_files_table(),
+            fstable: Self::build_files_table(),
         };
         emfat_rust::emfat_rust_init(&mut res.ctx, disk_label, res.fstable.as_mut_ptr());
         res
@@ -194,11 +194,16 @@ impl BlockDevice for EMfatStorage {
     const BLOCK_BYTES: usize = 512;
 
     fn read_block(&mut self, lba: u32, block: &mut [u8]) -> Result<(), BlockDeviceError> {
-        //defmt::debug!("SCSI: Read LBA block {}", lba);
-        unsafe {
-            emfat_rust::emfat_read(&mut self.ctx, block.as_mut_ptr(), lba, 1);
+        if crate::main_data_storage::is_erase_in_progress() {
+            defmt::warn!("Read error: flash is busy");
+            Err(BlockDeviceError::NotReady)
+        } else {
+            //defmt::debug!("SCSI: Read LBA block {}", lba);
+            unsafe {
+                emfat_rust::emfat_read(&mut self.ctx, block.as_mut_ptr(), lba, 1);
+            }
+            Ok(())
         }
-        Ok(())
     }
 
     fn write_block(&mut self, _lba: u32, _block: &[u8]) -> Result<(), BlockDeviceError> {
@@ -215,5 +220,9 @@ impl BlockDevice for EMfatStorage {
 
     fn is_write_protected(&self) -> bool {
         true
+    }
+
+    fn is_ready(&self) -> bool {
+        !crate::main_data_storage::is_erase_in_progress()
     }
 }
