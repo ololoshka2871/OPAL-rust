@@ -113,26 +113,6 @@ pub fn create_monitor(
     Ok(())
 }
 
-#[allow(dead_code)]
-pub fn create_pseudo_idle_task() -> Result<(), freertos_rust::FreeRtosError> {
-    #[cfg(debug_assertions)]
-    {
-        use freertos_rust::{Task, TaskPriority};
-
-        defmt::trace!("Creating pseudo-idle thread...");
-        Task::new()
-            .name("T_IDLE")
-            .stack_size(48)
-            .priority(TaskPriority(crate::config::PSEOUDO_IDLE_TASK_PRIO))
-            .start(move |_| loop {
-                unsafe {
-                    freertos_rust::freertos_rs_isr_yield();
-                }
-            })?;
-    }
-    Ok(())
-}
-
 pub fn create_qspi<CLK, NCS, IO0, IO1, IO2, IO3, RESET>(
     pins: (CLK, NCS, IO0, IO1, IO2, IO3),
     mut reset: RESET,

@@ -105,7 +105,7 @@ pub fn usbd(
 
         if !res {
             // block until usb interrupt
-            interrupt_controller.unpend(Interrupt::USB_FS.into());
+            // interrupt_controller.unpend(Interrupt::USB_FS.into()); // без этого скорость в 1,5 раза выше
             interrupt_controller.unmask(Interrupt::USB_FS.into());
 
             unsafe {

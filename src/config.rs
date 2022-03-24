@@ -25,25 +25,25 @@ pub const DMA_IRQ_PRIO: u8 = IRQ_HIGEST_PRIO + 5;
 // Приоритеты, обльше -> лучше
 
 /// pseudo-idle task prio
-pub const PSEOUDO_IDLE_TASK_PRIO: u8 = 1;
+pub const IDLE_TASK_PRIO: u8 = 0;
 
 /// usbd task prio
-pub const USBD_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 3;
+pub const USBD_TASK_PRIO: u8 = IDLE_TASK_PRIO + 3;
 
 /// protobuf task prio
 pub const PROTOBUF_TASK_PRIO: u8 = USBD_TASK_PRIO - 1; // иначе не работает
 
 /// monitor task prio
-pub const MONITOR_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 1;
+pub const MONITOR_TASK_PRIO: u8 = IDLE_TASK_PRIO + 1;
 
 /// sensor processor task prio
-pub const SENS_PROC_TASK_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 6;
+pub const SENS_PROC_TASK_PRIO: u8 = IDLE_TASK_PRIO + 8;
 
 /// recorder controller task prio
-pub const RECORDER_CTRL_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO + 4;
+pub const RECORDER_CTRL_PRIO: u8 = IDLE_TASK_PRIO + 4;
 
 /// flash cleaner prio
-pub const FLASH_CLEANER_PRIO: u8 = PSEOUDO_IDLE_TASK_PRIO;
+pub const FLASH_CLEANER_PRIO: u8 = IDLE_TASK_PRIO + 2;
 
 //-----------------------------------------------------------------------------
 
