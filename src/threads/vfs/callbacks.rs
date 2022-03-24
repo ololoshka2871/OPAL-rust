@@ -145,9 +145,8 @@ pub(crate) unsafe extern "C" fn flash_read(
 
     let page_size = flash_page_size();
     if let Ok(page) = select_page(offset / page_size) {
-        page.read_to(
-            (offset % page_size) as usize,
-            core::slice::from_raw_parts_mut(dest, size as usize),
-        );
+        // Устанваливаем хак прямого чтения вместо чтения в буфер
+        page.map_to_mem((offset % page_size) as usize)
+            .serialise_ptr(dest, size as usize)
     }
 }

@@ -33,6 +33,7 @@ lazy_static! {
 pub trait PageAccessor {
     fn write(&mut self, data: Vec<u8>) -> Result<(), flash::Error>;
     fn read_to(&self, offset: usize, dest: &mut [u8]);
+    fn map_to_mem(&self, offset: usize) -> usbd_scsi::direct_read::DirectReadHack;
     fn erase(&mut self) -> Result<(), flash::Error>;
 }
 
@@ -80,20 +81,18 @@ pub fn find_next_empty_page(start: u32) -> Option<u32> {
     if start < flash_size_pages() {
         for p in start..flash_size_pages() {
             let accessor = unsafe { select_page(p).unwrap_unchecked() };
-            let mut header_blockchain: self_recorder_packet::DataPacketHeader =
-                unsafe { core::mem::MaybeUninit::uninit().assume_init() };
-            accessor.read_to(0, unsafe {
-                core::slice::from_raw_parts_mut(
-                    &mut header_blockchain as *mut _ as *mut u8,
-                    core::mem::size_of_val(&header_blockchain),
-                )
-            });
+
+            let p_header_blockchain = accessor
+                .map_to_mem(0)
+                .pointer::<self_recorder_packet::DataPacketHeader>();
 
             // признаком того, что флешка стерта является то, что там везде FF
-            if core::cmp::min(
-                header_blockchain.this_block_id,
-                header_blockchain.prev_block_id,
-            ) == u32::MAX
+            if unsafe {
+                core::cmp::min(
+                    (*p_header_blockchain).this_block_id,
+                    (*p_header_blockchain).prev_block_id,
+                )
+            } == u32::MAX
             {
                 if let Ok(mut guard) = NEXT_EMPTY_PAGE.lock(Duration::zero()) {
                     *guard = MemoryState::PartialUsed(p);

@@ -70,6 +70,7 @@ where
 {
     qspi: Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>,
     config: Option<&'static FlashConfig>,
+    extender_value: u8,
 }
 
 impl<CLK, NCS, IO0, IO1, IO2, IO3> QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
@@ -92,7 +93,11 @@ where
                 .clock_mode(qspi::ClockMode::Mode3),
         );
 
-        let mut res = Self { qspi, config: None };
+        let mut res = Self {
+            qspi,
+            config: None,
+            extender_value: 0xff,
+        };
 
         let id = res.get_jedec_id()?;
 
@@ -152,8 +157,8 @@ where
         Ok(super::Identification::from_jedec_id(&id_arr))
     }
 
-    fn is_mamory_mapped(&self) -> bool {
-        self.qspi.dmode() == 0b11
+    fn is_memory_mapped(&self) -> bool {
+        self.qspi.fmode() == 0b11
     }
 }
 
@@ -199,7 +204,7 @@ where
     }
 
     fn set_memory_mapping_mode(&mut self, enable: bool) -> Result<(), QspiError> {
-        if enable != self.is_mamory_mapped() {
+        if enable == self.is_memory_mapped() {
             return Ok(());
         }
 
@@ -227,20 +232,27 @@ where
     }
 
     fn set_addr_extender(&mut self, extender_value: u8) -> Result<(), QspiError> {
-        if self.is_mamory_mapped() {
-            self.set_memory_mapping_mode(false)?;
+        if self.extender_value != extender_value {
+            if self.is_memory_mapped() {
+                self.set_memory_mapping_mode(false)?;
+            }
+
+            let data = [extender_value];
+            let set_extender_cmd = QspiWriteCommand {
+                instruction: Some((Opcode::WriteAddrExtanderReg as u8, QspiMode::QuadChannel)),
+                address: None,
+                alternative_bytes: None,
+                dummy_cycles: 0, // internal register, no wait
+                data: Some((&data, QspiMode::QuadChannel)),
+                double_data_rate: false,
+            };
+
+            self.qspi.write(set_extender_cmd)?;
+
+            self.extender_value = extender_value;
+
+            defmt::debug!("New map flash segment: {}", extender_value);
         }
-
-        let data = [extender_value];
-        let set_extender_cmd = QspiWriteCommand {
-            instruction: Some((Opcode::WriteAddrExtanderReg as u8, QspiMode::QuadChannel)),
-            address: None,
-            alternative_bytes: None,
-            dummy_cycles: 0, // internal register, no wait
-            data: Some((&data, QspiMode::QuadChannel)),
-            double_data_rate: false,
-        };
-
-        self.qspi.write(set_extender_cmd)
+        Ok(())
     }
 }

@@ -4,6 +4,7 @@ pub mod qspi_driver;
 
 use freertos_rust::{Duration, Mutex};
 use identification::Identification;
+use usbd_scsi::direct_read::DirectReadHack;
 
 use core::usize;
 
@@ -34,6 +35,16 @@ impl<'a> PageAccessor for QSPIFlashPageAccessor<'a> {
             unsafe {
                 core::ptr::copy_nonoverlapping(self.ptr.add(offset), dest.as_mut_ptr(), dest.len())
             };
+        } else {
+            unreachable!()
+        }
+    }
+
+    fn map_to_mem(&self, offset: usize) -> DirectReadHack {
+        if let Ok(mut guard) = self.driver.lock(Duration::infinite()) {
+            guard.set_memory_mapping_mode(true).unwrap();
+
+            DirectReadHack::new(unsafe { self.ptr.add(offset) })
         } else {
             unreachable!()
         }
