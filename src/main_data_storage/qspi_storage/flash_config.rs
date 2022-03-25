@@ -11,6 +11,10 @@ pub struct FlashConfig {
     pub capacity_code: u8,
     pub vendor_name: &'static str,
     pub qspi_dumy_cycles: u8,
+
+    pub wake_up_command_code: u8,
+    pub enter_deep_sleep_command_code: u8,
+
     address_size: AddressSize,
     qspi_flash_size_code: u8,
     qspi_max_freq: Hertz,
@@ -84,6 +88,10 @@ pub static FLASH_CONFIGS: [FlashConfig; 1] = [
         vendor_id: 0x20,
         capacity_code: 0x21, // 1Gb
         vendor_name: VENDORS[0],
+
+        enter_deep_sleep_command_code:
+            MT25QU01GBBB8E12::DeepSleepCmd::ENTER_DEEP_SLEEP_COMMAND_CODE.bits(),
+        wake_up_command_code: MT25QU01GBBB8E12::DeepSleepCmd::WAKE_UP_COMMAND_CODE.bits(),
 
         // по дефолту включена 3 байтовая адресация, нужно переключение
         address_size: AddressSize::Addr32Bit,

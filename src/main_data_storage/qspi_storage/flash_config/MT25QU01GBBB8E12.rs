@@ -52,6 +52,11 @@ bitflags::bitflags! {
         /// Disable Quard IO
         const DISABLE_QIO = 1 << 7;
     }
+
+    pub struct DeepSleepCmd: u8 {
+        const ENTER_DEEP_SLEEP_COMMAND_CODE = 0xB9;
+        const WAKE_UP_COMMAND_CODE = 0xab;
+    }
 }
 
 impl Default for EnchantedVolatileRegisterBits {

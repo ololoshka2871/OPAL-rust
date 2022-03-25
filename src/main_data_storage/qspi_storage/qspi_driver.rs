@@ -1,3 +1,7 @@
+use core::any::Any;
+
+use alloc::{boxed::Box, sync::Arc};
+use freertos_rust::{Duration, Mutex, Timer};
 use qspi_stm32lx3::qspi::QspiWriteCommand;
 #[cfg(any(feature = "stm32l433", feature = "stm32l443"))]
 pub use qspi_stm32lx3::{qspi, stm32l4x3::QUADSPI};
@@ -9,6 +13,8 @@ pub use qspi::{
     ClkPin, IO0Pin, IO1Pin, IO2Pin, IO3Pin, NCSPin, Qspi, QspiConfig, QspiError, QspiMode,
     QspiReadCommand,
 };
+
+use crate::workmodes::common::HertzExt;
 
 use super::flash_config::FlashConfig;
 
@@ -46,7 +52,7 @@ pub enum Opcode {
     WriteAddrExtanderReg = 0xC5,
 }
 
-pub trait FlashDriver {
+pub trait FlashDriver: Sync + Send {
     fn get_jedec_id(&mut self) -> Result<super::Identification, QspiError>;
     fn get_jedec_id_qio(&mut self) -> Result<super::Identification, QspiError>;
     fn get_capacity(&self) -> usize;
@@ -57,6 +63,18 @@ pub trait FlashDriver {
     fn apply_qspi_config(&mut self, cfg: QspiConfig);
     fn set_memory_mapping_mode(&mut self, enable: bool) -> Result<(), QspiError>;
     fn set_addr_extender(&mut self, extender_value: u8) -> Result<(), QspiError>;
+    fn wake_up(&mut self) -> Result<(), QspiError>;
+    fn want_sleep(&mut self);
+
+    fn as_any(&self) -> &dyn Any;
+    fn as_mut_any(&mut self) -> &mut dyn Any;
+}
+
+#[derive(PartialEq)]
+enum SleepState {
+    Slepping,
+    Waiting,
+    Working,
 }
 
 pub struct QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
@@ -69,37 +87,48 @@ where
     IO3: IO3Pin<QUADSPI>,
 {
     qspi: Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>,
-    config: Option<&'static FlashConfig>,
+    config: &'static FlashConfig,
     extender_value: u8,
+    sleep_timer: Timer,
+    sleep_state: SleepState,
 }
 
 impl<CLK, NCS, IO0, IO1, IO2, IO3> QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
 where
-    CLK: ClkPin<QUADSPI>,
-    NCS: NCSPin<QUADSPI>,
-    IO0: IO0Pin<QUADSPI>,
-    IO1: IO1Pin<QUADSPI>,
-    IO2: IO2Pin<QUADSPI>,
-    IO3: IO3Pin<QUADSPI>,
+    CLK: ClkPin<QUADSPI> + 'static,
+    NCS: NCSPin<QUADSPI> + 'static,
+    IO0: IO0Pin<QUADSPI> + 'static,
+    IO1: IO1Pin<QUADSPI> + 'static,
+    IO2: IO2Pin<QUADSPI> + 'static,
+    IO3: IO3Pin<QUADSPI> + 'static,
 {
     pub fn init(
         mut qspi: Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>,
-        qspi_base_clock_speed: stm32l4xx_hal::time::Hertz,
-    ) -> Result<Self, QspiError> {
+        sys_clk: stm32l4xx_hal::time::Hertz,
+    ) -> Result<Arc<Mutex<Box<dyn FlashDriver>>>, QspiError> {
         qspi.apply_config(
             QspiConfig::default()
                 /* failsafe config */
-                .clock_prescaler((qspi_base_clock_speed.0 / 1_000_000) as u8)
+                .clock_prescaler((sys_clk.0 / 1_000_000) as u8)
                 .clock_mode(qspi::ClockMode::Mode3),
         );
 
+        #[allow(invalid_value)]
         let mut res = Self {
             qspi,
-            config: None,
+            config: unsafe { core::mem::MaybeUninit::uninit().assume_init() },
             extender_value: 0xff,
+            sleep_timer: unsafe { core::mem::MaybeUninit::uninit().assume_init() },
+            sleep_state: SleepState::Slepping,
         };
 
-        let id = res.get_jedec_id()?;
+        let id = match res.get_jedec_id() {
+            Ok(id) => id,
+            Err(e) => {
+                core::mem::forget(res);
+                return Err(e);
+            }
+        };
 
         let config = super::flash_config::FLASH_CONFIGS.iter().find_map(|cfg| {
             if cfg.vendor_id == id.mfr_code() && cfg.capacity_code == id.device_id()[1] {
@@ -109,18 +138,61 @@ where
             }
         });
 
-        res.config = config;
         if let Some(config) = config {
             defmt::info!("Found flash: {}", config);
+            core::mem::forget(core::mem::replace(&mut res.config, config));
 
-            if let Err(e) = config.configure(&mut res, qspi_base_clock_speed) {
+            if let Err(e) = res.wake_up() {
+                core::mem::forget(res);
+                return Err(e);
+            }
+
+            if let Err(e) = config.configure(&mut res, sys_clk) {
                 defmt::error!("Failed to init flash!");
                 Err(e)
             } else {
                 let newid = res.get_jedec_id_qio()?;
                 if newid == id {
                     defmt::info!("Initialised QSPI flash: {}", config);
-                    Ok(res)
+
+                    let b: Box<dyn FlashDriver> = Box::new(res);
+                    let arc = Arc::new(Mutex::new(b).map_err(|_| QspiError::Unknown)?);
+
+                    if let Ok(mut guard) = arc.lock(Duration::infinite()) {
+                        let pg = match guard.as_mut_any().downcast_mut::<Self>() {
+                            Some(pg) => pg,
+                            None => unreachable!(),
+                        };
+                        let res_clone = arc.clone();
+                        let timer = Timer::new(
+                            sys_clk.duration_ms(crate::config::FLASH_AUTO_POWER_DOWN_MS),
+                        )
+                        .set_name("FlashSleep")
+                        .set_auto_reload(true)
+                        .create(move |timer| {
+                            if let Ok(mut guard) = res_clone.lock(Duration::zero()) {
+                                if let Some(pg) = guard.as_mut_any().downcast_mut::<Self>() {
+                                    if pg.sleep_state == SleepState::Waiting {
+                                        if let Err(e) = pg.enter_sleep() {
+                                            defmt::error!(
+                                                "Flash sleep timer: {}",
+                                                defmt::Debug2Format(&e)
+                                            );
+                                        } else {
+                                            let _ = timer.stop(Duration::infinite());
+                                        }
+                                    }
+                                }
+                            }
+                        })
+                        .map_err(|_| QspiError::Unknown)?;
+                        let _ = timer.stop(Duration::infinite());
+                        core::mem::forget(core::mem::replace(&mut pg.sleep_timer, timer));
+                    } else {
+                        unreachable!();
+                    }
+
+                    Ok(arc)
                 } else {
                     defmt::error!("Failed to verify id in QSPI mode");
                     Err(QspiError::Unknown)
@@ -160,16 +232,41 @@ where
     fn is_memory_mapped(&self) -> bool {
         self.qspi.fmode() == 0b11
     }
+
+    fn enter_sleep(&mut self) -> Result<(), QspiError> {
+        if self.is_memory_mapped() {
+            self.set_memory_mapping_mode(false)?;
+        }
+
+        let wake_up_cmd = QspiWriteCommand {
+            instruction: Some((
+                self.config.enter_deep_sleep_command_code,
+                QspiMode::SingleChannel,
+            )),
+            address: None,
+            alternative_bytes: None,
+            dummy_cycles: 0, // internal register, no wait
+            data: None,
+            double_data_rate: false,
+        };
+
+        self.qspi.write(wake_up_cmd)?;
+        self.sleep_state = SleepState::Slepping;
+
+        defmt::trace!("Flash sleep...");
+
+        Ok(())
+    }
 }
 
 impl<CLK, NCS, IO0, IO1, IO2, IO3> FlashDriver for QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
 where
-    CLK: ClkPin<QUADSPI>,
-    NCS: NCSPin<QUADSPI>,
-    IO0: IO0Pin<QUADSPI>,
-    IO1: IO1Pin<QUADSPI>,
-    IO2: IO2Pin<QUADSPI>,
-    IO3: IO3Pin<QUADSPI>,
+    CLK: ClkPin<QUADSPI> + 'static,
+    NCS: NCSPin<QUADSPI> + 'static,
+    IO0: IO0Pin<QUADSPI> + 'static,
+    IO1: IO1Pin<QUADSPI> + 'static,
+    IO2: IO2Pin<QUADSPI> + 'static,
+    IO3: IO3Pin<QUADSPI> + 'static,
 {
     fn get_jedec_id(&mut self) -> Result<super::Identification, QspiError> {
         self.get_jedec_id_cfg(false)
@@ -180,11 +277,14 @@ where
     }
 
     fn get_capacity(&self) -> usize {
-        unsafe { self.config.unwrap_unchecked().capacity() }
+        self.config.capacity()
     }
 
     fn erase(&mut self) -> Result<(), QspiError> {
-        Err(QspiError::Unknown)
+        self.wake_up()?;
+        Err(QspiError::Unknown)?;
+        self.want_sleep();
+        Ok(())
     }
 
     fn raw_read(&mut self, command: QspiReadCommand, buffer: &mut [u8]) -> Result<(), QspiError> {
@@ -196,7 +296,7 @@ where
     }
 
     fn config(&self) -> &FlashConfig {
-        self.config.unwrap()
+        self.config
     }
 
     fn apply_qspi_config(&mut self, cfg: QspiConfig) {
@@ -208,27 +308,23 @@ where
             return Ok(());
         }
 
-        if let Some(cfg) = self.config {
-            if enable {
-                const DUMMY: [u8; 1] = [0];
-                let enable_mapping_cmd = QspiWriteCommand {
-                    instruction: Some((Opcode::QIOFastRead as u8, QspiMode::QuadChannel)),
-                    address: Some((0, QspiMode::QuadChannel)),
-                    alternative_bytes: None,
-                    dummy_cycles: cfg.qspi_dumy_cycles,
-                    data: Some((&DUMMY, QspiMode::QuadChannel)),
-                    double_data_rate: false,
-                };
+        if enable {
+            const DUMMY: [u8; 1] = [0];
+            let enable_mapping_cmd = QspiWriteCommand {
+                instruction: Some((Opcode::QIOFastRead as u8, QspiMode::QuadChannel)),
+                address: Some((0, QspiMode::QuadChannel)),
+                alternative_bytes: None,
+                dummy_cycles: self.config.qspi_dumy_cycles,
+                data: Some((&DUMMY, QspiMode::QuadChannel)),
+                double_data_rate: false,
+            };
 
-                self.qspi.start_memory_mapping(enable_mapping_cmd)?;
-            } else {
-                self.qspi.abort_transmission();
-            }
-
-            Ok(())
+            self.qspi.start_memory_mapping(enable_mapping_cmd)?;
         } else {
-            Err(QspiError::Unknown)
+            self.qspi.abort_transmission();
         }
+
+        Ok(())
     }
 
     fn set_addr_extender(&mut self, extender_value: u8) -> Result<(), QspiError> {
@@ -255,4 +351,67 @@ where
         }
         Ok(())
     }
+
+    fn wake_up(&mut self) -> Result<(), QspiError> {
+        if self.sleep_state == SleepState::Slepping {
+            if self.is_memory_mapped() {
+                self.set_memory_mapping_mode(false)?;
+            }
+
+            let wake_up_cmd = QspiWriteCommand {
+                instruction: Some((self.config.wake_up_command_code, QspiMode::SingleChannel)),
+                address: None,
+                alternative_bytes: None,
+                dummy_cycles: 0, // internal register, no wait
+                data: None,
+                double_data_rate: false,
+            };
+
+            self.qspi.write(wake_up_cmd)?;
+
+            defmt::trace!("Flash wake up...");
+        }
+
+        self.sleep_state = SleepState::Working;
+        Ok(())
+    }
+
+    fn want_sleep(&mut self) {
+        if self.sleep_state == SleepState::Working {
+            self.sleep_state = SleepState::Waiting;
+            let _ = self.sleep_timer.start(Duration::infinite());
+        }
+    }
+
+    fn as_any(&self) -> &(dyn Any + 'static) {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut (dyn Any + 'static) {
+        self
+    }
+}
+
+// Маркерные трейты, чтобы наконец позволить сделать таймер, захватывающий драйвер в лямбду
+
+unsafe impl<CLK, NCS, IO0, IO1, IO2, IO3> Sync for QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
+where
+    CLK: ClkPin<QUADSPI> + 'static,
+    NCS: NCSPin<QUADSPI> + 'static,
+    IO0: IO0Pin<QUADSPI> + 'static,
+    IO1: IO1Pin<QUADSPI> + 'static,
+    IO2: IO2Pin<QUADSPI> + 'static,
+    IO3: IO3Pin<QUADSPI> + 'static,
+{
+}
+
+unsafe impl<CLK, NCS, IO0, IO1, IO2, IO3> Send for QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
+where
+    CLK: ClkPin<QUADSPI> + 'static,
+    NCS: NCSPin<QUADSPI> + 'static,
+    IO0: IO0Pin<QUADSPI> + 'static,
+    IO1: IO1Pin<QUADSPI> + 'static,
+    IO2: IO2Pin<QUADSPI> + 'static,
+    IO3: IO3Pin<QUADSPI> + 'static,
+{
 }

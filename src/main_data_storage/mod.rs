@@ -125,7 +125,7 @@ pub fn flash_size_pages() -> u32 {
 
 pub(crate) fn init<CLK, NCS, IO0, IO1, IO2, IO3>(
     qspi: qspi_stm32lx3::qspi::Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>,
-    qspi_base_clock_speed: stm32l4xx_hal::time::Hertz,
+    sys_clk: stm32l4xx_hal::time::Hertz,
 ) where
     CLK: ClkPin<QUADSPI> + 'static,
     NCS: NCSPin<QUADSPI> + 'static,
@@ -134,7 +134,7 @@ pub(crate) fn init<CLK, NCS, IO0, IO1, IO2, IO3>(
     IO2: IO2Pin<QUADSPI> + 'static,
     IO3: IO3Pin<QUADSPI> + 'static,
 {
-    if let Ok(s) = qspi_storage::QSPIStorage::<'static>::init(qspi, qspi_base_clock_speed) {
+    if let Ok(s) = qspi_storage::QSPIStorage::init(qspi, sys_clk) {
         unsafe { STORAGE_IMPL.replace(Box::new(s)) };
 
         let next_free_page = find_next_empty_page(0);
