@@ -8,7 +8,7 @@ use usbd_scsi::direct_read::DirectReadHack;
 
 use core::usize;
 
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, sync::Arc};
 use stm32l4xx_hal::traits::flash;
 
 use self::qspi_driver::{FlashDriver, QSpiDriver};
@@ -22,10 +22,18 @@ pub struct QSPIFlashPageAccessor {
     ptr: *mut u8,
 }
 
+const QSPI_MEMORY_MAPPED_REGION: *mut u8 = 0x90000000 as *mut u8;
+
 impl PageAccessor for QSPIFlashPageAccessor {
-    fn write(&mut self, data: Vec<u8>) -> Result<(), flash::Error> {
-        //self.driver.set_memory_mapping_mode(false).unwrap();
-        Err(flash::Error::Failure)
+    fn write(&mut self, data: &[u8]) -> Result<(), flash::Error> {
+        if let Ok(mut guard) = self.driver.lock(Duration::infinite()) {
+            let addr24 = unsafe { self.ptr.sub(QSPI_MEMORY_MAPPED_REGION as usize) as u32 };
+            guard
+                .write_block(addr24, data)
+                .map_err(|_| flash::Error::Failure)
+        } else {
+            unreachable!()
+        }
     }
 
     fn read_to(&self, offset: usize, dest: &mut [u8]) {
@@ -51,8 +59,11 @@ impl PageAccessor for QSPIFlashPageAccessor {
     }
 
     fn erase(&mut self) -> Result<(), flash::Error> {
-        //self.driver.set_memory_mapping_mode(false).unwrap();
-        Err(flash::Error::Failure)
+        if let Ok(mut guard) = self.driver.lock(Duration::zero()) {
+            guard.erase().map_err(|_| flash::Error::Failure)
+        } else {
+            Err(flash::Error::Busy)
+        }
     }
 }
 
@@ -70,8 +81,6 @@ pub struct QSPIStorage {
 
 impl super::storage::Storage<'static> for QSPIStorage {
     fn select_page(&mut self, page: u32) -> Result<Box<dyn PageAccessor + 'static>, flash::Error> {
-        const QSPI_MEMORY_MAPPED_REGION: *mut u8 = 0x90000000 as *mut u8;
-
         let full_adress = (page * self.flash_page_size()) as usize;
         let addr24 = full_adress & 0x00FFFFFF;
 
@@ -110,9 +119,9 @@ impl super::storage::Storage<'static> for QSPIStorage {
     }
 
     fn flash_page_size(&mut self) -> u32 {
-        // На сколько я понимаю, это минимальный размер который можно стереть за раз
-        // можно будет поэкспериментировать с большим размером
-        4096
+        // Запись ведется блоками по 256 байт, это буфер для сжатия, выгодно делать его
+        // как можно большим
+        512 //4096
     }
 }
 

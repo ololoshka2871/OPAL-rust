@@ -31,7 +31,7 @@ lazy_static! {
 }
 
 pub trait PageAccessor {
-    fn write(&mut self, data: Vec<u8>) -> Result<(), flash::Error>;
+    fn write(&mut self, data: &[u8]) -> Result<(), flash::Error>;
     fn read_to(&self, offset: usize, dest: &mut [u8]);
     fn map_to_mem(&self, offset: usize) -> usbd_scsi::direct_read::DirectReadHack;
     fn erase(&mut self) -> Result<(), flash::Error>;

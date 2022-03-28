@@ -35,6 +35,22 @@ bitflags::bitflags! {
         const READ = 0x65;
     }
 
+    pub struct FlagStatusRegisterCommands: u8 {
+        /// Read status regiaster
+        const READ = 0x70;
+    }
+
+    pub struct StatusFlagsRegisterBits: u8 {
+        const PROG_OR_ERASE_CTRL = 1 << 7; // 0 - busy
+        const ERASE_SUSPEND = 1 << 6;
+        const ERASE_FAILURE = 1 << 5;
+        const PROGRAM_FAILURE = 1 << 4;
+        const RESERVED = 1 << 3;
+        const PROGRAMM_SUSPEND = 1 << 2;
+        const PROTECTION_FAILURE = 1 << 1;
+        const FOR_BYTE_ADDRESSING = 1 << 0;
+    }
+
     pub struct EnchantedVolatileRegisterBits: u8 {
         /// Output driver strength
         const OUTPUT_DRIVER_30_OHMS = 0b111;
@@ -164,4 +180,28 @@ pub fn flash_finalise_config(driver: &mut dyn FlashDriver) -> Result<(), QspiErr
     // dummy cycles - default
 
     Ok(())
+}
+
+pub fn is_busy(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<bool, QspiError> {
+    let mode = if qspi_mode {
+        QspiMode::QuadChannel
+    } else {
+        QspiMode::SingleChannel
+    };
+    let get_flag_status_reg_cmd = QspiReadCommand {
+        instruction: Some((FlagStatusRegisterCommands::READ.bits(), mode)),
+        address: None,
+        alternative_bytes: None,
+        dummy_cycles: 0, // Comand set table - 0 in any mode
+        data_mode: mode,
+        receive_length: 1,
+        double_data_rate: false,
+    };
+
+    let mut result = [0; 1];
+    driver.raw_read(get_flag_status_reg_cmd, &mut result)?;
+    Ok(
+        !(unsafe { StatusFlagsRegisterBits::from_bits_unchecked(result[0]) }
+            .contains(StatusFlagsRegisterBits::PROG_OR_ERASE_CTRL)),
+    )
 }

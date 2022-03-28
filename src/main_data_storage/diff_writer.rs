@@ -154,7 +154,7 @@ impl WriteController<DataBlock> for CpuFlashDiffWriter {
         }) {
             if let Ok(mut page_accessor) = crate::main_data_storage::select_page(page.dest_page) {
                 let len = data.len();
-                if let Ok(()) = page_accessor.write(data) {
+                if let Ok(()) = page_accessor.write(data.as_slice()) {
                     defmt::info!(
                         "Write page {}, {} values ({} bytes) -> {}",
                         id,

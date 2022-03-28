@@ -10,10 +10,14 @@ pub struct FlashConfig {
     pub vendor_id: u8,
     pub capacity_code: u8,
     pub vendor_name: &'static str,
-    pub qspi_dumy_cycles: u8,
+    pub read_dumy_cycles: u8,
+    pub write_dumy_cycles: u8,
+    pub write_max_bytes: usize,
 
     pub wake_up_command_code: u8,
     pub enter_deep_sleep_command_code: u8,
+
+    pub is_busy: fn(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<bool, QspiError>,
 
     address_size: AddressSize,
     qspi_flash_size_code: u8,
@@ -56,7 +60,7 @@ impl FlashConfig {
             .flash_size(self.qspi_flash_size_code)
             .address_size(self.address_size)
             .chip_select_high_time(
-                core::cmp::min((qspi_base_clock_speed.0 / 10_000_000) as u8, 9) - 1, // max 8
+                core::cmp::min((qspi_base_clock_speed.0 / 10_000_000) as u8, 8), // max 8
             )
             .qpi_mode(true);
 
@@ -89,16 +93,19 @@ pub static FLASH_CONFIGS: [FlashConfig; 1] = [
         capacity_code: 0x21, // 1Gb
         vendor_name: VENDORS[0],
 
-        enter_deep_sleep_command_code:
-            MT25QU01GBBB8E12::DeepSleepCmd::ENTER_DEEP_SLEEP_COMMAND_CODE.bits(),
-        wake_up_command_code: MT25QU01GBBB8E12::DeepSleepCmd::WAKE_UP_COMMAND_CODE.bits(),
+        read_dumy_cycles: 10,
+        write_dumy_cycles: 0,
 
         // по дефолту включена 3 байтовая адресация, нужно переключение
-        address_size: AddressSize::Addr32Bit,
-        qspi_flash_size_code: 26,
-        qspi_max_freq: Hertz(20_000_000),
-        qspi_dumy_cycles: 10, // QUAD INPUT/OUTPUT FAST READ command (factory-default)
+        write_max_bytes: 256,
+        wake_up_command_code: MT25QU01GBBB8E12::DeepSleepCmd::WAKE_UP_COMMAND_CODE.bits(),
+        enter_deep_sleep_command_code:
+            MT25QU01GBBB8E12::DeepSleepCmd::ENTER_DEEP_SLEEP_COMMAND_CODE.bits(),
+        is_busy: MT25QU01GBBB8E12::is_busy, // QUAD INPUT/OUTPUT FAST READ command (factory-default)
+        address_size: AddressSize::Addr32Bit, // QUAD INPUT FAST PROGRAM command
+        qspi_flash_size_code: 26,           // QUAD INPUT FAST PROGRAM command
 
+        qspi_max_freq: Hertz(20_000_000),
         flash_prepare_qspi: Some(MT25QU01GBBB8E12::flash_prepare_qspi),
         special_qspi_config: None,
         flash_finalise_config: Some(MT25QU01GBBB8E12::flash_finalise_config),
