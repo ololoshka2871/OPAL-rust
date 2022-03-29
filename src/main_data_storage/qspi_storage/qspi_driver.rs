@@ -59,8 +59,10 @@ pub trait FlashDriver: Sync + Send {
     fn get_jedec_id_qio(&mut self) -> Result<super::Identification, QspiError>;
     fn get_capacity(&self) -> usize;
     fn erase(&mut self) -> Result<(), QspiError>;
+    fn write_enable(&mut self) -> Result<(), QspiError>;
     fn raw_read(&mut self, command: QspiReadCommand, buffer: &mut [u8]) -> Result<(), QspiError>;
     fn raw_write(&mut self, command: QspiWriteCommand) -> Result<(), QspiError>;
+    fn read_direct(&mut self, start_address: u32, dest: &mut [u8]) -> Result<(), QspiError>;
     fn write_block(&mut self, start_address: u32, data: &[u8]) -> Result<(), QspiError>;
     fn config(&self) -> &FlashConfig;
     fn apply_qspi_config(&mut self, cfg: QspiConfig);
@@ -267,6 +269,13 @@ where
         }
         (self.config.is_busy)(self, qspi_mode)
     }
+
+    fn cancel_memory_mapping(&mut self) -> Result<(), QspiError> {
+        if self.is_memory_mapped() {
+            self.set_memory_mapping_mode(false)?;
+        }
+        Ok(())
+    }
 }
 
 impl<CLK, NCS, IO0, IO1, IO2, IO3> FlashDriver for QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
@@ -303,12 +312,76 @@ where
         }
     }
 
+    fn write_enable(&mut self) -> Result<(), QspiError> {
+        let write_enable_command = QspiWriteCommand {
+            instruction: Some((Opcode::WriteEnable as u8, QspiMode::SingleChannel)),
+            address: None,
+            alternative_bytes: None,
+            dummy_cycles: 0,
+            data: None,
+            double_data_rate: false,
+        };
+        self.qspi.write(write_enable_command)
+    }
+
     fn raw_read(&mut self, command: QspiReadCommand, buffer: &mut [u8]) -> Result<(), QspiError> {
         self.qspi.transfer(command, buffer)
     }
 
     fn raw_write(&mut self, command: QspiWriteCommand) -> Result<(), QspiError> {
         self.qspi.write(command)
+    }
+
+    fn read_direct(&mut self, start_address: u32, dest: &mut [u8]) -> Result<(), QspiError> {
+        self.cancel_memory_mapping()?;
+
+        let read_command = QspiReadCommand {
+            instruction: Some((Opcode::QIOFastRead as u8, QspiMode::QuadChannel)),
+            address: Some((start_address, QspiMode::QuadChannel)),
+            alternative_bytes: None,
+            dummy_cycles: self.config.read_dumy_cycles,
+            double_data_rate: false,
+            data_mode: QspiMode::QuadChannel,
+            receive_length: dest.len() as u32,
+        };
+
+        self.raw_read(read_command, dest)
+    }
+
+    fn write_block(&mut self, start_address: u32, data: &[u8]) -> Result<(), QspiError> {
+        self.cancel_memory_mapping()?;
+
+        for start in (0..data.len()).step_by(self.config.write_max_bytes) {
+            let end = if data.len() - start >= self.config.write_max_bytes {
+                start + self.config.write_max_bytes
+            } else {
+                data.len()
+            };
+            let block = &data[start..end];
+
+            while self.is_busy(true)? {
+                /* wait write complead */
+                freertos_rust::CurrentTask::delay(Duration::ticks(1));
+            }
+
+            // Sets the write enable latch bit before each PROGRAM, ERASE, and WRITE command.
+            self.write_enable()?;
+
+            (self.config.check_write_ok)(self, true)?;
+
+            let write_cmd = QspiWriteCommand {
+                instruction: Some((Opcode::QIOFastProgramm as u8, QspiMode::QuadChannel)),
+                address: Some((start_address, QspiMode::QuadChannel)),
+                alternative_bytes: None,
+                dummy_cycles: self.config.write_dumy_cycles,
+                data: Some((block, QspiMode::QuadChannel)),
+                double_data_rate: false,
+            };
+
+            self.qspi.write(write_cmd)?;
+        }
+
+        Ok(())
     }
 
     fn config(&self) -> &FlashConfig {
@@ -345,9 +418,7 @@ where
 
     fn set_addr_extender(&mut self, extender_value: u8) -> Result<(), QspiError> {
         if self.extender_value != extender_value {
-            if self.is_memory_mapped() {
-                self.set_memory_mapping_mode(false)?;
-            }
+            self.cancel_memory_mapping()?;
 
             let data = [extender_value];
             let set_extender_cmd = QspiWriteCommand {
@@ -370,9 +441,7 @@ where
 
     fn wake_up(&mut self) -> Result<(), QspiError> {
         if self.sleep_state == SleepState::Slepping {
-            if self.is_memory_mapped() {
-                self.set_memory_mapping_mode(false)?;
-            }
+            self.cancel_memory_mapping()?;
 
             let wake_up_cmd = QspiWriteCommand {
                 instruction: Some((self.config.wake_up_command_code, QspiMode::SingleChannel)),
@@ -405,39 +474,6 @@ where
 
     fn as_mut_any(&mut self) -> &mut (dyn Any + 'static) {
         self
-    }
-
-    fn write_block(&mut self, start_address: u32, data: &[u8]) -> Result<(), QspiError> {
-        if self.is_memory_mapped() {
-            self.set_memory_mapping_mode(false)?;
-        }
-
-        for start in (0..data.len()).step_by(self.config.write_max_bytes) {
-            let end = if data.len() - start >= self.config.write_max_bytes {
-                start + self.config.write_max_bytes
-            } else {
-                data.len()
-            };
-            let block = &data[start..end];
-
-            while self.is_busy(true)? {
-                /* wait write complead */
-                freertos_rust::CurrentTask::delay(Duration::ticks(1));
-            }
-
-            let write_cmd = QspiWriteCommand {
-                instruction: Some((Opcode::QIOFastProgramm as u8, QspiMode::QuadChannel)),
-                address: Some((start_address, QspiMode::QuadChannel)),
-                alternative_bytes: None,
-                dummy_cycles: self.config.write_dumy_cycles,
-                data: Some((block, QspiMode::QuadChannel)),
-                double_data_rate: false,
-            };
-
-            self.qspi.write(write_cmd)?;
-        }
-
-        Ok(())
     }
 }
 

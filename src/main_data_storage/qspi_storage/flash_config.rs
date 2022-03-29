@@ -18,9 +18,10 @@ pub struct FlashConfig {
     pub enter_deep_sleep_command_code: u8,
 
     pub is_busy: fn(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<bool, QspiError>,
+    pub check_write_ok: fn(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<(), QspiError>,
 
     address_size: AddressSize,
-    qspi_flash_size_code: u8,
+    qspi_flash_size_code: u8, // using 24bit addressing, 16 MB max per page
     qspi_max_freq: Hertz,
 
     flash_prepare_qspi: Option<fn(driver: &mut dyn FlashDriver) -> Result<(), QspiError>>,
@@ -57,7 +58,7 @@ impl FlashConfig {
                 (qspi_base_clock_speed.0 / self.qspi_max_freq.0) as u8,
             ))
             .clock_mode(qspi_stm32lx3::qspi::ClockMode::Mode3)
-            .flash_size(self.qspi_flash_size_code)
+            .flash_size(core::cmp::min(self.qspi_flash_size_code, 23))
             .address_size(self.address_size)
             .chip_select_high_time(
                 core::cmp::min((qspi_base_clock_speed.0 / 10_000_000) as u8, 8), // max 8
@@ -96,15 +97,15 @@ pub static FLASH_CONFIGS: [FlashConfig; 1] = [
         read_dumy_cycles: 10,
         write_dumy_cycles: 0,
 
-        // по дефолту включена 3 байтовая адресация, нужно переключение
-        write_max_bytes: 256,
+        write_max_bytes: 256, // QUAD INPUT FAST PROGRAM command
         wake_up_command_code: MT25QU01GBBB8E12::DeepSleepCmd::WAKE_UP_COMMAND_CODE.bits(),
         enter_deep_sleep_command_code:
             MT25QU01GBBB8E12::DeepSleepCmd::ENTER_DEEP_SLEEP_COMMAND_CODE.bits(),
         is_busy: MT25QU01GBBB8E12::is_busy, // QUAD INPUT/OUTPUT FAST READ command (factory-default)
-        address_size: AddressSize::Addr32Bit, // QUAD INPUT FAST PROGRAM command
-        qspi_flash_size_code: 26,           // QUAD INPUT FAST PROGRAM command
+        check_write_ok: MT25QU01GBBB8E12::check_write_ok,
+        address_size: AddressSize::Addr32Bit,
 
+        qspi_flash_size_code: 26,
         qspi_max_freq: Hertz(20_000_000),
         flash_prepare_qspi: Some(MT25QU01GBBB8E12::flash_prepare_qspi),
         special_qspi_config: None,

@@ -294,7 +294,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         configure_usb48();
 
-        // stm32l433cc.pdf: fugure. 4
+        // stm32l433cc.pdf: figure. 4
         master_counter::MasterCounter::init(
             HighPerformanceClockConfigProvider::master_counter_frequency(),
             self.interrupt_controller.clone(),

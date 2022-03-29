@@ -123,18 +123,7 @@ pub fn flash_prepare_qspi(driver: &mut dyn FlashDriver) -> Result<(), QspiError>
     defmt::debug!("Current volatile enc. cfg: 0x{:X}", cfg.bits());
 
     // 1. Write enable
-    let write_enable_command = QspiWriteCommand {
-        instruction: Some((
-            crate::main_data_storage::qspi_storage::qspi_driver::Opcode::WriteEnable as u8,
-            QspiMode::SingleChannel,
-        )),
-        address: None,
-        alternative_bytes: None,
-        dummy_cycles: 0,
-        data: None,
-        double_data_rate: false,
-    };
-    driver.raw_write(write_enable_command)?;
+    driver.write_enable()?;
 
     // 2. enable QSPI
     let qspi_state = {
@@ -182,7 +171,10 @@ pub fn flash_finalise_config(driver: &mut dyn FlashDriver) -> Result<(), QspiErr
     Ok(())
 }
 
-pub fn is_busy(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<bool, QspiError> {
+fn read_status(
+    driver: &mut dyn FlashDriver,
+    qspi_mode: bool,
+) -> Result<StatusFlagsRegisterBits, QspiError> {
     let mode = if qspi_mode {
         QspiMode::QuadChannel
     } else {
@@ -192,7 +184,7 @@ pub fn is_busy(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<bool, Qs
         instruction: Some((FlagStatusRegisterCommands::READ.bits(), mode)),
         address: None,
         alternative_bytes: None,
-        dummy_cycles: 0, // Comand set table - 0 in any mode
+        dummy_cycles: 0, // internal command - no dummy
         data_mode: mode,
         receive_length: 1,
         double_data_rate: false,
@@ -200,8 +192,21 @@ pub fn is_busy(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<bool, Qs
 
     let mut result = [0; 1];
     driver.raw_read(get_flag_status_reg_cmd, &mut result)?;
-    Ok(
-        !(unsafe { StatusFlagsRegisterBits::from_bits_unchecked(result[0]) }
-            .contains(StatusFlagsRegisterBits::PROG_OR_ERASE_CTRL)),
-    )
+    Ok(unsafe { StatusFlagsRegisterBits::from_bits_unchecked(result[0]) })
+}
+
+pub fn is_busy(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<bool, QspiError> {
+    let status = read_status(driver, qspi_mode)?;
+    Ok(!(status.contains(StatusFlagsRegisterBits::PROG_OR_ERASE_CTRL)))
+}
+
+pub fn check_write_ok(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<(), QspiError> {
+    let status = read_status(driver, qspi_mode)?;
+    if status.contains(StatusFlagsRegisterBits::PROGRAM_FAILURE)
+        | status.contains(StatusFlagsRegisterBits::PROTECTION_FAILURE)
+    {
+        Err(QspiError::Unknown)
+    } else {
+        Ok(())
+    }
 }

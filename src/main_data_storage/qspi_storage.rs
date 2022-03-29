@@ -38,11 +38,17 @@ impl PageAccessor for QSPIFlashPageAccessor {
 
     fn read_to(&self, offset: usize, dest: &mut [u8]) {
         if let Ok(mut guard) = self.driver.lock(Duration::infinite()) {
+            let addr24 =
+                unsafe { self.ptr.sub(QSPI_MEMORY_MAPPED_REGION as usize - offset) as u32 };
+            let _ = guard.read_direct(addr24, dest);
+
+            /*
             guard.set_memory_mapping_mode(true).unwrap();
 
             unsafe {
                 core::ptr::copy_nonoverlapping(self.ptr.add(offset), dest.as_mut_ptr(), dest.len())
             };
+            */
         } else {
             unreachable!()
         }
@@ -121,7 +127,7 @@ impl super::storage::Storage<'static> for QSPIStorage {
     fn flash_page_size(&mut self) -> u32 {
         // Запись ведется блоками по 256 байт, это буфер для сжатия, выгодно делать его
         // как можно большим
-        512 //4096
+        4096
     }
 }
 

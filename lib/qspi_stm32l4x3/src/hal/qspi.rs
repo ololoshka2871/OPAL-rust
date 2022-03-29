@@ -774,8 +774,9 @@ impl<CLK, NCS, IO0, IO1, IO2, IO3> Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)> {
 
         // Write CCR register with instruction etc.
         self.qspi.ccr.modify(|_, w| unsafe {
-            //w.sioo() - ?
-            w.fmode()
+            w.sioo()
+                .clear_bit() // no sioo
+                .fmode()
                 .bits(0b11) // memory mapped mode
                 .admode()
                 .bits(admode)
