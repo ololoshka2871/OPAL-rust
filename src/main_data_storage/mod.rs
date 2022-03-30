@@ -17,7 +17,8 @@ use stm32l4xx_hal::traits::flash;
 
 use qspi_storage::qspi_driver::{ClkPin, IO0Pin, IO1Pin, IO2Pin, IO3Pin, NCSPin, QUADSPI};
 
-enum MemoryState {
+#[derive(Copy, Clone)]
+pub enum MemoryState {
     Undefined,
     PartialUsed(u32),
     FullUsed,
@@ -35,6 +36,14 @@ pub trait PageAccessor {
     fn read_to(&self, offset: usize, dest: &mut [u8]);
     fn map_to_mem(&self, offset: usize) -> usbd_scsi::direct_read::DirectReadHack;
     fn erase(&mut self) -> Result<(), flash::Error>;
+}
+
+pub fn memory_state() -> MemoryState {
+    if let Ok(guard) = NEXT_EMPTY_PAGE.lock(Duration::zero()) {
+        *guard
+    } else {
+        MemoryState::Undefined
+    }
 }
 
 pub fn is_erase_in_progress() -> bool {
@@ -100,27 +109,6 @@ pub fn find_next_empty_page(start: u32) -> Option<u32> {
                 }
                 return Some(p);
             }
-
-            /*
-            let mut header_blockchain: self_recorder_packet::DataPacketHeader =
-                unsafe { core::mem::MaybeUninit::uninit().assume_init() };
-            accessor.read_to(0, unsafe {
-                core::slice::from_raw_parts_mut(
-                    &mut header_blockchain as *mut _ as *mut u8,
-                    core::mem::size_of_val(&header_blockchain),
-                )
-            });
-            if core::cmp::min(
-                header_blockchain.this_block_id,
-                header_blockchain.prev_block_id,
-            ) == u32::MAX
-            {
-                if let Ok(mut guard) = NEXT_EMPTY_PAGE.lock(Duration::zero()) {
-                    *guard = MemoryState::PartialUsed(p);
-                }
-                return Some(p);
-            }
-            */
         }
     }
     if let Ok(mut guard) = NEXT_EMPTY_PAGE.lock(Duration::zero()) {

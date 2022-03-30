@@ -1,3 +1,4 @@
+use freertos_rust::Duration;
 use qspi_stm32lx3::qspi::{QspiError, QspiMode, QspiReadCommand, QspiWriteCommand};
 
 use crate::main_data_storage::qspi_storage::qspi_driver::FlashDriver;
@@ -72,6 +73,16 @@ bitflags::bitflags! {
     pub struct DeepSleepCmd: u8 {
         const ENTER_DEEP_SLEEP_COMMAND_CODE = 0xB9;
         const WAKE_UP_COMMAND_CODE = 0xab;
+    }
+
+    pub struct EraseCommnds: u8 {
+        // effects on 128M
+        const DIE_ERASE = 0xC4;
+    }
+
+    pub struct DieConfig : usize {
+        const DIE_COUNT = 2;
+        const DIE_SIZE = 128 * 1024 * 1024;
     }
 }
 
@@ -209,4 +220,30 @@ pub fn check_write_ok(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<(
     } else {
         Ok(())
     }
+}
+
+pub fn chip_erase(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<(), QspiError> {
+    for die in 0..DieConfig::DIE_COUNT.bits() {
+        let full_adress = (die * DieConfig::DIE_SIZE.bits()) as u32;
+
+        driver.write_enable()?;
+        driver.set_addr_extender((full_adress >> 24) as u8)?;
+
+        driver.write_enable()?;
+        let erase_cmd = QspiWriteCommand {
+            instruction: Some((EraseCommnds::DIE_ERASE.bits(), QspiMode::QuadChannel)),
+            address: Some((full_adress & 0x00FFFFFF, QspiMode::QuadChannel)),
+            alternative_bytes: None,
+            dummy_cycles: 0,
+            data: None,
+            double_data_rate: false,
+        };
+        driver.raw_write(erase_cmd)?;
+
+        while is_busy(driver, qspi_mode)? {
+            /* wait write complead */
+            freertos_rust::CurrentTask::delay(Duration::ticks(10));
+        }
+    }
+    Ok(())
 }

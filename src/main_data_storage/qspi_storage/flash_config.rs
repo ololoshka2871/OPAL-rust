@@ -20,6 +20,8 @@ pub struct FlashConfig {
     pub is_busy: fn(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<bool, QspiError>,
     pub check_write_ok: fn(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<(), QspiError>,
 
+    pub chip_erase: fn(driver: &mut dyn FlashDriver, qspi_mode: bool) -> Result<(), QspiError>,
+
     address_size: AddressSize,
     qspi_flash_size_code: u8, // using 24bit addressing, 16 MB max per page
     qspi_max_freq: Hertz,
@@ -110,5 +112,6 @@ pub static FLASH_CONFIGS: [FlashConfig; 1] = [
         flash_prepare_qspi: Some(MT25QU01GBBB8E12::flash_prepare_qspi),
         special_qspi_config: None,
         flash_finalise_config: Some(MT25QU01GBBB8E12::flash_finalise_config),
+        chip_erase: MT25QU01GBBB8E12::chip_erase,
     },
 ];

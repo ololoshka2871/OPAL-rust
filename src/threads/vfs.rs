@@ -40,7 +40,7 @@ impl EMfatStorage {
 
         let mut res: Vec<emfat_entry> = Vec::new();
 
-        defmt::trace!("EmFat: .. /");
+        defmt::trace!("EmFat: /");
         res.push(
             EntryBuilder::new()
                 .name(c_str!(""))
@@ -52,7 +52,7 @@ impl EMfatStorage {
                 .build(),
         );
 
-        defmt::trace!("EmFat: .. /Readme.txt");
+        defmt::trace!("EmFat: /Readme.txt");
         res.push(
             EntryBuilder::new()
                 .name(c_str!("Readme.txt"))
@@ -66,7 +66,7 @@ impl EMfatStorage {
                 .build(),
         );
 
-        defmt::trace!("EmFat: .. /driver.inf");
+        defmt::trace!("EmFat: /driver.inf");
         res.push(
             EntryBuilder::new()
                 .name(c_str!("driver.inf"))
@@ -80,7 +80,7 @@ impl EMfatStorage {
                 .build(),
         );
 
-        defmt::trace!("EmFat: .. /proto.prt");
+        defmt::trace!("EmFat: /proto.prt");
         res.push(
             EntryBuilder::new()
                 .name(c_str!("proto.prt"))
@@ -94,7 +94,7 @@ impl EMfatStorage {
                 .build(),
         );
 
-        defmt::trace!("EmFat: .. /settings.var");
+        defmt::trace!("EmFat: /settings.var");
         res.push(
             EntryBuilder::new()
                 .name(c_str!("config.var"))
@@ -107,7 +107,7 @@ impl EMfatStorage {
                 .build(),
         );
 
-        defmt::trace!("EmFat: .. /storage.var");
+        defmt::trace!("EmFat: /storage.var");
         res.push(
             EntryBuilder::new()
                 .name(c_str!("storage.var"))
@@ -120,19 +120,49 @@ impl EMfatStorage {
                 .build(),
         );
 
-        defmt::trace!("EmFat: .. /data.hs");
-        let flash_size = crate::main_data_storage::flash_size();
-        res.push(
-            EntryBuilder::new()
-                .name(c_str!("data.hs"))
-                .dir(false)
-                .lvl(1)
-                .offset(0)
-                .size(flash_size)
-                .max_size(flash_size)
-                .read_cb(Some(flash_read))
-                .build(),
-        );
+        {
+            let flash_size = crate::main_data_storage::flash_size();
+            defmt::trace!("EmFat: /data.hs ({} B)", flash_size);
+            res.push(
+                EntryBuilder::new()
+                    .name(c_str!("data.hs"))
+                    .dir(false)
+                    .lvl(1)
+                    .offset(0)
+                    .size(flash_size)
+                    .max_size(flash_size)
+                    .read_cb(Some(flash_read))
+                    .build(),
+            );
+        }
+
+        match crate::main_data_storage::memory_state() {
+            crate::main_data_storage::MemoryState::Undefined => {
+                defmt::error!("EmFat: /data-ex.hs <undefined state>")
+            }
+            crate::main_data_storage::MemoryState::PartialUsed(pages) => {
+                if pages == 0 {
+                    defmt::debug!("EmFat: /data-ex.hs <empty-skipped>");
+                } else {
+                    let used = (pages * crate::main_data_storage::flash_page_size()) as usize;
+                    defmt::trace!("EmFat: /data-ex.hs ({})", used);
+                    res.push(
+                        EntryBuilder::new()
+                            .name(c_str!("data-ex.hs"))
+                            .dir(false)
+                            .lvl(1)
+                            .offset(0)
+                            .size(used)
+                            .max_size(used)
+                            .read_cb(Some(flash_read))
+                            .build(),
+                    );
+                }
+            }
+            crate::main_data_storage::MemoryState::FullUsed => {
+                defmt::debug!("EmFat: /data-ex.hs <full used>")
+            }
+        }
 
         /*
         let mut master = alloc::boxed::Box::new(

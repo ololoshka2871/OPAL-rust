@@ -302,14 +302,16 @@ where
     }
 
     fn erase(&mut self) -> Result<(), QspiError> {
+        self.cancel_memory_mapping()?;
+
         self.wake_up()?;
 
         if (self.config.is_busy)(self, true)? {
             self.want_sleep();
             Err(QspiError::Busy)
         } else {
+            (self.config.chip_erase)(self, true)?;
             self.want_sleep();
-            todo!();
             Ok(())
         }
     }
@@ -422,6 +424,7 @@ where
         if self.extender_value != extender_value {
             self.cancel_memory_mapping()?;
 
+            self.write_enable()?;
             let data = [extender_value];
             let set_extender_cmd = QspiWriteCommand {
                 instruction: Some((Opcode::WriteAddrExtanderReg as u8, QspiMode::QuadChannel)),
