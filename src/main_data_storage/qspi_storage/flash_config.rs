@@ -103,7 +103,7 @@ pub static FLASH_CONFIGS: [FlashConfig; 1] = [
             MT25QU01GBBB8E12::DeepSleepCmd::ENTER_DEEP_SLEEP_COMMAND_CODE.bits(),
         is_busy: MT25QU01GBBB8E12::is_busy, // QUAD INPUT/OUTPUT FAST READ command (factory-default)
         check_write_ok: MT25QU01GBBB8E12::check_write_ok,
-        address_size: AddressSize::Addr32Bit,
+        address_size: AddressSize::Addr24Bit,
 
         qspi_flash_size_code: 26,
         qspi_max_freq: Hertz(20_000_000),

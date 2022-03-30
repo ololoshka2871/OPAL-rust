@@ -59,6 +59,8 @@ pub trait FlashDriver: Sync + Send {
     fn get_jedec_id_qio(&mut self) -> Result<super::Identification, QspiError>;
     fn get_capacity(&self) -> usize;
     fn erase(&mut self) -> Result<(), QspiError>;
+
+    /// Run this before any write operation
     fn write_enable(&mut self) -> Result<(), QspiError>;
     fn raw_read(&mut self, command: QspiReadCommand, buffer: &mut [u8]) -> Result<(), QspiError>;
     fn raw_write(&mut self, command: QspiWriteCommand) -> Result<(), QspiError>;
