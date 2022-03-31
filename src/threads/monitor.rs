@@ -31,13 +31,23 @@ pub fn monitord<D: freertos_rust::DurationTicks>(
             let total_run_time_diff = if prev_stat.total_run_time < staticstics.total_run_time {
                 staticstics.total_run_time - prev_stat.total_run_time
             } else {
-                u32::MAX - prev_stat.total_run_time + staticstics.total_run_time + 1
+                freertos_rust::FreeRtosUnsignedLong::MAX - prev_stat.total_run_time
+                    + staticstics.total_run_time
+                    + 1
             };
             let run_time_counter_diffs = staticstics
                 .tasks
                 .iter_mut()
                 .zip(prev_stat.tasks.iter())
-                .map(|(s, ps)| s.run_time_counter - ps.run_time_counter)
+                .map(|(s, ps)| {
+                    if s.run_time_counter >= ps.run_time_counter {
+                        s.run_time_counter - ps.run_time_counter
+                    } else {
+                        freertos_rust::FreeRtosUnsignedLong::MAX - ps.run_time_counter
+                            + s.run_time_counter
+                            + 1
+                    }
+                })
                 .collect::<Vec<u32>>();
             (run_time_counter_diffs, total_run_time_diff)
         } else {

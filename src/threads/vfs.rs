@@ -122,10 +122,10 @@ impl EMfatStorage {
 
         {
             let flash_size = crate::main_data_storage::flash_size();
-            defmt::trace!("EmFat: /data.hs ({} B)", flash_size);
+            defmt::trace!("EmFat: /data_raw.hs ({} B)", flash_size);
             res.push(
                 EntryBuilder::new()
-                    .name(c_str!("data.hs"))
+                    .name(c_str!("data_raw.hs"))
                     .dir(false)
                     .lvl(1)
                     .offset(0)
@@ -138,17 +138,17 @@ impl EMfatStorage {
 
         match crate::main_data_storage::memory_state() {
             crate::main_data_storage::MemoryState::Undefined => {
-                defmt::error!("EmFat: /data-ex.hs <undefined state>")
+                defmt::error!("EmFat: /data_use.hs <undefined state>")
             }
             crate::main_data_storage::MemoryState::PartialUsed(pages) => {
                 if pages == 0 {
-                    defmt::debug!("EmFat: /data-ex.hs <empty-skipped>");
+                    defmt::debug!("EmFat: /data_use.hs <empty-skipped>");
                 } else {
                     let used = (pages * crate::main_data_storage::flash_page_size()) as usize;
-                    defmt::trace!("EmFat: /data-ex.hs ({})", used);
+                    defmt::trace!("EmFat: /data_use.hs ({})", used);
                     res.push(
                         EntryBuilder::new()
-                            .name(c_str!("data-ex.hs"))
+                            .name(c_str!("data_use.hs"))
                             .dir(false)
                             .lvl(1)
                             .offset(0)
@@ -160,7 +160,7 @@ impl EMfatStorage {
                 }
             }
             crate::main_data_storage::MemoryState::FullUsed => {
-                defmt::debug!("EmFat: /data-ex.hs <full used>")
+                defmt::debug!("EmFat: /data_use.hs <full used>")
             }
         }
 

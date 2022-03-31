@@ -375,7 +375,7 @@ where
 
             let write_cmd = QspiWriteCommand {
                 instruction: Some((Opcode::QIOFastProgramm as u8, QspiMode::QuadChannel)),
-                address: Some((start_address, QspiMode::QuadChannel)),
+                address: Some((start_address + start as u32, QspiMode::QuadChannel)),
                 alternative_bytes: None,
                 dummy_cycles: self.config.write_dumy_cycles,
                 data: Some((block, QspiMode::QuadChannel)),
