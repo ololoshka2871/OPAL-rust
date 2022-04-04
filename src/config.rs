@@ -71,13 +71,13 @@ pub const OVER_LIMIT_COUNT: u32 = 5;
 
 //-----------------------------------------------------------------------------
 
-pub const VBAT_DEVIDER_R1: f32 = 100_000.0;
+pub const VBAT_DEVIDER_R1: f32 = 270_000.0;
 pub const VBAT_DEVIDER_R2: f32 = 91_000.0;
 
 //-----------------------------------------------------------------------------
 
 pub const START_BLINK_COUNT: u32 = 5;
-pub const START_BLINK_PERIOD_MS: u32 = 1000;
+pub const START_BLINK_PERIOD_MS: u32 = 500;
 
 //-----------------------------------------------------------------------------
 

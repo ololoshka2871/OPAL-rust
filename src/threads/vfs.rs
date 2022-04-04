@@ -164,56 +164,6 @@ impl EMfatStorage {
             }
         }
 
-        /*
-        let mut master = alloc::boxed::Box::new(
-            crate::sensors::freqmeter::master_counter::MasterCounter::acquire(),
-        );
-        master.want_start();
-
-        defmt::trace!("EmFat: .. /master.val");
-        res.push(
-            EntryBuilder::new()
-                .name(c_str!("master.val"))
-                .dir(false)
-                .lvl(1)
-                .offset(0)
-                .size(10)
-                .max_size(10)
-                .read_cb(master_read)
-                .user_data(alloc::boxed::Box::into_raw(master) as usize)
-                .build(),
-        );
-        */
-
-        /*
-        defmt::trace!("EmFat: .. /Testfile.bin");
-        res.push(
-            EntryBuilder::new()
-                .name(c_str!("Testfile.bin"))
-                .dir(false)
-                .lvl(1)
-                .offset(0)
-                .size(1024 * 10)
-                .max_size(1024 * 20)
-                .read_cb(null_read)
-                .build(),
-        );
-        */
-
-        /*
-        defmt::trace!("EmFat: .. /fill.x");
-        res.push(
-            EntryBuilder::new()
-                .name(c_str!("fill.x"))
-                .dir(false)
-                .lvl(1)
-                .offset(0)
-                .size(65600 * 8 * 512)
-                .max_size(65600 * 8 * 512)
-                .read_cb(null_read)
-                .build(),
-        );*/
-
         res.push(EntryBuilder::terminator_entry());
 
         res
@@ -224,7 +174,7 @@ impl BlockDevice for EMfatStorage {
     const BLOCK_BYTES: usize = 512;
 
     fn read_block(&mut self, lba: u32, block: &mut [u8]) -> Result<(), BlockDeviceError> {
-        if crate::main_data_storage::is_erase_in_progress() {
+        let res = if crate::main_data_storage::is_erase_in_progress() {
             defmt::warn!("Read error: flash is busy");
             Err(BlockDeviceError::NotReady)
         } else {
@@ -233,7 +183,9 @@ impl BlockDevice for EMfatStorage {
                 emfat_rust::emfat_read(&mut self.ctx, block.as_mut_ptr(), lba, 1);
             }
             Ok(())
-        }
+        };
+
+        res
     }
 
     fn write_block(&mut self, _lba: u32, _block: &[u8]) -> Result<(), BlockDeviceError> {

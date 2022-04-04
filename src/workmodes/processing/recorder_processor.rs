@@ -111,28 +111,29 @@ impl RecorderProcessor {
             .stack_size(1024)
             .priority(TaskPriority(config::RECORDER_CTRL_PRIO))
             .start(move |_| {
-                Self::led_blink(led, config::START_BLINK_COUNT, blink_period);
+                let led = Self::led_blink(led, config::START_BLINK_COUNT, blink_period);
                 CurrentTask::delay(start_delay); // задержка старта
-                Self::controller(output, cq, cfg, fm, writer, adaptate_f, scb);
+                Self::controller(output, cq, cfg, fm, writer, adaptate_f, scb, led);
             })
     }
 
-    fn led_blink<P>(mut _led: P, _cout: u32, _period: Duration)
+    fn led_blink<P>(mut led: P, _cout: u32, _period: Duration) -> P
     where
         P: OutputPin,
     {
         #[cfg(feature = "led-blink")]
-        for _ in 0.._cout * 2 {
+        for _ in 0.._cout {
             use crate::config;
 
-            let _ = _led.set_state(config::LED_ENABLE);
+            let _ = led.set_state(config::LED_ENABLE);
             CurrentTask::delay(Duration::ms(_period.to_ms() / 2));
-            let _ = _led.set_state(config::LED_DISABLE);
+            let _ = led.set_state(config::LED_DISABLE);
             CurrentTask::delay(Duration::ms(_period.to_ms() / 2));
         }
+        led
     }
 
-    fn controller<W, D>(
+    fn controller<W, D, P>(
         output: Arc<Mutex<OutputStorage>>,
         commad_queue: Arc<Queue<Command>>,
         ch_cfg: FChCfg,
@@ -140,9 +141,11 @@ impl RecorderProcessor {
         mut writer: W,
         adaptate_f: Arc<Mutex<bool>>,
         mut scb: cortex_m::peripheral::SCB,
+        mut _led: P,
     ) where
         W: WriteController<D>,
         D: DataPage,
+        P: OutputPin,
     {
         enum Event {
             /// Приступить к прогреву канала
@@ -518,6 +521,10 @@ impl RecorderProcessor {
             };
 
             // 8. Ожидание завершения адаптации пропуская 1 измерение
+
+            #[cfg(feature = "led-blink-each-block")]
+            let _ = _led.set_state(crate::config::LED_ENABLE);
+
             CurrentTask::delay(Duration::ms(
                 (core::cmp::max(ch_cfg.p_preheat_time_ms, ch_cfg.t_preheat_time_ms)
                     / crate::config::PREHEAT_MULTIPLIER
@@ -525,6 +532,9 @@ impl RecorderProcessor {
                     .checked_sub(write_time)
                     .unwrap_or_default(),
             ));
+
+            #[cfg(feature = "led-blink-each-block")]
+            let _ = _led.set_state(crate::config::LED_DISABLE);
 
             adaptate_req(false);
         }

@@ -104,6 +104,7 @@ pub fn usbd(
         };
 
         if !res {
+            crate::support::led::led_set(0);
             // block until usb interrupt
             // interrupt_controller.unpend(Interrupt::USB_FS.into()); // без этого скорость в 1,5 раза выше
             interrupt_controller.unmask(Interrupt::USB_FS.into());
@@ -117,6 +118,7 @@ pub fn usbd(
 
             interrupt_controller.mask(Interrupt::USB_FS.into());
         } else {
+            crate::support::led::led_set(1);
             protobuf_srv.notify(freertos_rust::TaskNotification::Increment);
         }
     }
