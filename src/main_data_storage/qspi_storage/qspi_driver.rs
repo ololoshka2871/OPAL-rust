@@ -6,9 +6,6 @@ use qspi_stm32lx3::qspi::QspiWriteCommand;
 #[cfg(any(feature = "stm32l433", feature = "stm32l443"))]
 pub use qspi_stm32lx3::{qspi, stm32l4x3::QUADSPI};
 
-#[cfg(not(any(feature = "stm32l433", feature = "stm32l443")))]
-use stm32l4xx_hal::{qspi, stm32::QUADSPI};
-
 pub use qspi::{
     ClkPin, IO0Pin, IO1Pin, IO2Pin, IO3Pin, NCSPin, Qspi, QspiConfig, QspiError, QspiMode,
     QspiReadCommand,
@@ -445,21 +442,24 @@ where
     }
 
     fn wake_up(&mut self) -> Result<(), QspiError> {
-        if self.sleep_state == SleepState::Slepping {
-            self.cancel_memory_mapping()?;
+        #[cfg(feature = "led-blink-each-block")]
+        {
+            if self.sleep_state == SleepState::Slepping {
+                self.cancel_memory_mapping()?;
 
-            let wake_up_cmd = QspiWriteCommand {
-                instruction: Some((self.config.wake_up_command_code, QspiMode::SingleChannel)),
-                address: None,
-                alternative_bytes: None,
-                dummy_cycles: 0, // internal register, no wait
-                data: None,
-                double_data_rate: false,
-            };
+                let wake_up_cmd = QspiWriteCommand {
+                    instruction: Some((self.config.wake_up_command_code, QspiMode::SingleChannel)),
+                    address: None,
+                    alternative_bytes: None,
+                    dummy_cycles: 0, // internal register, no wait
+                    data: None,
+                    double_data_rate: false,
+                };
 
-            self.qspi.write(wake_up_cmd)?;
+                self.qspi.write(wake_up_cmd)?;
 
-            defmt::trace!("Flash wake up...");
+                defmt::trace!("Flash wake up...");
+            }
         }
 
         self.sleep_state = SleepState::Working;
@@ -467,9 +467,12 @@ where
     }
 
     fn want_sleep(&mut self) {
-        if self.sleep_state == SleepState::Working {
-            self.sleep_state = SleepState::Waiting;
-            let _ = self.sleep_timer.start(Duration::infinite());
+        #[cfg(feature = "led-blink-each-block")]
+        {
+            if self.sleep_state == SleepState::Working {
+                self.sleep_state = SleepState::Waiting;
+                let _ = self.sleep_timer.start(Duration::infinite());
+            }
         }
     }
 
