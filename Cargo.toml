@@ -76,8 +76,8 @@ default = [
   "freqmeter-start-stop", # При временах измерения <= 100 мс только этот режим адекватно работает
   "defmt-debug",
   "monitor-heap",
+  "led-blink",
   #"monitor-output", # В режиме самописца данных там нет
-  #"led-blink ",
   #"monitor",
 ]
 

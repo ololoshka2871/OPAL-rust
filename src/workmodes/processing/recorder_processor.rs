@@ -122,13 +122,13 @@ impl RecorderProcessor {
         P: OutputPin,
     {
         #[cfg(feature = "led-blink")]
-        for _ in 0..cout * 2 {
+        for _ in 0.._cout * 2 {
             use crate::config;
 
-            let _ = led.set_state(config::LED_ENABLE);
-            CurrentTask::delay(Duration::ms(period.to_ms() / 2));
-            let _ = led.set_state(config::LED_DISABLE);
-            CurrentTask::delay(Duration::ms(period.to_ms() / 2));
+            let _ = _led.set_state(config::LED_ENABLE);
+            CurrentTask::delay(Duration::ms(_period.to_ms() / 2));
+            let _ = _led.set_state(config::LED_DISABLE);
+            CurrentTask::delay(Duration::ms(_period.to_ms() / 2));
         }
     }
 
@@ -386,6 +386,8 @@ impl RecorderProcessor {
         }
         adaptate_req(false);
 
+        let mut series_page_counter = 0;
+
         loop {
             // 2. Частотыне каналы прогреты, включаем аналоговые
             start_analog_channels(ch_cfg.tcpu_en, ch_cfg.vbat_en);
@@ -393,8 +395,11 @@ impl RecorderProcessor {
 
             // 3. Создаем новый буфер страницы флеш-памяти
             let mut page = loop {
-                match writer.try_create_new_page() {
-                    Ok(p) => break p,
+                match writer.try_create_new_page(series_page_counter) {
+                    Ok(p) => {
+                        series_page_counter += 1;
+                        break p;
+                    }
                     Err(freertos_rust::FreeRtosError::OutOfMemory) => {
                         super::halt_cpu(
                             &mut scb,

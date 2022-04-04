@@ -3,7 +3,7 @@ use freertos_rust::{Duration, Mutex, Task, TaskPriority};
 use stm32l4xx_hal::{
     adc::ADC,
     gpio::{
-        Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA2, PA3, PA6, PA7, PA8, PB0, PD0,
+        Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA2, PA3, PA6, PA7, PA8, PB0, PC10,
         PD10, PD13, PE12,
     },
     prelude::*,
@@ -355,7 +355,7 @@ pub struct RecorderMode {
         PA6<Alternate<PushPull, 10>>,
     )>,
 
-    led_pin: PD0<Output<PushPull>>,
+    led_pin: PC10<Output<PushPull>>,
     scb: cortex_m::peripheral::SCB,
 
     sensor_command_queue: Arc<freertos_rust::Queue<threads::sensor_processor::Command>>,
@@ -372,6 +372,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
 
         let mut gpioa = dp.GPIOA.split(&mut rcc.ahb2);
         let mut gpiob = dp.GPIOB.split(&mut rcc.ahb2);
+        let mut gpioc = dp.GPIOC.split(&mut rcc.ahb2);
         let mut gpiod = dp.GPIOD.split(&mut rcc.ahb2);
         let mut gpioe = dp.GPIOE.split(&mut rcc.ahb2);
 
@@ -452,11 +453,11 @@ impl WorkMode<RecorderMode> for RecorderMode {
             adc_common: dp.ADC_COMMON,
             vbat_pin: gpioa.pa1.into_analog(&mut gpioa.moder, &mut gpioa.pupdr),
 
-            led_pin: gpiod
-                .pd0
+            led_pin: gpioc
+                .pc10
                 .into_push_pull_output_in_state(
-                    &mut gpiod.moder,
-                    &mut gpiod.otyper,
+                    &mut gpioc.moder,
+                    &mut gpioc.otyper,
                     crate::config::LED_DISABLE,
                 )
                 .set_speed(Speed::Low),
@@ -584,7 +585,7 @@ impl WorkMode<RecorderMode> for RecorderMode {
 
             processor.start(
                 self.scb,
-                crate::main_data_storage::diff_writer::CpuFlashDiffWriter::new(
+                crate::main_data_storage::diff_writer::FlashDiffWriter::new(
                     RecorderClockConfigProvider::xtal2master_freq_multiplier() as f32,
                     self.crc.clone(),
                 ),

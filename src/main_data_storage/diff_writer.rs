@@ -14,7 +14,7 @@ use super::{
     write_controller::{self, WriteController},
 };
 
-pub struct CpuFlashDiffWriter {
+pub struct FlashDiffWriter {
     master_counter_info: MasterTimerInfo,
     next_page_number: u32,
     crc_calc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>,
@@ -67,7 +67,7 @@ impl DataPage for DataBlock {
     }
 }
 
-impl CpuFlashDiffWriter {
+impl FlashDiffWriter {
     pub fn new(fref_mul: f32, crc_calc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>) -> Self {
         let mut master_counter_info = MasterCounter::acquire();
         master_counter_info.want_start();
@@ -82,8 +82,8 @@ impl CpuFlashDiffWriter {
     }
 }
 
-impl WriteController<DataBlock> for CpuFlashDiffWriter {
-    fn try_create_new_page(&mut self) -> Result<DataBlock, FreeRtosError> {
+impl WriteController<DataBlock> for FlashDiffWriter {
+    fn try_create_new_page(&mut self, page_number: u32) -> Result<DataBlock, FreeRtosError> {
         if !self.page_aqured {
             if let Some(ep) = crate::main_data_storage::find_next_empty_page(self.next_page_number)
             {
@@ -111,10 +111,7 @@ impl WriteController<DataBlock> for CpuFlashDiffWriter {
                 };
 
             let packer = DataBlockPacker::builder()
-                .set_ids(
-                    self.next_page_number.checked_sub(1).unwrap_or_default(),
-                    self.next_page_number,
-                )
+                .set_ids(page_number.checked_sub(1).unwrap_or_default(), page_number)
                 .set_size(crate::main_data_storage::flash_page_size() as usize)
                 .set_timestamp(self.master_counter_info.uptime_ms())
                 .set_fref(self.fref_mul * fref as f32)
