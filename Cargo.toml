@@ -65,10 +65,11 @@ lto = false
 panic = "abort"
 
 [profile.release]
+opt-level = "s"
 codegen-units = 1 # better optimizations
-debug = true # symbols are nice and they don't increase the size on Flash
+debug = true # добавлять отладочные символы. Не влияет на размер исполняемого кода, зато работает дебаг
 panic = 'abort'
-lto = true # better optimizations
+lto = false # Делает только хуже
 
 [features]
 default = [

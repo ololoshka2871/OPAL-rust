@@ -39,7 +39,7 @@ fn vApplicationMallocFailedHook() {
 }
 
 // libcore panic -> this function
-#[cfg(debug_assertions)]
+// need if lto = false
 #[allow(unused_variables)]
 #[no_mangle]
 pub extern "C" fn rust_begin_unwind(
