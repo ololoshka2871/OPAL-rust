@@ -230,7 +230,11 @@ where
 
         self.qspi.transfer(get_id_command, &mut id_arr)?;
 
-        Ok(super::Identification::from_jedec_id(&id_arr))
+        if id_arr == [0, 0, 0] || id_arr == [0xff, 0xff, 0xff] {
+            Err(QspiError::Unknown)
+        } else {
+            Ok(super::Identification::from_jedec_id(&id_arr))
+        }
     }
 
     fn is_memory_mapped(&self) -> bool {
