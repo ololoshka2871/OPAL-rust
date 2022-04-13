@@ -132,9 +132,10 @@ impl super::storage::Storage<'static> for QSPIStorage {
 }
 
 impl QSPIStorage {
-    pub fn init<CLK, NCS, IO0, IO1, IO2, IO3>(
+    pub fn init<CLK, NCS, IO0, IO1, IO2, IO3, RESET>(
         qspi: qspi_stm32lx3::qspi::Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>,
         sys_clk: stm32l4xx_hal::time::Hertz,
+        reset: RESET,
     ) -> Result<Self, QspiError>
     where
         CLK: ClkPin<QUADSPI> + 'static,
@@ -143,8 +144,9 @@ impl QSPIStorage {
         IO1: IO1Pin<QUADSPI> + 'static,
         IO2: IO2Pin<QUADSPI> + 'static,
         IO3: IO3Pin<QUADSPI> + 'static,
+        RESET: stm32l4xx_hal::prelude::OutputPin + 'static,
     {
-        if let Ok(driver) = QSpiDriver::init(qspi, sys_clk) {
+        if let Ok(driver) = QSpiDriver::init(qspi, sys_clk, reset) {
             Ok(Self { driver })
         } else {
             Err(QspiError::Unknown)

@@ -10,6 +10,7 @@ pub use qspi::{
     ClkPin, IO0Pin, IO1Pin, IO2Pin, IO3Pin, NCSPin, Qspi, QspiConfig, QspiError, QspiMode,
     QspiReadCommand,
 };
+use stm32l4xx_hal::prelude::OutputPin;
 
 use crate::workmodes::common::HertzExt;
 
@@ -81,7 +82,7 @@ enum SleepState {
     Working,
 }
 
-pub struct QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
+pub struct QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3, RESET>
 where
     CLK: ClkPin<QUADSPI>,
     NCS: NCSPin<QUADSPI>,
@@ -89,15 +90,19 @@ where
     IO1: IO1Pin<QUADSPI>,
     IO2: IO2Pin<QUADSPI>,
     IO3: IO3Pin<QUADSPI>,
+    RESET: OutputPin,
 {
     qspi: Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>,
     config: &'static FlashConfig,
     extender_value: u8,
     sleep_timer: Timer,
     sleep_state: SleepState,
+
+    #[allow(unused)]
+    reset_pin: RESET,
 }
 
-impl<CLK, NCS, IO0, IO1, IO2, IO3> QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
+impl<CLK, NCS, IO0, IO1, IO2, IO3, RESET> QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3, RESET>
 where
     CLK: ClkPin<QUADSPI> + 'static,
     NCS: NCSPin<QUADSPI> + 'static,
@@ -105,10 +110,12 @@ where
     IO1: IO1Pin<QUADSPI> + 'static,
     IO2: IO2Pin<QUADSPI> + 'static,
     IO3: IO3Pin<QUADSPI> + 'static,
+    RESET: OutputPin + 'static,
 {
     pub fn init(
         mut qspi: Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>,
         sys_clk: stm32l4xx_hal::time::Hertz,
+        reset: RESET,
     ) -> Result<Arc<Mutex<Box<dyn FlashDriver>>>, QspiError> {
         qspi.apply_config(
             QspiConfig::default()
@@ -124,6 +131,7 @@ where
             extender_value: 0xff,
             sleep_timer: unsafe { core::mem::MaybeUninit::uninit().assume_init() },
             sleep_state: SleepState::Slepping,
+            reset_pin: reset,
         };
 
         let id = match res.get_jedec_id() {
@@ -259,6 +267,9 @@ where
         };
 
         self.qspi.write(wake_up_cmd)?;
+
+        //let _ = self.reset_pin.set_low();
+
         self.sleep_state = SleepState::Slepping;
 
         defmt::trace!("Flash sleep...");
@@ -281,7 +292,8 @@ where
     }
 }
 
-impl<CLK, NCS, IO0, IO1, IO2, IO3> FlashDriver for QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
+impl<CLK, NCS, IO0, IO1, IO2, IO3, RESET> FlashDriver
+    for QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3, RESET>
 where
     CLK: ClkPin<QUADSPI> + 'static,
     NCS: NCSPin<QUADSPI> + 'static,
@@ -289,6 +301,7 @@ where
     IO1: IO1Pin<QUADSPI> + 'static,
     IO2: IO2Pin<QUADSPI> + 'static,
     IO3: IO3Pin<QUADSPI> + 'static,
+    RESET: OutputPin + 'static,
 {
     fn get_jedec_id(&mut self) -> Result<super::Identification, QspiError> {
         self.get_jedec_id_cfg(false)
@@ -446,7 +459,9 @@ where
     }
 
     fn wake_up(&mut self) -> Result<(), QspiError> {
-        #[cfg(feature = "led-blink-each-block")]
+        //let _ = self.reset_pin.set_high();
+
+        #[cfg(feature = "flash-sleep")]
         {
             if self.sleep_state == SleepState::Slepping {
                 self.cancel_memory_mapping()?;
@@ -471,7 +486,7 @@ where
     }
 
     fn want_sleep(&mut self) {
-        #[cfg(feature = "led-blink-each-block")]
+        #[cfg(feature = "flash-sleep")]
         {
             if self.sleep_state == SleepState::Working {
                 self.sleep_state = SleepState::Waiting;
@@ -491,7 +506,8 @@ where
 
 // Маркерные трейты, чтобы наконец позволить сделать таймер, захватывающий драйвер в лямбду
 
-unsafe impl<CLK, NCS, IO0, IO1, IO2, IO3> Sync for QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
+unsafe impl<CLK, NCS, IO0, IO1, IO2, IO3, RESET> Sync
+    for QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3, RESET>
 where
     CLK: ClkPin<QUADSPI> + 'static,
     NCS: NCSPin<QUADSPI> + 'static,
@@ -499,10 +515,12 @@ where
     IO1: IO1Pin<QUADSPI> + 'static,
     IO2: IO2Pin<QUADSPI> + 'static,
     IO3: IO3Pin<QUADSPI> + 'static,
+    RESET: OutputPin + 'static,
 {
 }
 
-unsafe impl<CLK, NCS, IO0, IO1, IO2, IO3> Send for QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3>
+unsafe impl<CLK, NCS, IO0, IO1, IO2, IO3, RESET> Send
+    for QSpiDriver<CLK, NCS, IO0, IO1, IO2, IO3, RESET>
 where
     CLK: ClkPin<QUADSPI> + 'static,
     NCS: NCSPin<QUADSPI> + 'static,
@@ -510,5 +528,6 @@ where
     IO1: IO1Pin<QUADSPI> + 'static,
     IO2: IO2Pin<QUADSPI> + 'static,
     IO3: IO3Pin<QUADSPI> + 'static,
+    RESET: OutputPin + 'static,
 {
 }

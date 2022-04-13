@@ -33,6 +33,7 @@ impl EMfatStorage {
     }
 
     fn build_files_table() -> Vec<emfat_entry> {
+        #[allow(unused_imports)]
         use callbacks::{flash_read, meminfo_read, settings_read, unpack_reader};
         use static_data::{DRIVER_INF_COMPRESSED, PROTO_COMPRESSED, README_COMPRESSED};
 
@@ -107,64 +108,67 @@ impl EMfatStorage {
                 .build(),
         );
 
-        defmt::trace!("EmFat: /storage.var");
-        res.push(
-            EntryBuilder::new()
-                .name(c_str!("storage.var"))
-                .dir(false)
-                .lvl(1)
-                .offset(0)
-                .size(512) // noauto, размер может меняться - это генерированный текст
-                .max_size(2048)
-                .read_cb(Some(meminfo_read))
-                .build(),
-        );
-
+        #[cfg(not(feature = "no-flash"))]
         {
-            let flash_size = crate::main_data_storage::flash_size();
-            defmt::trace!("EmFat: /data_raw.hs ({} B)", flash_size);
+            defmt::trace!("EmFat: /storage.var");
             res.push(
                 EntryBuilder::new()
-                    .name(c_str!("data_raw.hs"))
+                    .name(c_str!("storage.var"))
                     .dir(false)
                     .lvl(1)
                     .offset(0)
-                    .size(flash_size)
-                    .max_size(flash_size)
-                    .read_cb(Some(flash_read))
+                    .size(512) // noauto, размер может меняться - это генерированный текст
+                    .max_size(2048)
+                    .read_cb(Some(meminfo_read))
                     .build(),
             );
-        }
 
-        match crate::main_data_storage::memory_state() {
-            crate::main_data_storage::MemoryState::Undefined => {
-                defmt::error!("EmFat: /data_use.hs <undefined state>")
+            {
+                let flash_size = crate::main_data_storage::flash_size();
+                defmt::trace!("EmFat: /data_raw.hs ({} B)", flash_size);
+                res.push(
+                    EntryBuilder::new()
+                        .name(c_str!("data_raw.hs"))
+                        .dir(false)
+                        .lvl(1)
+                        .offset(0)
+                        .size(flash_size)
+                        .max_size(flash_size)
+                        .read_cb(Some(flash_read))
+                        .build(),
+                );
             }
-            crate::main_data_storage::MemoryState::PartialUsed(pages) => {
-                if pages == 0 {
-                    defmt::debug!("EmFat: /data_use.hs <empty-skipped>");
-                } else {
-                    let used = (pages * crate::main_data_storage::flash_page_size()) as usize;
-                    defmt::trace!("EmFat: /data_use.hs ({})", used);
-                    res.push(
-                        EntryBuilder::new()
-                            .name(c_str!("data_use.hs"))
-                            .dir(false)
-                            .lvl(1)
-                            .offset(0)
-                            .size(used)
-                            .max_size(used)
-                            .read_cb(Some(flash_read))
-                            .build(),
-                    );
+
+            match crate::main_data_storage::memory_state() {
+                crate::main_data_storage::MemoryState::Undefined => {
+                    defmt::error!("EmFat: /data_use.hs <undefined state>")
+                }
+                crate::main_data_storage::MemoryState::PartialUsed(pages) => {
+                    if pages == 0 {
+                        defmt::debug!("EmFat: /data_use.hs <empty-skipped>");
+                    } else {
+                        let used = (pages * crate::main_data_storage::flash_page_size()) as usize;
+                        defmt::trace!("EmFat: /data_use.hs ({})", used);
+                        res.push(
+                            EntryBuilder::new()
+                                .name(c_str!("data_use.hs"))
+                                .dir(false)
+                                .lvl(1)
+                                .offset(0)
+                                .size(used)
+                                .max_size(used)
+                                .read_cb(Some(flash_read))
+                                .build(),
+                        );
+                    }
+                }
+                crate::main_data_storage::MemoryState::FullUsed => {
+                    defmt::debug!("EmFat: /data_use.hs <full used>")
                 }
             }
-            crate::main_data_storage::MemoryState::FullUsed => {
-                defmt::debug!("EmFat: /data_use.hs <full used>")
-            }
-        }
 
-        res.push(EntryBuilder::terminator_entry());
+            res.push(EntryBuilder::terminator_entry());
+        }
 
         res
     }

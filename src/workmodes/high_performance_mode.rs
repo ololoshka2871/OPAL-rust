@@ -1,8 +1,10 @@
 use alloc::sync::Arc;
 use freertos_rust::{Duration, Mutex, Queue, Task, TaskPriority};
+
+#[allow(unused_imports)]
 use stm32l4xx_hal::gpio::{
     Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA11, PA12, PA2, PA3, PA6, PA7, PA8, PB0,
-    PC10, PD10, PD13, PE12,
+    PC10, PD10, PD11, PD13, PE12,
 };
 use stm32l4xx_hal::{
     adc::ADC,
@@ -68,6 +70,7 @@ impl ClockConfigProvider for HighPerformanceClockConfigProvider {
     }
 }
 
+#[allow(unused)]
 pub struct HighPerformanceMode {
     rcc: stm32l4xx_hal::rcc::Rcc,
     flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>,
@@ -99,6 +102,7 @@ pub struct HighPerformanceMode {
     adc_common: stm32l4xx_hal::device::ADC_COMMON,
     vbat_pin: PA1<Analog>,
 
+    #[cfg(not(feature = "no-flash"))]
     qspi: qspi_stm32lx3::qspi::Qspi<(
         PA3<Alternate<PushPull, 10>>,
         PA2<Alternate<PushPull, 10>>,
@@ -107,6 +111,8 @@ pub struct HighPerformanceMode {
         PA7<Alternate<PushPull, 10>>,
         PA6<Alternate<PushPull, 10>>,
     )>,
+    #[cfg(not(feature = "no-flash"))]
+    flash_reset_pin: PD11<Output<PushPull>>,
 
     sensor_command_queue: Arc<freertos_rust::Queue<threads::sensor_processor::Command>>,
 
@@ -122,10 +128,43 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         let dma_channels = dp.DMA1.split(&mut rcc.ahb1);
 
         let mut gpioa = dp.GPIOA.split(&mut rcc.ahb2);
-        let mut gpiob = dp.GPIOB.split(&mut rcc.ahb2);
         let mut gpioc = dp.GPIOC.split(&mut rcc.ahb2);
         let mut gpiod = dp.GPIOD.split(&mut rcc.ahb2);
+
+        #[cfg(not(feature = "no-flash"))]
+        let mut gpiob = dp.GPIOB.split(&mut rcc.ahb2);
+        #[cfg(not(feature = "no-flash"))]
         let mut gpioe = dp.GPIOE.split(&mut rcc.ahb2);
+
+        #[cfg(not(feature = "no-flash"))]
+        let (qspi, flash_reset_pin) = super::common::create_qspi(
+            (
+                gpioa
+                    .pa3
+                    .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
+                gpioa
+                    .pa2
+                    .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
+                gpioe
+                    .pe12
+                    .into_alternate(&mut gpioe.moder, &mut gpioe.otyper, &mut gpioe.afrh),
+                gpiob
+                    .pb0
+                    .into_alternate(&mut gpiob.moder, &mut gpiob.otyper, &mut gpiob.afrl),
+                gpioa
+                    .pa7
+                    .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
+                gpioa
+                    .pa6
+                    .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
+            ),
+            gpiod.pd11.into_push_pull_output_in_state(
+                &mut gpiod.moder,
+                &mut gpiod.otyper,
+                PinState::Low,
+            ),
+            &mut rcc.ahb3,
+        );
 
         HighPerformanceMode {
             flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
@@ -149,34 +188,10 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             interrupt_controller: ic,
 
-            qspi: super::common::create_qspi(
-                (
-                    gpioa
-                        .pa3
-                        .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
-                    gpioa
-                        .pa2
-                        .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
-                    gpioe
-                        .pe12
-                        .into_alternate(&mut gpioe.moder, &mut gpioe.otyper, &mut gpioe.afrh),
-                    gpiob
-                        .pb0
-                        .into_alternate(&mut gpiob.moder, &mut gpiob.otyper, &mut gpiob.afrl),
-                    gpioa
-                        .pa7
-                        .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
-                    gpioa
-                        .pa6
-                        .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
-                ),
-                gpiod.pd11.into_push_pull_output_in_state(
-                    &mut gpiod.moder,
-                    &mut gpiod.otyper,
-                    PinState::Low,
-                ),
-                &mut rcc.ahb3,
-            ),
+            #[cfg(not(feature = "no-flash"))]
+            qspi,
+            #[cfg(not(feature = "no-flash"))]
+            flash_reset_pin,
 
             rcc,
 
@@ -308,7 +323,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         crate::support::led::led_init(self.led_pin);
 
-        crate::main_data_storage::init(self.qspi, sys_clk);
+        #[cfg(not(feature = "no-flash"))]
+        crate::main_data_storage::init(self.qspi, sys_clk, self.flash_reset_pin);
 
         {
             defmt::trace!("Creating usb thread...");

@@ -1,11 +1,9 @@
 use alloc::sync::Arc;
+
+#[allow(unused_imports)]
 use freertos_rust::{Duration, Mutex, Task, TaskPriority};
 use stm32l4xx_hal::{
     adc::ADC,
-    gpio::{
-        Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA2, PA3, PA6, PA7, PA8, PB0, PC10,
-        PD10, PD13, PE12,
-    },
     prelude::*,
     rcc::{Enable, PllConfig, Reset},
     stm32,
@@ -13,6 +11,13 @@ use stm32l4xx_hal::{
     time::Hertz,
 };
 
+#[allow(unused_imports)]
+use stm32l4xx_hal::gpio::{
+    Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA2, PA3, PA6, PA7, PA8, PB0, PC10, PD10,
+    PD11, PD13, PE12,
+};
+
+#[allow(unused_imports)]
 use crate::{
     sensors::freqmeter::master_counter,
     support::{interrupt_controller::IInterruptController, InterruptController},
@@ -322,6 +327,7 @@ impl MyCFGR {
     }
 }
 
+#[allow(unused)]
 pub struct RecorderMode {
     rcc: stm32l4xx_hal::rcc::Rcc,
     flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>,
@@ -346,6 +352,7 @@ pub struct RecorderMode {
     adc_common: stm32l4xx_hal::device::ADC_COMMON,
     vbat_pin: PA1<Analog>,
 
+    #[cfg(not(feature = "no-flash"))]
     qspi: qspi_stm32lx3::qspi::Qspi<(
         PA3<Alternate<PushPull, 10>>,
         PA2<Alternate<PushPull, 10>>,
@@ -354,6 +361,8 @@ pub struct RecorderMode {
         PA7<Alternate<PushPull, 10>>,
         PA6<Alternate<PushPull, 10>>,
     )>,
+    #[cfg(not(feature = "no-flash"))]
+    flash_reset_pin: PD11<Output<PushPull>>,
 
     led_pin: PC10<Output<PushPull>>,
     scb: cortex_m::peripheral::SCB,
@@ -371,10 +380,43 @@ impl WorkMode<RecorderMode> for RecorderMode {
         let dma_channels = dp.DMA1.split(&mut rcc.ahb1);
 
         let mut gpioa = dp.GPIOA.split(&mut rcc.ahb2);
-        let mut gpiob = dp.GPIOB.split(&mut rcc.ahb2);
         let mut gpioc = dp.GPIOC.split(&mut rcc.ahb2);
         let mut gpiod = dp.GPIOD.split(&mut rcc.ahb2);
+
+        #[cfg(not(feature = "no-flash"))]
+        let mut gpiob = dp.GPIOB.split(&mut rcc.ahb2);
+        #[cfg(not(feature = "no-flash"))]
         let mut gpioe = dp.GPIOE.split(&mut rcc.ahb2);
+
+        #[cfg(not(feature = "no-flash"))]
+        let (qspi, flash_reset_pin) = super::common::create_qspi(
+            (
+                gpioa
+                    .pa3
+                    .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
+                gpioa
+                    .pa2
+                    .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
+                gpioe
+                    .pe12
+                    .into_alternate(&mut gpioe.moder, &mut gpioe.otyper, &mut gpioe.afrh),
+                gpiob
+                    .pb0
+                    .into_alternate(&mut gpiob.moder, &mut gpiob.otyper, &mut gpiob.afrl),
+                gpioa
+                    .pa7
+                    .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
+                gpioa
+                    .pa6
+                    .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
+            ),
+            gpiod.pd11.into_push_pull_output_in_state(
+                &mut gpiod.moder,
+                &mut gpiod.otyper,
+                PinState::Low,
+            ),
+            &mut rcc.ahb3,
+        );
 
         RecorderMode {
             flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
@@ -387,34 +429,10 @@ impl WorkMode<RecorderMode> for RecorderMode {
 
             interrupt_controller: ic,
 
-            qspi: super::common::create_qspi(
-                (
-                    gpioa
-                        .pa3
-                        .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
-                    gpioa
-                        .pa2
-                        .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
-                    gpioe
-                        .pe12
-                        .into_alternate(&mut gpioe.moder, &mut gpioe.otyper, &mut gpioe.afrh),
-                    gpiob
-                        .pb0
-                        .into_alternate(&mut gpiob.moder, &mut gpiob.otyper, &mut gpiob.afrl),
-                    gpioa
-                        .pa7
-                        .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
-                    gpioa
-                        .pa6
-                        .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl),
-                ),
-                gpiod.pd11.into_push_pull_output_in_state(
-                    &mut gpiod.moder,
-                    &mut gpiod.otyper,
-                    PinState::Low,
-                ),
-                &mut rcc.ahb3,
-            ),
+            #[cfg(not(feature = "no-flash"))]
+            qspi,
+            #[cfg(not(feature = "no-flash"))]
+            flash_reset_pin,
 
             rcc,
 
@@ -526,7 +544,9 @@ impl WorkMode<RecorderMode> for RecorderMode {
 
         let sys_clk = unsafe { self.clocks.unwrap_unchecked().hclk() };
 
-        crate::main_data_storage::init(self.qspi, sys_clk);
+        #[cfg(not(feature = "no-flash"))]
+        crate::main_data_storage::init(self.qspi, sys_clk, self.flash_reset_pin);
+
         {
             use stm32l4xx_hal::adc::{Resolution, SampleTime};
 
@@ -554,51 +574,53 @@ impl WorkMode<RecorderMode> for RecorderMode {
             adc.set_sample_time(SampleTime::Cycles640_5);
             adc.set_resolution(Resolution::Bits12);
 
-            let tcpu_ch = adc.enable_temperature(&mut delay);
-            let v_ref = adc.enable_vref(&mut delay);
+            #[cfg(not(feature = "no-flash"))]
+            {
+                let tcpu_ch = adc.enable_temperature(&mut delay);
+                let v_ref = adc.enable_vref(&mut delay);
+                let sp = threads::sensor_processor::SensorPerith {
+                    timer1: self.timer1,
+                    timer1_dma_ch: self.dma1_ch6,
+                    timer1_pin: self.in_p,
+                    en_1: self.en_p,
 
-            let sp = threads::sensor_processor::SensorPerith {
-                timer1: self.timer1,
-                timer1_dma_ch: self.dma1_ch6,
-                timer1_pin: self.in_p,
-                en_1: self.en_p,
+                    timer2: self.timer2,
+                    timer2_dma_ch: self.dma1_ch2,
+                    timer2_pin: self.in_t,
+                    en_2: self.en_t,
 
-                timer2: self.timer2,
-                timer2_dma_ch: self.dma1_ch2,
-                timer2_pin: self.in_t,
-                en_2: self.en_t,
+                    vbat_pin: self.vbat_pin,
+                    tcpu_ch: tcpu_ch,
+                    v_ref: v_ref,
 
-                vbat_pin: self.vbat_pin,
-                tcpu_ch: tcpu_ch,
-                v_ref: v_ref,
+                    adc: adc,
+                };
+                let cq = self.sensor_command_queue.clone();
+                let ic = self.interrupt_controller.clone();
+                let mut processor = RecorderProcessor::new(
+                    output.clone(),
+                    self.sensor_command_queue.clone(),
+                    RecorderClockConfigProvider::xtal2master_freq_multiplier(),
+                    sys_clk,
+                );
 
-                adc: adc,
-            };
-            let cq = self.sensor_command_queue.clone();
-            let ic = self.interrupt_controller.clone();
-            let mut processor = RecorderProcessor::new(
-                output.clone(),
-                self.sensor_command_queue.clone(),
-                RecorderClockConfigProvider::xtal2master_freq_multiplier(),
-                sys_clk,
-            );
+                processor.start(
+                    self.scb,
+                    crate::main_data_storage::diff_writer::FlashDiffWriter::new(
+                        RecorderClockConfigProvider::xtal2master_freq_multiplier() as f32,
+                        self.crc.clone(),
+                    ),
+                    self.led_pin,
+                )?;
 
-            processor.start(
-                self.scb,
-                crate::main_data_storage::diff_writer::FlashDiffWriter::new(
-                    RecorderClockConfigProvider::xtal2master_freq_multiplier() as f32,
-                    self.crc.clone(),
-                ),
-                self.led_pin,
-            )?;
-
-            Task::new()
-                .name("SensProc")
-                .stack_size(1024)
-                .priority(TaskPriority(crate::config::SENS_PROC_TASK_PRIO))
-                .start(move |_| {
-                    threads::sensor_processor::sensor_processor(sp, cq, ic, processor, sys_clk)
-                })?;
+                Task::new()
+                    .name("SensProc")
+                    .stack_size(1024)
+                    .priority(TaskPriority(crate::config::SENS_PROC_TASK_PRIO))
+                    .start(move |_| {
+                        threads::sensor_processor::sensor_processor(sp, cq, ic, processor, sys_clk)
+                    })?;
+            }
         }
         // --------------------------------------------------------------------
 

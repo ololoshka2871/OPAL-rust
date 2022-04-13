@@ -113,11 +113,12 @@ pub fn create_monitor(
     Ok(())
 }
 
+#[allow(unused)]
 pub fn create_qspi<CLK, NCS, IO0, IO1, IO2, IO3, RESET>(
     pins: (CLK, NCS, IO0, IO1, IO2, IO3),
     mut reset: RESET,
     ahb3: &mut stm32l4xx_hal::rcc::AHB3,
-) -> Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>
+) -> (Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>, RESET)
 where
     CLK: ClkPin<stm32l4x3::QUADSPI>,
     NCS: NCSPin<stm32l4x3::QUADSPI>,
@@ -132,10 +133,13 @@ where
     cortex_m::asm::delay(1);
     let _ = reset.set_high();
 
-    Qspi::new(
-        unsafe { stm32l4x3::QUADSPI::new() },
-        pins,
-        unsafe { core::mem::transmute(ahb3) },
-        qspi_stm32lx3::qspi::QspiConfig::default(),
+    (
+        Qspi::new(
+            unsafe { stm32l4x3::QUADSPI::new() },
+            pins,
+            unsafe { core::mem::transmute(ahb3) },
+            qspi_stm32lx3::qspi::QspiConfig::default(),
+        ),
+        reset,
     )
 }

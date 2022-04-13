@@ -82,6 +82,7 @@ default = [
   "flash-sleep",
   #"monitor-output", # В режиме самописца данных там нет
   #"monitor",
+  #"no-flash",
 ]
 
 monitor-heap = ["monitor"]
@@ -92,6 +93,7 @@ freqmeter-start-stop = []
 led-blink = []
 led-blink-each-block = ["led-blink"]
 flash-sleep = []
+no-flash = [] # only for debug 
 
  # defmt: do NOT modify these features
 defmt-default = []
