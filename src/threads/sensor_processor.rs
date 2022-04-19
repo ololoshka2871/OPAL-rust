@@ -138,6 +138,9 @@ where
         });
     }
 
+    let mut master_counter_enabler = MasterCounter::acquire();
+    master_counter_enabler.want_start();
+
     let master_counter = MasterCounter::acquire();
     perith.timer1.configure(
         master_counter.cnt_addr(),
