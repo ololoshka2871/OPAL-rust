@@ -108,7 +108,7 @@ impl RecorderProcessor {
         let adaptate_f = self.adaptate_f.clone();
         Task::new()
             .name("RecCtrl")
-            .stack_size(1024)
+            .stack_size(1280)
             .priority(TaskPriority(config::RECORDER_CTRL_PRIO))
             .start(move |_| {
                 let led = Self::led_blink(led, config::START_BLINK_COUNT, blink_period);
