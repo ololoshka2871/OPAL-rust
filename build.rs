@@ -1,3 +1,5 @@
+include!("src/config.rs");
+
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -23,10 +25,12 @@ fn generate_free_rtos_config<P: AsRef<Path>>(path: P) -> PathBuf {
     let cfg = fs::read_to_string(infile.clone())
         .expect(format!("Failed to read {}", infile.to_str().unwrap()).as_str());
 
-    let out_cfg = cfg.replace(
-        "%RUNTIME_STATS%",
-        if cfg!(debug_assertions) { "1" } else { "0" },
-    );
+    let out_cfg = cfg
+        .replace(
+            "%RUNTIME_STATS%",
+            if cfg!(debug_assertions) { "1" } else { "0" },
+        )
+        .replace("%F_CPU%", format!("{}UL", FREERTOS_CONFIG_FREQ).as_str());
 
     let mut out_file = outpath.clone();
     out_file.push(config_file);

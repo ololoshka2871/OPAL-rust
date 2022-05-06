@@ -30,7 +30,7 @@ where
     <ENPIN as OutputPin>::Error: Debug,
 {
     fn power_on(&mut self) {
-        self.set_lvl(crate::config::GENERATOR_ENABLE_LVL);
+        self.set_lvl(crate::config_pins::GENERATOR_ENABLE_LVL);
     }
 
     fn start(&mut self) {
@@ -42,7 +42,7 @@ where
     fn diasble(&mut self) {
         let _ = self.no_signal_guard.stop(Duration::infinite());
         self.freqmeter.stop();
-        self.set_lvl(crate::config::GENERATOR_DISABLE_LVL);
+        self.set_lvl(crate::config_pins::GENERATOR_DISABLE_LVL);
     }
 
     fn enabled(&self) -> bool {

@@ -1,9 +1,28 @@
-use stm32l4xx_hal::gpio::PinState;
-
 //-----------------------------------------------------------------------------
 
+#[cfg(feature = "clock-base-12Mhz")]
 pub const XTAL_FREQ: u32 = 12_000_000;
-pub const FREERTOS_CONFIG_FREQ: u32 = 3_000_000; // Это же число должно быть в src/configTemplate/FreeRTOSConfig.h
+
+#[cfg(feature = "clock-base-24Mhz")]
+pub const XTAL_FREQ: u32 = 24_000_000;
+
+//-----------------------------------------------------------------------------
+// Это же число должно быть записано в src/configTemplate/FreeRTOSConfig.h через build.rs
+
+#[cfg(feature = "recorder-power-save")]
+pub const FREERTOS_CONFIG_FREQ: u32 = 3_000_000; // /4, /8
+
+#[cfg(all(feature = "recorder-balanced", feature = "clock-base-12Mhz"))]
+pub const FREERTOS_CONFIG_FREQ: u32 = 6_000_000; // /2
+
+#[cfg(all(feature = "recorder-balanced", feature = "clock-base-24Mhz"))]
+pub const FREERTOS_CONFIG_FREQ: u32 = 12_000_000; // /2
+
+#[cfg(all(feature = "recorder-performance", feature = "clock-base-12Mhz"))]
+pub const FREERTOS_CONFIG_FREQ: u32 = 12_000_000; // /1
+
+#[cfg(all(feature = "recorder-performance", feature = "clock-base-24Mhz"))]
+pub const FREERTOS_CONFIG_FREQ: u32 = 24_000_000; // /1
 
 //-----------------------------------------------------------------------------
 
@@ -48,16 +67,6 @@ pub const FLASH_CLEANER_PRIO: u8 = IDLE_TASK_PRIO + 2;
 //-----------------------------------------------------------------------------
 
 pub const INITIAL_FREQMETER_TARGET: u32 = 1;
-
-//-----------------------------------------------------------------------------
-
-// generator enable/disable lvls
-pub const GENERATOR_ENABLE_LVL: PinState = PinState::High;
-pub const GENERATOR_DISABLE_LVL: PinState = PinState::Low;
-
-// Led
-pub const LED_DISABLE: PinState = PinState::High;
-pub const LED_ENABLE: PinState = PinState::Low;
 
 //-----------------------------------------------------------------------------
 

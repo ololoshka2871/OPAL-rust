@@ -161,7 +161,7 @@ impl MasterTimerInfo {
     }
 
     pub fn uptime_ms(&self) -> u64 {
-        self.value64().0 / (self.f_ref().0 / 1_000) as u64
+        self.value64().0 / (self.f_ref().to_kHz() as u64)
     }
 
     #[inline]

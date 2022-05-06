@@ -123,11 +123,11 @@ impl RecorderProcessor {
     {
         #[cfg(feature = "led-blink")]
         for _ in 0.._cout {
-            use crate::config;
+            use crate::config_pins;
 
-            let _ = led.set_state(config::LED_ENABLE);
+            let _ = led.set_state(config_pins::LED_ENABLE);
             CurrentTask::delay(Duration::ms(_period.to_ms() / 2));
-            let _ = led.set_state(config::LED_DISABLE);
+            let _ = led.set_state(config_pins::LED_DISABLE);
             CurrentTask::delay(Duration::ms(_period.to_ms() / 2));
         }
         led
@@ -523,7 +523,7 @@ impl RecorderProcessor {
             // 8. Ожидание завершения адаптации пропуская 1 измерение
 
             #[cfg(feature = "led-blink-each-block")]
-            let _ = _led.set_state(crate::config::LED_ENABLE);
+            let _ = _led.set_state(crate::config_pins::LED_ENABLE);
 
             CurrentTask::delay(Duration::ms(
                 (core::cmp::max(ch_cfg.p_preheat_time_ms, ch_cfg.t_preheat_time_ms)
@@ -534,7 +534,7 @@ impl RecorderProcessor {
             ));
 
             #[cfg(feature = "led-blink-each-block")]
-            let _ = _led.set_state(crate::config::LED_DISABLE);
+            let _ = _led.set_state(crate::config_pins::LED_DISABLE);
 
             adaptate_req(false);
         }

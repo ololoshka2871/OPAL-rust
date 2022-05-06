@@ -17,6 +17,7 @@ mod support;
 mod workmodes;
 
 pub mod config;
+pub mod config_pins;
 
 #[cfg(debug_assertions)]
 mod master_value_stat;

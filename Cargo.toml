@@ -3,7 +3,7 @@ authors = ["ololoshka2871"]
 edition = "2018"
 readme = "README.md"
 name = "stm32-usb-self-writer"
-version = "0.3.0"
+version = "0.6.0"
 resolver = "2"
 
 [dependencies]
@@ -80,6 +80,13 @@ default = [
   "led-blink",
   "led-blink-each-block",
   "flash-sleep",
+
+  "clock-base-12Mhz",
+  "recorder-power-save",
+
+  #"clock-base-24Mhz",
+  #"recorder-performance",
+
   #"monitor-output", # В режиме самописца данных там нет
   #"monitor",
   #"no-flash",
@@ -95,7 +102,16 @@ led-blink-each-block = ["led-blink"]
 flash-sleep = []
 no-flash = [] # only for debug 
 
- # defmt: do NOT modify these features
+# base clocking
+clock-base-12Mhz = []
+clock-base-24Mhz = []
+
+# recorder CPU and master counter clocking
+recorder-power-save = []
+recorder-balanced = []
+recorder-performance = []
+
+# defmt: do NOT modify these features
 defmt-default = []
 defmt-trace = []
 defmt-debug = []

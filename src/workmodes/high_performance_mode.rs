@@ -23,31 +23,36 @@ use crate::workmodes::{common::ClockConfigProvider, processing::HighPerformanceP
 
 use super::{output_storage::OutputStorage, WorkMode};
 
-// /PD *M /AD
-const PLL_CFG: (u32, u32, u32) = (3, 40, 2);
-const APB1_DEVIDER: u32 = 8;
-const APB2_DEVIDER: u32 = 8;
+#[cfg(feature = "clock-base-12Mhz")]
+mod clock_config_12;
+#[cfg(feature = "clock-base-12Mhz")]
+use clock_config_12::{APB1_DEVIDER, APB2_DEVIDER, PLL_CFG, SAI_DIVIDER, SAI_MULTIPLIER};
+
+#[cfg(feature = "clock-base-24Mhz")]
+mod clock_config_24;
+#[cfg(feature = "clock-base-24Mhz")]
+use clock_config_24::{APB1_DEVIDER, APB2_DEVIDER, PLL_CFG, SAI_DIVIDER, SAI_MULTIPLIER};
 
 struct HighPerformanceClockConfigProvider;
 
 impl ClockConfigProvider for HighPerformanceClockConfigProvider {
     fn core_frequency() -> Hertz {
         let f = crate::config::XTAL_FREQ * PLL_CFG.1 / (PLL_CFG.0 * PLL_CFG.2);
-        Hertz(f)
+        Hertz::Hz(f)
     }
 
     fn apb1_frequency() -> Hertz {
-        Hertz(Self::core_frequency().0 / APB1_DEVIDER)
+        Hertz::Hz(Self::core_frequency().to_Hz() / APB1_DEVIDER)
     }
 
     fn apb2_frequency() -> Hertz {
-        Hertz(Self::core_frequency().0 / APB2_DEVIDER)
+        Hertz::Hz(Self::core_frequency().to_Hz() / APB2_DEVIDER)
     }
 
     // stm32_cube: if APB devider > 1, timers freq APB*2
     fn master_counter_frequency() -> Hertz {
         if APB1_DEVIDER > 1 {
-            Hertz(Self::apb1_frequency().0 * 2)
+            Hertz::Hz(Self::apb1_frequency().to_Hz() * 2)
         } else {
             Self::apb1_frequency()
         }
@@ -57,7 +62,7 @@ impl ClockConfigProvider for HighPerformanceClockConfigProvider {
         PllConfig::new(
             PLL_CFG.0 as u8,
             PLL_CFG.1 as u8,
-            super::common::to_pll_devider(PLL_CFG.2),
+            crate::workmodes::common::to_pll_devider(PLL_CFG.2),
         )
     }
 
@@ -121,7 +126,7 @@ pub struct HighPerformanceMode {
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     fn new(p: cortex_m::Peripherals, dp: stm32l4xx_hal::stm32l4::stm32l4x3::Peripherals) -> Self {
-        use crate::config::GENERATOR_DISABLE_LVL;
+        use crate::config_pins::GENERATOR_DISABLE_LVL;
 
         let mut rcc = dp.RCC.constrain();
         let ic = Arc::new(InterruptController::new(p.NVIC));
@@ -260,9 +265,9 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             _rcc.pllsai1cfgr.modify(|_, w| unsafe {
                 w.pllsai1n()
-                    .bits(24) // * 24
+                    .bits(SAI_MULTIPLIER)
                     .pllsai1q()
-                    .bits(0b00) // /2
+                    .bits(SAI_DIVIDER)
                     .pllsai1qen()
                     .set_bit() // enable PLLSAI1Q
             });
@@ -284,7 +289,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             let mut cfgr = cfgr
                 .hsi48(false)
                 .hse(
-                    Hertz(crate::config::XTAL_FREQ), // onboard crystall
+                    Hertz::Hz(crate::config::XTAL_FREQ), // onboard crystall
                     stm32l4xx_hal::rcc::CrystalBypass::Disable,
                     stm32l4xx_hal::rcc::ClockSecuritySystem::Enable,
                 )
