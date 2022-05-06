@@ -34,21 +34,21 @@ struct RecorderClockConfigProvider;
 
 impl ClockConfigProvider for RecorderClockConfigProvider {
     fn core_frequency() -> Hertz {
-        Hertz::Hz(crate::config::FREERTOS_CONFIG_FREQ)
+        Hertz(crate::config::FREERTOS_CONFIG_FREQ)
     }
 
     fn apb1_frequency() -> Hertz {
-        Hertz::Hz(Self::core_frequency().to_Hz() / APB1_DEVIDER)
+        Hertz(Self::core_frequency().0 / APB1_DEVIDER)
     }
 
     fn apb2_frequency() -> Hertz {
-        Hertz::Hz(Self::core_frequency().to_Hz() / APB2_DEVIDER)
+        Hertz(Self::core_frequency().0 / APB2_DEVIDER)
     }
 
     // stm32_cube: if APB devider > 1, timers freq APB*2
     fn master_counter_frequency() -> Hertz {
         if APB1_DEVIDER > 1 {
-            Hertz::Hz(Self::apb1_frequency().to_Hz() * 2)
+            Hertz(Self::apb1_frequency().0 * 2)
         } else {
             Self::apb1_frequency()
         }
@@ -113,7 +113,7 @@ impl MyCFGR {
         F: Into<Hertz>,
     {
         self.hse = HseConfig {
-            speed: freq.into().to_Hz(),
+            speed: freq.into().0,
             bypass,
             css,
         };
@@ -126,7 +126,7 @@ impl MyCFGR {
     where
         F: Into<Hertz>,
     {
-        self.hclk = Some(freq.into().to_Hz());
+        self.hclk = Some(freq.into().0);
         self
     }
 
@@ -135,7 +135,7 @@ impl MyCFGR {
     where
         F: Into<Hertz>,
     {
-        self.sysclk = freq.into().to_Hz();
+        self.sysclk = freq.into().0;
         self
     }
 
@@ -144,7 +144,7 @@ impl MyCFGR {
     where
         F: Into<Hertz>,
     {
-        self.pclk1 = Some(freq.into().to_Hz());
+        self.pclk1 = Some(freq.into().0);
         self
     }
 
@@ -153,7 +153,7 @@ impl MyCFGR {
     where
         F: Into<Hertz>,
     {
-        self.pclk2 = Some(freq.into().to_Hz());
+        self.pclk2 = Some(freq.into().0);
         self
     }
 
@@ -313,18 +313,18 @@ impl MyCFGR {
 
         unsafe {
             core::mem::transmute(Clocks {
-                hclk: Hertz::Hz(hclk),
+                hclk: Hertz(hclk),
                 lsi: false,
                 lse: false,
                 msi: None,
                 hsi48: false,
-                pclk1: Hertz::Hz(pclk1),
-                pclk2: Hertz::Hz(pclk2),
+                pclk1: Hertz(pclk1),
+                pclk2: Hertz(pclk2),
                 ppre1,
                 ppre2,
-                sysclk: Hertz::Hz(self.sysclk),
-                timclk1: Hertz::Hz(if ppre1 == 1 { pclk1 } else { 2 * pclk1 }),
-                timclk2: Hertz::Hz(if ppre2 == 1 { pclk2 } else { 2 * pclk2 }),
+                sysclk: Hertz(self.sysclk),
+                timclk1: Hertz(if ppre1 == 1 { pclk1 } else { 2 * pclk1 }),
+                timclk2: Hertz(if ppre2 == 1 { pclk2 } else { 2 * pclk2 }),
                 pll_source: None,
             })
         }
@@ -509,11 +509,11 @@ impl WorkMode<RecorderMode> for RecorderMode {
             MyCFGR::new()
                 // TODO: constants
                 .hse(
-                    Hertz::Hz(crate::config::XTAL_FREQ), // onboard crystall
+                    Hertz(crate::config::XTAL_FREQ), // onboard crystall
                     stm32l4xx_hal::rcc::CrystalBypass::Disable,
                     stm32l4xx_hal::rcc::ClockSecuritySystem::Enable,
                 )
-                .sysclk(Hertz::Hz(crate::config::XTAL_FREQ))
+                .sysclk(Hertz(crate::config::XTAL_FREQ))
                 .hclk(RecorderClockConfigProvider::core_frequency())
                 .pclk1(RecorderClockConfigProvider::apb1_frequency())
                 .pclk2(RecorderClockConfigProvider::apb2_frequency())

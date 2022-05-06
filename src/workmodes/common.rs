@@ -57,19 +57,19 @@ impl defmt::Format for Ticks {
 }
 
 pub fn to_real_period<D: DurationTicks, F: Into<Hertz>>(period: D, sysclk: F) -> Duration {
-    let in_freq_hz = Hertz::Hz(crate::config::FREERTOS_CONFIG_FREQ);
+    let in_freq_hz = Hertz(crate::config::FREERTOS_CONFIG_FREQ);
     let fcpu_hz: Hertz = sysclk.into();
 
-    let ticks = period.to_ticks() as u64 * fcpu_hz.to_Hz() as u64 / in_freq_hz.to_Hz() as u64;
+    let ticks = period.to_ticks() as u64 * fcpu_hz.0 as u64 / in_freq_hz.0 as u64;
 
     Duration::ticks(ticks as u32)
 }
 
 pub fn from_real_period<F: Into<Hertz>>(period: u32, sysclk: F) -> Duration {
-    let in_freq_hz = Hertz::Hz(crate::config::FREERTOS_CONFIG_FREQ);
+    let in_freq_hz = Hertz(crate::config::FREERTOS_CONFIG_FREQ);
     let fcpu_hz: Hertz = sysclk.into();
 
-    let ticks = period as u64 * in_freq_hz.to_Hz() as u64 / fcpu_hz.to_Hz() as u64;
+    let ticks = period as u64 * in_freq_hz.0 as u64 / fcpu_hz.0 as u64;
 
     Duration::ticks(ticks as u32)
 }
@@ -78,9 +78,9 @@ pub fn print_clock_config(clocks: &Option<stm32l4xx_hal::rcc::Clocks>, usb_state
     if let Some(clocks) = clocks {
         defmt::info!(
             "Clock config: CPU={}, pclk1={}, pclk2={}, USB: {}",
-            clocks.hclk().to_Hz(),
-            clocks.pclk1().to_Hz(),
-            clocks.pclk2().to_Hz(),
+            clocks.hclk().0,
+            clocks.pclk1().0,
+            clocks.pclk2().0,
             usb_state
         );
     } else {
