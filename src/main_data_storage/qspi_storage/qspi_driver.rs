@@ -120,7 +120,7 @@ where
         qspi.apply_config(
             QspiConfig::default()
                 /* failsafe config */
-                .clock_prescaler(sys_clk.0 as u8)
+                .clock_prescaler(sys_clk.to_MHz() as u8)
                 .clock_mode(qspi::ClockMode::Mode3),
         );
 

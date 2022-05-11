@@ -18,14 +18,14 @@ bitflags = "1.0.4"
 
 embedded-hal = { version = "0.2.4", features = ["unproven"] }
 cortex-m = "0.7.3"
-cortex-m-rt = "0.6.11" # need by stm32l4 == 0.13.0
+cortex-m-rt = "0.7" # need by stm32l4xx-hal rev == e4835469a38b844865a6d5eef91542bdc6822941
 
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
-strum = {version = "0.23.0", default-features = false, features = ["derive"] }
+strum = {version = "0.24.0", default-features = false, features = ["derive"] }
 
-usb-device = "0.2.7"
+usb-device = "0.2.8"
 stm32-usbd = "0.6.0"
 usbd-serial = { path = "lib/usbd-serial" }
 usbd_scsi = { path = "lib/stm32-usb.rs/firmware/usbd_scsi", features = ["no-zlp", "direct-read-hack"] }
@@ -36,24 +36,26 @@ defmt = "0.2"
 defmt-rtt = "0.2"
 panic-probe = { version = "0.2", features = ["print-defmt"] }
 
-stm32l4xx-hal = { git = "https://github.com/stm32-rs/stm32l4xx-hal.git", features = ["rt", "unproven", "stm32-usbd"], rev = "e483546" }
-freertos-rust = { git = "https://github.com/lobaro/FreeRTOS-rust.git", rev = "4155bc88e2a5b" }
+stm32l4xx-hal = { git = "https://github.com/stm32-rs/stm32l4xx-hal.git", features = ["rt", "unproven", "stm32-usbd"], tag = "v0.7.1" }
 
-self-recorder-packet = { git = "https://github.com/ololoshka2871/self-recorder-packet.git",  default-features = false }
+freertos-rust = { git = "https://github.com/lobaro/FreeRTOS-rust.git" }
 
 heatshrink-rust = { path = "lib/heatshrink.rs/heatshrink-rust" }
 heatshrink-rust-macro = { path = "lib/heatshrink.rs/heatshrink-rust-macro" }
+
+self-recorder-packet = { git = "https://github.com/ololoshka2871/self-recorder-packet.git",  default-features = false }
 emfat-rust = { path = "lib/emfat" }
 flash-settings-rs = { path = "lib/flash-settings.rs" }
 my-proc-macro = { path = "lib/my-proc-macro" }
 qspi-stm32lx3 = { path = "lib/qspi_stm32l4x3" }
 
-prost = { version = "0.9", default-features = false, features = ["prost-derive"] }
+# protobuf
+prost = { version = "0.10.3", default-features = false, features = ["prost-derive"] }
 
 [build-dependencies]
 cc = "1.0.52"
 freertos-cargo-build = "0.1.1"
-prost-build = "0.9"
+prost-build = "0.10.3"
 
 [profile.dev.package."*"]
 opt-level = "z"
