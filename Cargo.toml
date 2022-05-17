@@ -82,10 +82,11 @@ default = [
   "led-blink-each-block",
   "flash-sleep",
 
-  "clock-base-12Mhz",
-  "recorder-power-save",
+  #"clock-base-12Mhz",
+  "clock-base-24Mhz",
 
-  #"clock-base-24Mhz",
+  "recorder-power-save",
+  #"recorder-balanced",
   #"recorder-performance",
 
   #"monitor-output", # В режиме самописца данных там нет
