@@ -1,7 +1,7 @@
-mod protobuf_server;
-mod vfs;
+//mod protobuf_server;
 
-pub mod sensor_processor;
+mod gcode_server;
+
 pub mod usb_periph;
 pub mod usbd;
 

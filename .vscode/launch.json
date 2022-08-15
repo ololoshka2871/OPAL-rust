@@ -11,7 +11,7 @@
             "name": "cortex-debug (Debug)",
             "type": "cortex-debug",
             "cwd": "${workspaceRoot}",
-            "executable": "./target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer", // бинарь
+            "executable": "./target/thumbv7em-none-eabihf/debug/opal-rust", // бинарь
             "request": "attach", // позволяет не прошивать таргет при запуске
             "loadFiles": false, 
             "svdFile": "${workspaceRoot}/STM32L4x3-qspi.svd",
@@ -21,14 +21,14 @@
                 "skip -rfunction ^core::",
                 "skip -rfu ^compiler_builtins::",
                 "skip -rfu ^alloc::",
-                "break main",
+                //"break main",
             ]
         },
         {
             "name": "cortex-debug (Release)",
             "type": "cortex-debug",
             "cwd": "${workspaceRoot}",
-            "executable": "./target/thumbv7em-none-eabihf/release/stm32-usb-self-writer", // бинарь
+            "executable": "./target/thumbv7em-none-eabihf/release/opal-rust", // бинарь
             "request": "attach", // позволяет не прошивать таргет при запуске
             "loadFiles": false, 
             "svdFile": "${workspaceRoot}/STM32L4x3-qspi.svd",
@@ -40,192 +40,6 @@
                 "skip -rfu ^alloc::",
                 "break main",
             ]
-        },
-        {
-            "type": "gdb",
-            "request": "attach",
-            "name": "Attach (OpenOCD)", 
-            "target": "./target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer",
-            "gdbpath" : "arm-none-eabi-gdb", // Это тупо какой gdb использовать
-            "runToMain": true,
-            "cwd": "${workspaceRoot}",
-            "valuesFormatting": "parseText",
-            "autorun": [
-                "file ./target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer", // бинарь
-                "target extended-remote :2331", // куда коннектиться к openocd
-                "set print asm-demangle on",
-                "set backtrace limit 64",
-
-                "set mi-async 1",
-                "set pagination off",
-                "set non-stop on",
-                "skip -rfunction ^core::",
-                "skip -rfu ^compiler_builtins::",
-                "skip -rfu ^alloc::",
-
-                // дефольные брейкпоинты
-                //"break DefaultHandler",
-                //"break HardFault",
-                //"break rust_begin_unwind",
-                "break main",
-                
-                //"monitor arm semihosting enable",
-                
-                // сбросить проц при подключении
-                "monitor reset halt"
-            ]
-        },
-        {
-            "type": "gdb",
-            "request": "attach",
-            "name": "Attach (OpenOCD) Release", 
-            "target": "./target/thumbv7em-none-eabihf/release/stm32-usb-self-writer",
-            "gdbpath" : "arm-none-eabi-gdb", // Это тупо какой gdb использовать
-            "runToMain": true,
-            "cwd": "${workspaceRoot}",
-            "valuesFormatting": "parseText",
-            "autorun": [
-                "file ./target/thumbv7em-none-eabihf/release/stm32-usb-self-writer", // бинарь
-                "target extended-remote :2331", // куда коннектиться к openocd
-                "set print asm-demangle on",
-                "set backtrace limit 64",
-
-                "set mi-async 1",
-                "set pagination off",
-                "set non-stop on",
-                "skip -rfunction ^core::",
-                "skip -rfu ^compiler_builtins::",
-                "skip -rfu ^alloc::",
-
-                // дефольные брейкпоинты
-                //"break DefaultHandler",
-                //"break HardFault",
-                //"break rust_begin_unwind",
-                "break main",
-                
-                //"monitor arm semihosting enable",
-                
-                // сбросить проц при подключении
-                "monitor reset halt"
-            ]
-        },
-        {
-            "type": "gdb",
-            "request": "attach",
-            "name": "Attach (OpenOCD) + rtt", 
-            "target": "./target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer",
-            "gdbpath" : "arm-none-eabi-gdb", // Это тупо какой gdb использовать
-            "runToMain": true,
-            "cwd": "${workspaceRoot}",
-            "valuesFormatting": "parseText",
-            "autorun": [
-                "file ./target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer", // бинарь
-                "target extended-remote :2331", // куда коннектиться к openocd
-                "set print asm-demangle on",
-                "set backtrace limit 64",
-
-                "set mi-async 1",
-                "set pagination off",
-                "set non-stop on",
-                "skip -rfunction ^core::",
-                "skip -rfu ^compiler_builtins::",
-                "skip -rfu ^alloc::",
-
-                // дефольные брейкпоинты
-                //"break DefaultHandler",
-                //"break HardFault",
-                //"break rust_begin_unwind",
-                "break main",
-                
-                //"monitor arm semihosting enable",
-                
-                // сбросить проц при подключении
-                "monitor reset halt",
-
-                "monitor rtt server start 8765 0", // 8765 - port, 0 - channel
-                // should span the *right* part of RAM
-                // nm -S target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer | grep RTT 
-                // 0x2000000c 0x30 D _SEGGER_RTT
-                "monitor rtt setup 0x2000000c 0x30 \"SEGGER RTT\"",
-                "monitor rtt start",
-            ]
-        },
-        {
-            "type": "gdb",
-            "request": "attach",
-            "name": "Attach (cargo embed)", 
-            "target": "./target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer",
-            "gdbpath" : "arm-none-eabi-gdb", // Это тупо какой gdb использовать
-            "runToMain": true,
-            "cwd": "${workspaceRoot}",
-            "valuesFormatting": "parseText",
-            "autorun": [
-                "file ./target/thumbv7em-none-eabihf/debug/stm32-usb-self-writer", // бинарь
-                "target remote :2331", // куда коннектиться к openocd
-                "set print asm-demangle on",
-                "set backtrace limit 8",
-
-                "set mi-async 1",
-                "set pagination off",
-                "set non-stop on",
-                "skip -rfunction ^core::",
-                "skip -rfu ^compiler_builtins::",
-                "skip -rfu ^alloc::",
-
-                // дефольные брейкпоинты
-                //"break DefaultHandler",
-                //"break HardFault",
-                //"break rust_begin_unwind",
-                "break main",
-                
-                // сбросить проц при подключении
-                "monitor reset"
-            ]
-        },
-        {
-            "type": "gdb",
-            "request": "attach",
-            "name": "Attach (cargo embed) release", 
-            "target": "./target/thumbv7em-none-eabihf/release/stm32-usb-self-writer",
-            "gdbpath" : "arm-none-eabi-gdb", // Это тупо какой gdb использовать
-            "runToMain": true,
-            "cwd": "${workspaceRoot}",
-            "valuesFormatting": "parseText",
-            "autorun": [
-                "file ./target/thumbv7em-none-eabihf/release/stm32-usb-self-writer", // бинарь
-                "target remote :2331", // куда коннектиться к openocd
-                "set print asm-demangle on",
-                "set backtrace limit 8",
-
-                "set mi-async 1",
-                "set pagination off",
-                "set non-stop on",
-                "skip -rfunction ^core::",
-                "skip -rfu ^compiler_builtins::",
-                "skip -rfu ^alloc::",
-
-                // дефольные брейкпоинты
-                //"break DefaultHandler",
-                //"break HardFault",
-                //"break rust_begin_unwind",
-                "break main",
-                
-                // сбросить проц при подключении
-                "monitor reset"
-            ]
-        },
-        {
-            "type": "gdb",
-            "request": "launch",
-            "name": "Launch build.rs",
-            // fixme!
-            "target": "./target/debug/build/stm32-usb-self-writer-0c8805cdf0f13d64/build-script-build",
-            "env": {
-                "OUT_DIR": "./target/thumbv7em-none-eabihf/debug/build/stm32-usb-self-writer-031fac96a7ae2faf/out"
-            },
-            "cwd": "${workspaceRoot}",
-            "valuesFormatting": "parseText",
-            "gdbpath": "gdb"
         }
     ]
 }

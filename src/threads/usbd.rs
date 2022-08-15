@@ -2,7 +2,6 @@ use core::ops::DerefMut;
 
 use alloc::sync::Arc;
 use freertos_rust::{Duration, InterruptContext, Mutex, Task, TaskPriority};
-use my_proc_macro::c_str;
 use stm32_usbd::UsbBus;
 
 use stm32l4xx_hal::gpio::{Alternate, PushPull};
@@ -11,12 +10,12 @@ use stm32l4xx_hal::interrupt;
 use stm32l4xx_hal::stm32l4::stm32l4x3::Interrupt;
 
 use usb_device::{class_prelude::UsbBusAllocator, prelude::*};
-use usbd_scsi::Scsi;
 use usbd_serial::SerialPort;
 
+use crate::threads::gcode_server;
 use crate::{
     support::{self},
-    threads::{protobuf_server, usb_periph::UsbPeriph, vfs::EMfatStorage},
+    threads::usb_periph::UsbPeriph,
 };
 
 static mut USBD_THREAD: Option<freertos_rust::Task> = None;
@@ -32,8 +31,6 @@ pub fn usbd(
     usbd_periph: UsbdPeriph,
     interrupt_controller: Arc<dyn support::interrupt_controller::IInterruptController>,
     interrupt_prio: u8,
-    output: Arc<Mutex<crate::workmodes::output_storage::OutputStorage>>,
-    cq: Arc<freertos_rust::Queue<super::sensor_processor::Command>>,
 ) -> ! {
     defmt::info!("Usb thread started!");
 
@@ -51,16 +48,6 @@ pub fn usbd(
             pin_dp: usbd_periph.pin_dp,
         }))
     }
-
-    defmt::info!("Allocating SCSI device");
-    let mut scsi = Scsi::new(
-        unsafe { USB_BUS.as_ref().unwrap_unchecked() }, //&usb_bus,
-        64, // для устройств full speed: max_packet_size 8, 16, 32 or 64
-        EMfatStorage::new(c_str!("LOGGER")),
-        "SCTB", // <= max 8 больших букв
-        "SelfWriter",
-        "L442",
-    );
 
     defmt::info!("Allocating ACM device");
     let serial = SerialPort::new(unsafe { USB_BUS.as_ref().unwrap_unchecked() });
@@ -86,20 +73,20 @@ pub fn usbd(
 
     let protobuf_srv = {
         let sn = serial_container.clone();
-        defmt::trace!("Creating protobuf server thread...");
+        defmt::trace!("Creating G-Code server thread...");
         Task::new()
-            .name("Protobuf")
+            .name("G-CODE")
             .stack_size(2048)
-            .priority(TaskPriority(crate::config::PROTOBUF_TASK_PRIO))
-            .start(move |_| protobuf_server::protobuf_server(sn, output, cq))
-            .expect("Failed to create protobuf server")
+            .priority(TaskPriority(crate::config::GCODE_TASK_PRIO))
+            .start(move |_| gcode_server::gcode_server(sn))
+            .expect("Failed to create G-CODE server")
     };
 
     loop {
         // Важно! Список передаваемый сюда в том же порядке,
         // что были инициализированы интерфейсы
         let res = match serial_container.lock(Duration::ms(1)) {
-            Ok(mut serial) => usb_dev.poll(&mut [&mut scsi, serial.deref_mut()]),
+            Ok(mut serial) => usb_dev.poll(&mut [serial.deref_mut()]),
             Err(_) => true,
         };
 
@@ -119,7 +106,7 @@ pub fn usbd(
             interrupt_controller.mask(Interrupt::USB_FS.into());
         } else {
             crate::support::led::led_set(1);
-            protobuf_srv.notify(freertos_rust::TaskNotification::Increment);
+            //protobuf_srv.notify(freertos_rust::TaskNotification::Increment);
         }
     }
 }

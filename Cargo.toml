@@ -2,8 +2,8 @@
 authors = ["ololoshka2871"]
 edition = "2018"
 readme = "README.md"
-name = "stm32-usb-self-writer"
-version = "0.6.0"
+name = "opal-rust"
+version = "0.0.1"
 resolver = "2"
 
 [dependencies]
@@ -13,7 +13,7 @@ num-traits = { version = "0.2", default-features = false }
 static_assertions = "1.1.0"
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 vcell = "0.1.3"
-bitflags = "1.0.4"
+#bitflags = "1.0.4"
 #bstr = { version = "0.2", default-features = false, features = ["unicode"] }
 
 embedded-hal = { version = "0.2.4", features = ["unproven"] }
@@ -21,15 +21,10 @@ cortex-m = "0.7.3"
 cortex-m-rt = "0.7" # need by stm32l4xx-hal rev == e4835469a38b844865a6d5eef91542bdc6822941
 
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-
-strum = {version = "0.24.0", default-features = false, features = ["derive"] }
 
 usb-device = "0.2.8"
 stm32-usbd = "0.6.0"
 usbd-serial = { path = "lib/usbd-serial" }
-usbd_scsi = { path = "lib/stm32-usb.rs/firmware/usbd_scsi", features = ["no-zlp", "direct-read-hack"] }
-usbd_mass_storage = "0.1.0"
 
 # defmt
 defmt = "0.2"
@@ -40,22 +35,12 @@ stm32l4xx-hal = { git = "https://github.com/stm32-rs/stm32l4xx-hal.git", feature
 
 freertos-rust = { git = "https://github.com/lobaro/FreeRTOS-rust.git" }
 
-heatshrink-rust = { path = "lib/heatshrink.rs/heatshrink-rust" }
-heatshrink-rust-macro = { path = "lib/heatshrink.rs/heatshrink-rust-macro" }
-
-self-recorder-packet = { git = "https://github.com/ololoshka2871/self-recorder-packet.git",  default-features = false }
-emfat-rust = { path = "lib/emfat" }
 flash-settings-rs = { path = "lib/flash-settings.rs" }
 my-proc-macro = { path = "lib/my-proc-macro" }
-qspi-stm32lx3 = { path = "lib/qspi_stm32l4x3" }
-
-# protobuf
-prost = { version = "0.10.3", default-features = false, features = ["prost-derive"] }
 
 [build-dependencies]
 cc = "1.0.52"
 freertos-cargo-build = "0.1.1"
-prost-build = "0.10.3"
 
 [profile.dev.package."*"]
 opt-level = "z"
@@ -75,43 +60,17 @@ lto = false # Делает только хуже
 [features]
 default = [
   "stm32l433",
-  "freqmeter-start-stop", # При временах измерения <= 100 мс только этот режим адекватно работает
   "defmt-debug",
   "monitor-heap",
-  "led-blink",
-  "led-blink-each-block",
-  "flash-sleep",
-
-  #"clock-base-12Mhz",
-  "clock-base-24Mhz",
-
-  "recorder-power-save",
-  #"recorder-balanced",
-  #"recorder-performance",
-
-  #"monitor-output", # В режиме самописца данных там нет
-  #"monitor",
-  #"no-flash",
 ]
 
 monitor-heap = ["monitor"]
-monitor-output = ["monitor"]
-stm32l433 = ["stm32l4xx-hal/stm32l433", "qspi-stm32lx3/stm32l433"]
+stm32l433 = ["stm32l4xx-hal/stm32l433"]
 monitor = []
-freqmeter-start-stop = []
 led-blink = []
-led-blink-each-block = ["led-blink"]
-flash-sleep = []
-no-flash = [] # only for debug 
 
 # base clocking
-clock-base-12Mhz = []
 clock-base-24Mhz = []
-
-# recorder CPU and master counter clocking
-recorder-power-save = []
-recorder-balanced = []
-recorder-performance = []
 
 # defmt: do NOT modify these features
 defmt-default = []

@@ -9,32 +9,22 @@
 
 extern crate alloc;
 
-mod main_data_storage;
-mod protobuf;
-mod sensors;
 mod settings;
 mod support;
+mod threads;
 mod workmodes;
 
 pub mod config;
 pub mod config_pins;
 
-#[cfg(debug_assertions)]
-mod master_value_stat;
-
 use cortex_m_rt::entry;
 
 use stm32l4xx_hal::stm32;
-use support::{usb_connection_checker::UsbConnectionChecker, vusb_monitor::VUsbMonitor};
 
 use crate::{
     support::free_rtos_error_ext::FreeRtosErrorContainer,
-    workmodes::{
-        high_performance_mode::HighPerformanceMode, recorder_mode::RecorderMode, WorkMode,
-    },
+    workmodes::{high_performance_mode::HighPerformanceMode, WorkMode},
 };
-
-mod threads;
 
 //---------------------------------------------------------------
 
@@ -53,15 +43,7 @@ fn main() -> ! {
     let p = unsafe { cortex_m::Peripherals::take().unwrap_unchecked() };
     let dp = unsafe { stm32::Peripherals::take().unwrap_unchecked() };
 
-    let start_res = if is_usb_connected() {
-        defmt::info!("USB connected, CPU max performance mode");
-        start_at_mode::<HighPerformanceMode>(p, dp)
-    } else {
-        defmt::info!("USB not connected, self-writer mode");
-        start_at_mode::<RecorderMode>(p, dp)
-    };
-
-    start_res
+    start_at_mode::<HighPerformanceMode>(p, dp)
         .unwrap_or_else(|e| defmt::panic!("Failed to start thread: {}", FreeRtosErrorContainer(e)));
 
     freertos_rust::FreeRtosUtils::start_scheduler();
@@ -78,20 +60,7 @@ where
     mode.ini_static();
     mode.configure_clock();
     mode.print_clock_config();
-
-    #[cfg(debug_assertions)]
-    master_value_stat::init_master_getter(
-        sensors::freqmeter::master_counter::MasterCounter::acquire(),
-    );
-
     mode.start_threads()
-}
-
-fn is_usb_connected() -> bool {
-    let rcc = unsafe { &*stm32::RCC::ptr() };
-    let pwr = unsafe { &*stm32::PWR::ptr() };
-
-    VUsbMonitor::new(rcc, pwr).is_usb_connected()
 }
 
 //-----------------------------------------------------------------------------

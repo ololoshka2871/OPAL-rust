@@ -2,13 +2,8 @@ use alloc::sync::Arc;
 use freertos_rust::{FreeRtosError, Mutex};
 
 pub mod high_performance_mode;
-pub mod recorder_mode;
 
 pub(crate) mod common;
-//mod my_clock_freeze;
-
-pub mod output_storage;
-pub mod processing;
 
 pub trait WorkMode<T> {
     fn new(p: cortex_m::Peripherals, dp: stm32l4xx_hal::device::Peripherals) -> T;

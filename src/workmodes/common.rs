@@ -1,16 +1,9 @@
-use alloc::sync::Arc;
-use freertos_rust::{Duration, DurationTicks, Mutex};
+use freertos_rust::{Duration, DurationTicks};
 
-use qspi_stm32lx3::{
-    qspi::{ClkPin, IO0Pin, IO1Pin, IO2Pin, IO3Pin, NCSPin, Qspi},
-    stm32l4x3,
-};
 use stm32l4xx_hal::{
     rcc::{PllConfig, PllDivider},
     time::Hertz,
 };
-
-use super::output_storage::OutputStorage;
 
 pub fn to_pll_devider(v: u32) -> PllDivider {
     match v {
@@ -88,10 +81,7 @@ pub fn print_clock_config(clocks: &Option<stm32l4xx_hal::rcc::Clocks>, usb_state
     }
 }
 
-pub fn create_monitor(
-    _sysclk: Hertz,
-    _output: Arc<Mutex<OutputStorage>>,
-) -> Result<(), freertos_rust::FreeRtosError> {
+pub fn create_monitor(_sysclk: Hertz) -> Result<(), freertos_rust::FreeRtosError> {
     #[cfg(feature = "monitor")]
     #[cfg(debug_assertions)]
     {
@@ -107,39 +97,8 @@ pub fn create_monitor(
             .name("Monitord")
             .stack_size(MONITOR_STACK_SIZE)
             .priority(TaskPriority(crate::config::MONITOR_TASK_PRIO))
-            .start(move |_| threads::monitor::monitord(monitoring_period, _output))?;
+            .start(move |_| threads::monitor::monitord(monitoring_period))?;
     }
 
     Ok(())
-}
-
-#[allow(unused)]
-pub fn create_qspi<CLK, NCS, IO0, IO1, IO2, IO3, RESET>(
-    pins: (CLK, NCS, IO0, IO1, IO2, IO3),
-    mut reset: RESET,
-    ahb3: &mut stm32l4xx_hal::rcc::AHB3,
-) -> (Qspi<(CLK, NCS, IO0, IO1, IO2, IO3)>, RESET)
-where
-    CLK: ClkPin<stm32l4x3::QUADSPI>,
-    NCS: NCSPin<stm32l4x3::QUADSPI>,
-    IO0: IO0Pin<stm32l4x3::QUADSPI>,
-    IO1: IO1Pin<stm32l4x3::QUADSPI>,
-    IO2: IO2Pin<stm32l4x3::QUADSPI>,
-    IO3: IO3Pin<stm32l4x3::QUADSPI>,
-    RESET: stm32l4xx_hal::prelude::OutputPin,
-{
-    // reset flash
-    let _ = reset.set_low();
-    cortex_m::asm::delay(1);
-    let _ = reset.set_high();
-
-    (
-        Qspi::new(
-            unsafe { stm32l4x3::QUADSPI::new() },
-            pins,
-            unsafe { core::mem::transmute(ahb3) },
-            qspi_stm32lx3::qspi::QspiConfig::default(),
-        ),
-        reset,
-    )
 }

@@ -1,4 +1,3 @@
-pub mod filter;
 pub mod free_rtos_error_ext;
 pub mod hex_slice;
 pub mod interrupt_controller;
@@ -7,8 +6,6 @@ pub mod len_in_u64_aligned;
 pub mod log_anywhere;
 pub mod logging;
 pub mod timer_period;
-pub mod usb_connection_checker;
-pub mod vusb_monitor;
 
 mod freertos_hooks;
 mod new_freertos_timer;

@@ -7,6 +7,3 @@
 [submodule "lib/usbd-serial"]
 	path = lib/usbd-serial
 	url = https://github.com/ololoshka2871/usbd-serial.git
-[submodule "lib/heatshrink.rs"]
-	path = lib/heatshrink.rs
-	url = https://github.com/ololoshka2871/heatshrink.rs.git
