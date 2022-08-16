@@ -14,14 +14,14 @@
             "executable": "./target/thumbv7em-none-eabihf/debug/opal-rust", // бинарь
             "request": "attach", // позволяет не прошивать таргет при запуске
             "loadFiles": false, 
-            "svdFile": "${workspaceRoot}/STM32L4x3-qspi.svd",
+            "svdFile": "STM32L4x3-qspi.svd",
             "servertype": "external", // Подключиться к внешнему отладочному интерфейсу
             "gdbTarget": "localhost:2331", // адрес куда подключаться
             "postAttachCommands": [
                 "skip -rfunction ^core::",
                 "skip -rfu ^compiler_builtins::",
                 "skip -rfu ^alloc::",
-                //"break main",
+                "break main",
             ]
         },
         {
@@ -31,7 +31,7 @@
             "executable": "./target/thumbv7em-none-eabihf/release/opal-rust", // бинарь
             "request": "attach", // позволяет не прошивать таргет при запуске
             "loadFiles": false, 
-            "svdFile": "${workspaceRoot}/STM32L4x3-qspi.svd",
+            "svdFile": "STM32L4x3-qspi.svd",
             "servertype": "external", // Подключиться к внешнему отладочному интерфейсу
             "gdbTarget": "localhost:2331", // адрес куда подключаться
             "postAttachCommands": [

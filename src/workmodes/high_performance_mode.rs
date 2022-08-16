@@ -1,3 +1,4 @@
+use alloc::boxed::Box;
 use alloc::sync::Arc;
 use freertos_rust::{Duration, Mutex, Task, TaskPriority};
 
@@ -8,14 +9,15 @@ use stm32l4xx_hal::gpio::{
 };
 use stm32l4xx_hal::{prelude::*, rcc::PllConfig, stm32, time::Hertz};
 
+use crate::control::xy2_100;
 use crate::support::{interrupt_controller::IInterruptController, InterruptController};
 use crate::threads;
 use crate::workmodes::common::ClockConfigProvider;
 
 use super::WorkMode;
 
-mod clock_config_80;
-use clock_config_80::{APB1_DEVIDER, APB2_DEVIDER, PLL_CFG, SAI_DIVIDER, SAI_MULTIPLIER};
+mod clock_config_72;
+use clock_config_72::{APB1_DEVIDER, APB2_DEVIDER, PLL_CFG, SAI_DIVIDER, SAI_MULTIPLIER};
 
 struct HighPerformanceClockConfigProvider;
 
@@ -77,6 +79,8 @@ pub struct HighPerformanceMode {
     crc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>,
 
     led_pin: PC10<Output<PushPull>>,
+
+    galvo_ctrl: xy2_100::xy2_100,
 }
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
@@ -87,11 +91,9 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         let mut gpioa = dp.GPIOA.split(&mut rcc.ahb2);
         let mut gpioc = dp.GPIOC.split(&mut rcc.ahb2);
-        /*
         let mut gpiod = dp.GPIOD.split(&mut rcc.ahb2);
         let mut gpiob = dp.GPIOB.split(&mut rcc.ahb2);
         let mut gpioe = dp.GPIOE.split(&mut rcc.ahb2);
-        */
 
         HighPerformanceMode {
             flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
@@ -121,6 +123,57 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 .pc10
                 .into_push_pull_output_in_state(&mut gpioc.moder, &mut gpioc.otyper, PinState::High)
                 .set_speed(Speed::Low),
+
+            // PCB
+            // верхняя флешка
+            // via: *  * *  *  * *
+            // chk: A3 x x  x  x D11
+            // нижняя флешка
+            // via: *  * *  *  * *
+            // chk: A3 x A2 B0 x D11
+            galvo_ctrl: xy2_100::xy2_100::new(
+                dp.TIM7,
+                Box::new(
+                    gpioa
+                        .pa3
+                        .into_push_pull_output_in_state(
+                            &mut gpioa.moder,
+                            &mut gpioa.otyper,
+                            PinState::High,
+                        )
+                        .set_speed(Speed::VeryHigh),
+                ),
+                Box::new(
+                    gpiod
+                        .pd11
+                        .into_push_pull_output_in_state(
+                            &mut gpiod.moder,
+                            &mut gpiod.otyper,
+                            PinState::High,
+                        )
+                        .set_speed(Speed::VeryHigh),
+                ),
+                Box::new(
+                    gpioa
+                        .pa2
+                        .into_push_pull_output_in_state(
+                            &mut gpioa.moder,
+                            &mut gpioa.otyper,
+                            PinState::High,
+                        )
+                        .set_speed(Speed::VeryHigh),
+                ),
+                Box::new(
+                    gpiob
+                        .pb0
+                        .into_push_pull_output_in_state(
+                            &mut gpiob.moder,
+                            &mut gpiob.otyper,
+                            PinState::High,
+                        )
+                        .set_speed(Speed::VeryHigh),
+                ),
+            ),
         }
     }
 
@@ -195,10 +248,19 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         self.clocks = Some(clocks);
     }
 
-    fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
+    fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
         let sys_clk = unsafe { self.clocks.unwrap_unchecked().hclk() };
+        let tim_ref_clk = unsafe { self.clocks.unwrap_unchecked().pclk1() };
 
         crate::support::led::led_init(self.led_pin);
+
+        // --------------------------------------------------------------------
+
+        self.galvo_ctrl
+            .begin(self.interrupt_controller.clone(), tim_ref_clk);
+
+        // --------------------------------------------------------------------
+
         {
             defmt::trace!("Creating usb thread...");
             let usbperith = threads::usbd::UsbdPeriph {

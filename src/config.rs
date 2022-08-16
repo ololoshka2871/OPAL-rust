@@ -12,11 +12,11 @@ pub const FREERTOS_CONFIG_FREQ: u32 = 72_000_000;
 // value + -> prio -
 pub const IRQ_HIGEST_PRIO: u8 = 80;
 
-/// master counter interrupt prio
-pub const MASTER_COUNTER_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 10;
+/// galvo interface tick prio
+pub const GALVO_INTERFACE_TICK_PRIO: u8 = IRQ_HIGEST_PRIO + 2;
 
 /// USB interrupt ptiority
-pub const USB_INTERRUPT_PRIO: u8 = MASTER_COUNTER_INTERRUPT_PRIO + 1;
+pub const USB_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 6;
 
 // dma value captured interrupt prio
 pub const DMA_IRQ_PRIO: u8 = IRQ_HIGEST_PRIO + 5;
