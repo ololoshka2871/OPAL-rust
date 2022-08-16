@@ -1,6 +1,5 @@
 /// global logger
 use defmt_rtt as _;
-use freertos_rust::FreeRtosUtils;
 use panic_probe as _;
 
 // same panicking *behavior* as `panic-probe` but doesn't print a panic message
@@ -21,6 +20,8 @@ defmt::timestamp!("{=usize}", {
 });
 
 /*
+use freertos_rust::FreeRtosUtils;
+
 defmt::timestamp!(
     "[{:?}T]",
     crate::workmodes::common::Ticks(FreeRtosUtils::get_tick_count())

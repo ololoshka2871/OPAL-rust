@@ -60,7 +60,7 @@ pub fn usbd(
     let mut usb_dev =
         UsbDeviceBuilder::new(unsafe { USB_BUS.as_ref().unwrap_unchecked() }, vid_pid)
             .manufacturer("SCTB ELPA")
-            .product("Pressure self-registrator")
+            .product("OPAL-rust")
             .serial_number("0123456789")
             //.device_class(0) // Это не нужно для композита
             .composite_with_iads()
@@ -71,7 +71,7 @@ pub fn usbd(
 
     defmt::info!("USB ready!");
 
-    let protobuf_srv = {
+    let gcode_srv = {
         let sn = serial_container.clone();
         defmt::trace!("Creating G-Code server thread...");
         Task::new()
@@ -106,7 +106,7 @@ pub fn usbd(
             interrupt_controller.mask(Interrupt::USB_FS.into());
         } else {
             crate::support::led::led_set(1);
-            //protobuf_srv.notify(freertos_rust::TaskNotification::Increment);
+            gcode_srv.notify(freertos_rust::TaskNotification::Increment);
         }
     }
 }

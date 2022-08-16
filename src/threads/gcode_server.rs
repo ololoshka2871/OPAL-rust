@@ -1,5 +1,3 @@
-use core::fmt::Display;
-
 use alloc::vec;
 use alloc::{sync::Arc, vec::Vec};
 
@@ -8,12 +6,13 @@ use freertos_rust::{CurrentTask, Duration, FreeRtosError, Mutex};
 use usb_device::UsbError;
 use usbd_serial::SerialPort;
 
+use super::stream::Stream;
+
 struct SerialStream<'a, B: usb_device::bus::UsbBus> {
     serial_container: Arc<Mutex<SerialPort<'a, B>>>,
     max_size: Option<usize>,
 }
 
-/*
 impl<'a, B: usb_device::bus::UsbBus> Stream<FreeRtosError> for SerialStream<'a, B> {
     fn read(&mut self, buf: &mut [u8]) -> Result<(), FreeRtosError> {
         loop {
@@ -66,84 +65,31 @@ impl<'a, B: usb_device::bus::UsbBus> SerialStream<'a, B> {
         }
     }
 }
-*/
 
 pub fn gcode_server<B: usb_device::bus::UsbBus>(serial_container: Arc<Mutex<SerialPort<B>>>) -> ! {
+    let mut buf = [0u8; 1];
+
+    let mut serial_stream = SerialStream::new(serial_container.clone(), None);
+
     loop {
-        /*
-        let msg_size = match protobuf::recive_md_header(&mut SerialStream::new(
-            serial_container.clone(),
-            None,
-        )) {
-            Ok(size) => size,
-            Err(e) => {
-                print_error(e);
-                continue;
-            }
-        };
-
-        let request = match protobuf::recive_message_body(&mut SerialStream::new(
-            serial_container.clone(),
-            Some(msg_size),
-        )) {
-            Ok(request) => request,
-            Err(e) => {
-                print_error(e);
-                continue;
-            }
-        };
-
-        let id = request.id;
-
-        defmt::trace!("Protobuf: Request:\n{}", defmt::Debug2Format(&request));
-
-        let response = {
-            let id = request.id;
-            match protobuf::process_requiest(
-                request,
-                protobuf::new_response(id),
-                &output,
-                cq.as_ref(),
-            ) {
-                Ok(r) => r,
-                Err(_) => {
-                    defmt::error!("Failed to generate response");
-                    continue;
-                }
-            }
-        };
-
-        defmt::trace!("Protobuf: Response:\n{}", defmt::Debug2Format(&response));
-
-        if let Err(e) = write_responce(serial_container.clone(), response) {
-            print_error(e);
+        match serial_stream.read(&mut buf) {
+            Ok(_) => write_responce(serial_container.clone(), &buf),
+            Err(e) => defmt::trace!("Serial: failed to read: {}", defmt::Debug2Format(&e)),
         }
-
-        defmt::trace!("Protobuf: message id = {} processed succesfully", id);
-        */
-        freertos_rust::CurrentTask::delay(Duration::ms(1000));
     }
-}
-
-/*
-fn print_error<E: Display>(e: E) {
-    defmt::error!("Protobuf error: {}", defmt::Display2Format(&e));
 }
 
 fn write_responce<B: usb_device::bus::UsbBus>(
     serial_container: Arc<Mutex<SerialPort<B>>>,
-    response: protobuf::Response,
-) -> Result<(), EncodeError> {
-    let data = protobuf::encode_md_message(response)?;
-    let mut buf = data.as_slice();
-
+    mut buf: &[u8],
+) {
     loop {
         match serial_container.lock(Duration::infinite()) {
             Ok(mut serial) => match serial.write(buf) {
                 Ok(len) if len > 0 => {
                     //defmt::trace!("Serial: {} bytes writen", len);
                     if len == buf.len() {
-                        return Ok(());
+                        return;
                     }
                     buf = &buf[len..];
                 }
@@ -154,5 +100,3 @@ fn write_responce<B: usb_device::bus::UsbBus>(
         CurrentTask::delay(Duration::ms(1));
     }
 }
-
-*/

@@ -1,6 +1,7 @@
 //mod protobuf_server;
 
 mod gcode_server;
+mod stream;
 
 pub mod usb_periph;
 pub mod usbd;

@@ -6,12 +6,7 @@ use stm32l4xx_hal::gpio::{
     Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA11, PA12, PA2, PA3, PA6, PA7, PA8, PB0,
     PC10, PD10, PD11, PD13, PE12,
 };
-use stm32l4xx_hal::{
-    prelude::*,
-    rcc::{Enable, PllConfig, Reset},
-    stm32,
-    time::Hertz,
-};
+use stm32l4xx_hal::{prelude::*, rcc::PllConfig, stm32, time::Hertz};
 
 use crate::support::{interrupt_controller::IInterruptController, InterruptController};
 use crate::threads;
@@ -88,16 +83,15 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     fn new(p: cortex_m::Peripherals, dp: stm32l4xx_hal::stm32l4::stm32l4x3::Peripherals) -> Self {
         let mut rcc = dp.RCC.constrain();
         let ic = Arc::new(InterruptController::new(p.NVIC));
-        let dma_channels = dp.DMA1.split(&mut rcc.ahb1);
+        //let dma_channels = dp.DMA1.split(&mut rcc.ahb1);
 
         let mut gpioa = dp.GPIOA.split(&mut rcc.ahb2);
         let mut gpioc = dp.GPIOC.split(&mut rcc.ahb2);
+        /*
         let mut gpiod = dp.GPIOD.split(&mut rcc.ahb2);
-
-        #[cfg(not(feature = "no-flash"))]
         let mut gpiob = dp.GPIOB.split(&mut rcc.ahb2);
-        #[cfg(not(feature = "no-flash"))]
         let mut gpioe = dp.GPIOE.split(&mut rcc.ahb2);
+        */
 
         HighPerformanceMode {
             flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
@@ -201,11 +195,10 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         self.clocks = Some(clocks);
     }
 
-    fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
+    fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
         let sys_clk = unsafe { self.clocks.unwrap_unchecked().hclk() };
 
         crate::support::led::led_init(self.led_pin);
-        /*
         {
             defmt::trace!("Creating usb thread...");
             let usbperith = threads::usbd::UsbdPeriph {
@@ -222,7 +215,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                     threads::usbd::usbd(usbperith, ic, crate::config::USB_INTERRUPT_PRIO)
                 })?;
         }
-        */
+
         // --------------------------------------------------------------------
 
         crate::workmodes::common::create_monitor(sys_clk)?;

@@ -13,6 +13,7 @@ mod settings;
 mod support;
 mod threads;
 mod workmodes;
+mod control;
 
 pub mod config;
 pub mod config_pins;
