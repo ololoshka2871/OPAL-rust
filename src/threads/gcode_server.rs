@@ -66,14 +66,20 @@ impl<'a, B: usb_device::bus::UsbBus> SerialStream<'a, B> {
     }
 }
 
-pub fn gcode_server<B: usb_device::bus::UsbBus>(serial_container: Arc<Mutex<SerialPort<B>>>) -> ! {
+pub fn gcode_server<B: usb_device::bus::UsbBus>(
+    serial_container: Arc<Mutex<SerialPort<B>>>,
+    galvo_ctrl: crate::control::xy2_100::xy2_100,
+) -> ! {
     let mut buf = [0u8; 1];
 
     let mut serial_stream = SerialStream::new(serial_container.clone(), None);
 
     loop {
         match serial_stream.read(&mut buf) {
-            Ok(_) => write_responce(serial_container.clone(), &buf),
+            Ok(_) => {
+                galvo_ctrl.set_pos(buf[0] as u16, (buf[0] ^ 0xff) as u16);
+                write_responce(serial_container.clone(), &buf);
+            }
             Err(e) => defmt::trace!("Serial: failed to read: {}", defmt::Debug2Format(&e)),
         }
     }

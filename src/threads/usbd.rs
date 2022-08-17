@@ -31,6 +31,7 @@ pub fn usbd(
     usbd_periph: UsbdPeriph,
     interrupt_controller: Arc<dyn support::interrupt_controller::IInterruptController>,
     interrupt_prio: u8,
+    galvo_ctrl: crate::control::xy2_100::xy2_100,
 ) -> ! {
     defmt::info!("Usb thread started!");
 
@@ -78,7 +79,7 @@ pub fn usbd(
             .name("G-CODE")
             .stack_size(2048)
             .priority(TaskPriority(crate::config::GCODE_TASK_PRIO))
-            .start(move |_| gcode_server::gcode_server(sn))
+            .start(move |_| gcode_server::gcode_server(sn, galvo_ctrl))
             .expect("Failed to create G-CODE server")
     };
 

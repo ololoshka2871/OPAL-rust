@@ -6,6 +6,8 @@ pub const XTAL_FREQ: u32 = 12_000_000;
 
 pub const FREERTOS_CONFIG_FREQ: u32 = 72_000_000;
 
+pub const GALVO_CLOCK_RATE: u32 = 2_000_000 * 2; // clock needs 2 ticks
+
 //-----------------------------------------------------------------------------
 
 // see: src/config/FreeRTOSConfig.h: configMAX_SYSCALL_INTERRUPT_PRIORITY

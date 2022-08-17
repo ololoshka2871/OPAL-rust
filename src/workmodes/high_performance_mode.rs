@@ -1,4 +1,3 @@
-use alloc::boxed::Box;
 use alloc::sync::Arc;
 use freertos_rust::{Duration, Mutex, Task, TaskPriority};
 
@@ -87,13 +86,17 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     fn new(p: cortex_m::Peripherals, dp: stm32l4xx_hal::stm32l4::stm32l4x3::Peripherals) -> Self {
         let mut rcc = dp.RCC.constrain();
         let ic = Arc::new(InterruptController::new(p.NVIC));
-        //let dma_channels = dp.DMA1.split(&mut rcc.ahb1);
+        let dma_channels = dp.DMA2.split(&mut rcc.ahb1);
 
         let mut gpioa = dp.GPIOA.split(&mut rcc.ahb2);
         let mut gpioc = dp.GPIOC.split(&mut rcc.ahb2);
-        let mut gpiod = dp.GPIOD.split(&mut rcc.ahb2);
+
+        let gpiod = dp.GPIOD.split(&mut rcc.ahb2);
+
+        /*
         let mut gpiob = dp.GPIOB.split(&mut rcc.ahb2);
         let mut gpioe = dp.GPIOE.split(&mut rcc.ahb2);
+        */
 
         HighPerformanceMode {
             flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
@@ -126,54 +129,12 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             // PCB
             // верхняя флешка
-            // via: *  * *  *  * *
-            // chk: A3 x x  x  x D11
+            // via: *  *  *  *  *  *
+            // chk: A3 D6 D3 D5 D7 D11
             // нижняя флешка
-            // via: *  * *  *  * *
-            // chk: A3 x A2 B0 x D11
-            galvo_ctrl: xy2_100::xy2_100::new(
-                dp.TIM7,
-                Box::new(
-                    gpioa
-                        .pa3
-                        .into_push_pull_output_in_state(
-                            &mut gpioa.moder,
-                            &mut gpioa.otyper,
-                            PinState::High,
-                        )
-                        .set_speed(Speed::VeryHigh),
-                ),
-                Box::new(
-                    gpiod
-                        .pd11
-                        .into_push_pull_output_in_state(
-                            &mut gpiod.moder,
-                            &mut gpiod.otyper,
-                            PinState::High,
-                        )
-                        .set_speed(Speed::VeryHigh),
-                ),
-                Box::new(
-                    gpioa
-                        .pa2
-                        .into_push_pull_output_in_state(
-                            &mut gpioa.moder,
-                            &mut gpioa.otyper,
-                            PinState::High,
-                        )
-                        .set_speed(Speed::VeryHigh),
-                ),
-                Box::new(
-                    gpiob
-                        .pb0
-                        .into_push_pull_output_in_state(
-                            &mut gpiob.moder,
-                            &mut gpiob.otyper,
-                            PinState::High,
-                        )
-                        .set_speed(Speed::VeryHigh),
-                ),
-            ),
+            // via: *  *  *  *  *  *
+            // chk: A3 x  A2 B0 x  D11
+            galvo_ctrl: xy2_100::xy2_100::new(dp.TIM7, gpiod, dma_channels.5, 6, 3, 5, 7),
         }
     }
 
@@ -248,7 +209,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         self.clocks = Some(clocks);
     }
 
-    fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
+    fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
         let sys_clk = unsafe { self.clocks.unwrap_unchecked().hclk() };
         let tim_ref_clk = unsafe { self.clocks.unwrap_unchecked().pclk1() };
 
@@ -256,8 +217,10 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         // --------------------------------------------------------------------
 
-        self.galvo_ctrl
-            .begin(self.interrupt_controller.clone(), tim_ref_clk);
+        let mut galvo_ctrl = self.galvo_ctrl;
+        galvo_ctrl.begin(self.interrupt_controller.clone(), tim_ref_clk);
+
+        galvo_ctrl.set_pos(0, 0);
 
         // --------------------------------------------------------------------
 
@@ -274,7 +237,12 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 .stack_size(1024)
                 .priority(TaskPriority(crate::config::USBD_TASK_PRIO))
                 .start(move |_| {
-                    threads::usbd::usbd(usbperith, ic, crate::config::USB_INTERRUPT_PRIO)
+                    threads::usbd::usbd(
+                        usbperith,
+                        ic,
+                        crate::config::USB_INTERRUPT_PRIO,
+                        galvo_ctrl,
+                    )
                 })?;
         }
 
