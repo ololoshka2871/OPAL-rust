@@ -3,6 +3,8 @@
 mod gcode_server;
 mod stream;
 
+pub mod motion;
+
 pub mod usb_periph;
 pub mod usbd;
 

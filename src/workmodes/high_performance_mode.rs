@@ -210,6 +210,8 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     }
 
     fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
+        use crate::gcode::GCode;
+
         let sys_clk = unsafe { self.clocks.unwrap_unchecked().hclk() };
         let tim_ref_clk = unsafe { self.clocks.unwrap_unchecked().pclk1() };
 
@@ -217,10 +219,23 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         // --------------------------------------------------------------------
 
+        let gcode_queue = Arc::new(freertos_rust::Queue::<GCode>::new(3).unwrap());
+
         let mut galvo_ctrl = self.galvo_ctrl;
         galvo_ctrl.begin(self.interrupt_controller.clone(), tim_ref_clk);
 
         galvo_ctrl.set_pos(0, 0);
+
+        // --------------------------------------------------------------------
+
+        {
+            let gcode_queue_out = gcode_queue.clone();
+            Task::new()
+                .name("Motiond")
+                .stack_size(1024)
+                .priority(TaskPriority(crate::config::MOTIOND_TASK_PRIO))
+                .start(move |_| threads::motion::motion(gcode_queue_out))?;
+        }
 
         // --------------------------------------------------------------------
 
@@ -241,7 +256,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                         usbperith,
                         ic,
                         crate::config::USB_INTERRUPT_PRIO,
-                        galvo_ctrl,
+                        gcode_queue,
                     )
                 })?;
         }

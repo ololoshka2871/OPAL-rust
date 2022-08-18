@@ -6,10 +6,12 @@
 #![allow(incomplete_features)]
 #![feature(adt_const_params)]
 #![feature(int_abs_diff)]
+#![feature(array_zip)]
 
 extern crate alloc;
 
 mod control;
+mod gcode;
 mod settings;
 mod support;
 mod threads;
