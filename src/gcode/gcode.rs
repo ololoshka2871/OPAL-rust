@@ -135,6 +135,46 @@ impl GCode {
         }
         Ok(())
     }
+
+    #[inline]
+    pub fn is_g_code(&self) -> bool {
+        self.codeprefix == 'G'
+    }
+
+    #[inline]
+    pub fn is_m_code(&self) -> bool {
+        self.codeprefix == 'M'
+    }
+
+    #[inline]
+    pub fn code(&self) -> u32 {
+        self.code
+    }
+
+    #[inline]
+    pub fn get_x(&self) -> f64 {
+        self.x
+    }
+
+    #[inline]
+    pub fn get_y(&self) -> f64 {
+        self.y
+    }
+
+    #[inline]
+    pub fn get_z(&self) -> f64 {
+        self.z
+    }
+
+    #[inline]
+    pub fn get_s(&self) -> f64 {
+        self.s
+    }
+
+    #[inline]
+    pub fn get_f(&self) -> f64 {
+        self.f
+    }
 }
 
 impl defmt::Format for GCode {

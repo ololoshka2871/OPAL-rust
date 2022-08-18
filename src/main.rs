@@ -7,6 +7,7 @@
 #![feature(adt_const_params)]
 #![feature(int_abs_diff)]
 #![feature(array_zip)]
+#![feature(core_intrinsics)]
 
 extern crate alloc;
 

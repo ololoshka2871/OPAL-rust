@@ -43,3 +43,19 @@ pub const MONITOR_TASK_PRIO: u8 = IDLE_TASK_PRIO + 1;
 pub const GCODE_TASK_PRIO: u8 = IDLE_TASK_PRIO + 2;
 
 //-----------------------------------------------------------------------------
+
+// max laser S 100 -> 100%
+pub const MOTION_MAX_S: f64 = 100f64;
+
+// working range X
+pub const MOTION_X_RANGE: f64 = 250.0;
+
+// working range Y
+pub const MOTION_Y_RANGE: f64 = 250.0;
+
+// working range Z (unused)
+pub const MOTION_Z_RANGE: f64 = 1.0;
+
+// invert axis
+pub const AXIS_INVERSE_X: bool = false;
+pub const AXIS_INVERSE_Y: bool = false;

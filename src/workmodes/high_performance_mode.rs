@@ -234,7 +234,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 .name("Motiond")
                 .stack_size(1024)
                 .priority(TaskPriority(crate::config::MOTIOND_TASK_PRIO))
-                .start(move |_| threads::motion::motion(gcode_queue_out))?;
+                .start(move |_| threads::motion::motion(gcode_queue_out, 0, galvo_ctrl))?;
         }
 
         // --------------------------------------------------------------------

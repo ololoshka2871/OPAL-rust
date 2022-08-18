@@ -112,25 +112,27 @@ pub fn gcode_server<B: usb_device::bus::UsbBus>(
 ) -> ! {
     let mut serial_stream = SerialStream::new(serial_container.clone(), None);
 
+    print_welcome(&serial_container);
+
     loop {
         match serial_stream.read_line(Some(gcode::MAX_LEN)) {
             Ok(s) => match GCode::from_string(s.as_str()) {
                 Ok(gcode) => {
                     let _ = gcode_queue.send(gcode, Duration::infinite());
-                    write_responce(serial_container.clone(), "ok\n\r");
+                    write_responce(&serial_container, "ok\n\r");
                 }
                 Err(ParceError::Empty) => {
                     // нужно посылать "ok" даже на строки не содержащие кода
                     defmt::info!("Empty command: {}", defmt::Display2Format(&s));
-                    write_responce(serial_container.clone(), "ok\n\r");
+                    write_responce(&serial_container, "ok\n\r");
                 }
                 Err(ParceError::Error(e)) => write_responce(
-                    serial_container.clone(),
+                    &serial_container,
                     &alloc::fmt::format(format_args!("Error: {:?}\n\r", e)),
                 ),
             },
             Err(e) => write_responce(
-                serial_container.clone(),
+                &serial_container,
                 &alloc::fmt::format(format_args!("Error: {:?}\n\r", e)),
             ),
         }
@@ -138,7 +140,7 @@ pub fn gcode_server<B: usb_device::bus::UsbBus>(
 }
 
 fn write_responce<B: usb_device::bus::UsbBus>(
-    serial_container: Arc<Mutex<SerialPort<B>>>,
+    serial_container: &Arc<Mutex<SerialPort<B>>>,
     mut text: &str,
 ) {
     loop {
@@ -157,4 +159,17 @@ fn write_responce<B: usb_device::bus::UsbBus>(
         }
         CurrentTask::delay(Duration::ms(1));
     }
+}
+
+fn print_welcome<B: usb_device::bus::UsbBus>(serial_container: &Arc<Mutex<SerialPort<B>>>) {
+    write_responce(
+        serial_container,
+        r#"\n
+********************************************
+* Teensy running OpenGalvo OPAL Firmware   *
+*  -This is BETA Software                  *
+*  -Do not leave any hardware unattended!  *
+* CopyLeft: SCTB_Elpa                      *
+********************************************"#,
+    );
 }
