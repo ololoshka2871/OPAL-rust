@@ -13,6 +13,7 @@ pub struct GCode {
     x: f64,
     y: f64,
     z: f64,
+    /*
     e: f64,
 
     a: f64,
@@ -23,14 +24,15 @@ pub struct GCode {
     j: f64,
 
     p: f64,
-
+    */
     s: f64, // Laser Power
     f: f64, // FeedRate
-    r: f64, // Misc
-    t: f64, // Misc
-
-    move_length_nanos: f64,
-    fwd_cmd: [u8; MAX_LEN],
+            /*
+            r: f64, // Misc
+            t: f64, // Misc
+            */
+            //move_length_nanos: f64,
+            //fwd_cmd: [u8; MAX_LEN],
 }
 
 pub enum ParceError {
@@ -48,12 +50,12 @@ impl GCode {
             let mut new_code = Self::default();
 
             if Self::has_command('M', text) {
-                let startpos = Self::has_command_at('M', text);
-
                 new_code.codeprefix = 'M';
                 new_code.code = Self::search_string('M', text)
                     .or_else(|_| Err(ParceError::Error("Failed to parse M command".into())))?;
 
+                /*
+                let startpos = Self::has_command_at('M', text);
                 let cpy_src = &text.as_bytes()[startpos..];
                 unsafe {
                     core::ptr::copy_nonoverlapping(
@@ -62,6 +64,7 @@ impl GCode {
                         cpy_src.len(),
                     );
                 }
+                */
 
                 new_code.s = Self::get_val('S', text, 0_f64)
                     .or_else(|_| Err(ParceError::Error("Invalid S value".into())))?;
@@ -84,10 +87,12 @@ impl GCode {
         text.contains(key)
     }
 
+    /*
     #[inline]
     fn has_command_at(key: char, text: &str) -> usize {
         text.find(key).unwrap()
     }
+    */
 
     fn search_string<T: FromStr>(key: char, text: &str) -> Result<T, T::Err> {
         text.chars()
@@ -111,20 +116,27 @@ impl GCode {
             &mut self.x,
             &mut self.y,
             &mut self.z,
+            /*
             &mut self.e,
             &mut self.a,
             &mut self.b,
             &mut self.c,
+            */
             &mut self.f,
+            /*
             &mut self.i,
             &mut self.j,
             &mut self.p,
             &mut self.r,
+            */
             &mut self.s,
+            /*
             &mut self.t,
+            */
         ]
         .zip([
-            'X', 'Y', 'Z', 'E', 'A', 'B', 'C', 'F', 'I', 'J', 'P', 'R', 'S', 'T',
+            'X', 'Y', 'Z', /*'E', 'A', 'B', 'C',*/ 'F',
+            /*'I', 'J', 'P', 'R',*/ 'S', /*'T',*/
         ]) {
             *field = Self::get_val(letter, text, 0f64).or_else(|e| {
                 Err(ParceError::Error(format(format_args!(
@@ -181,22 +193,27 @@ impl defmt::Format for GCode {
     fn format(&self, fmt: defmt::Formatter) {
         write!(
             fmt,
-            "{}{}\n\rX{} Y{} Z{}\n\rA{} B{} C{}\n\rI{} J{}\n\rP{}\n\rS{} F{}\n\rR{} T{}",
+            //"{}{}\n\rX{} Y{} Z{}\n\rA{} B{} C{}\n\rI{} J{}\n\rP{}\n\rS{} F{}\n\rR{} T{}",
+            "{}{}\n\rX{} Y{} Z{}\n\rS{} F{}",
             self.codeprefix,
             self.code,
             self.x,
             self.y,
             self.z,
+            /*
             self.a,
             self.b,
             self.c,
             self.i,
             self.j,
             self.p,
+            */
             self.s,
             self.f,
+            /*
             self.r,
             self.t
+            */
         )
     }
 }
@@ -209,6 +226,7 @@ impl Default for GCode {
             x: 0f64,
             y: 0f64,
             z: 0f64,
+            /*
             e: 0f64,
             a: 0f64,
             b: 0f64,
@@ -216,12 +234,16 @@ impl Default for GCode {
             i: 0f64,
             j: 0f64,
             p: 0f64,
+            */
             s: 0f64,
             f: 0f64,
+            /*
             r: 0f64,
             t: 0f64,
+
             move_length_nanos: 0f64,
             fwd_cmd: [0u8; MAX_LEN],
+            */
         }
     }
 }

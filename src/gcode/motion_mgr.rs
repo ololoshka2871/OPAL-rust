@@ -4,7 +4,8 @@ use alloc::{fmt::format, string::String};
 
 use crate::config;
 
-use crate::control::xy2_100::xy2_100;
+use crate::control::xy2_100::XY2_100;
+use crate::time_base::master_counter::MasterTimerInfo;
 
 use super::GCode;
 
@@ -46,11 +47,14 @@ pub struct MotionMGR {
     laser_changed: bool,
 
     _laser: u32,
-    galvo: xy2_100,
+    galvo: XY2_100,
+
+    master: MasterTimerInfo,
+    to_nanos: f64,
 }
 
 impl MotionMGR {
-    pub fn new(laser: u32, galvo: xy2_100) -> Self {
+    pub fn new(laser: u32, galvo: XY2_100, master: MasterTimerInfo, to_nanos: f64) -> Self {
         Self {
             _status: MotionStatus::IDLE,
             is_move_first_interpolation: false,
@@ -81,7 +85,14 @@ impl MotionMGR {
 
             _laser: laser,
             galvo,
+
+            master,
+            to_nanos,
         }
+    }
+
+    pub fn begin(&mut self) {
+        self.set_galvo_position(0.0, 0.0);
     }
 
     pub fn process(&mut self, gcode: GCode) -> Result<(), String> {
@@ -93,12 +104,12 @@ impl MotionMGR {
     }
 
     pub fn tic(&mut self) -> MotionStatus {
-        self._now = nanos();
+        self._now = self.nanos();
         if self._status == MotionStatus::INTERPOLATING {
-            self.interpolate_move();
+            if self.interpolate_move() {
+                self.set_galvo_position(self.current_cmd_x, self.current_cmd_y);
+            }
         }
-
-        self.set_galvo_position(self.current_cmd_x, self.current_cmd_y);
 
         if self.current_laserenabled {
             if self.laser_changed {
@@ -273,7 +284,7 @@ impl MotionMGR {
         }
     }
 
-    fn interpolate_move(&mut self) {
+    fn interpolate_move(&mut self) -> bool {
         if self.is_move_first_interpolation {
             if [0, 28].contains(&self.current_code) {
                 // don't interpolate
@@ -285,7 +296,7 @@ impl MotionMGR {
                 self.current_cmd_z = self.current_to_z;
                 self._status = MotionStatus::IDLE;
                 self.is_move_first_interpolation = true;
-                return;
+                return true;
             }
             if self.current_code == 1 {
                 // G1
@@ -314,13 +325,13 @@ impl MotionMGR {
             self.current_cmd_z = self.current_to_z;
             self._status = MotionStatus::IDLE;
             self.is_move_first_interpolation = true;
-            return;
+            return self._now == self.current_endnanos;
         } else {
             let fraction_of_move =
                 (self._now - self.current_startnanos) as f64 / self.current_duration;
             self.current_cmd_x = self.current_from_x + (self.current_distance_x * fraction_of_move);
             self.current_cmd_y = self.current_from_y + (self.current_distance_y * fraction_of_move);
-            return;
+            return true;
         }
     }
 
@@ -330,16 +341,16 @@ impl MotionMGR {
                 x,
                 -config::MOTION_X_RANGE / 2.0,
                 config::MOTION_X_RANGE / 2.0,
-                u16::MIN,
                 u16::MAX,
+                u16::MIN,
             )
         } else {
             map(
                 x,
                 -config::MOTION_X_RANGE / 2.0,
                 config::MOTION_X_RANGE / 2.0,
-                u16::MAX,
                 u16::MIN,
+                u16::MAX,
             )
         };
 
@@ -348,27 +359,27 @@ impl MotionMGR {
                 y,
                 -config::MOTION_Y_RANGE / 2.0,
                 config::MOTION_Y_RANGE / 2.0,
-                u16::MIN,
                 u16::MAX,
+                u16::MIN,
             )
         } else {
             map(
                 y,
                 -config::MOTION_Y_RANGE / 2.0,
                 config::MOTION_Y_RANGE / 2.0,
-                u16::MAX,
                 u16::MIN,
+                u16::MAX,
             )
         };
 
         self.galvo.set_pos(cmd_x, cmd_y);
     }
 
-    fn set_laser_power(&mut self, _power: f64) {}
-}
+    fn nanos(&self) -> u64 {
+        (self.master.value64().0 as f64 * self.to_nanos) as u64
+    }
 
-fn nanos() -> u64 {
-    0
+    fn set_laser_power(&mut self, _power: f64) {}
 }
 
 fn calculate_move_length_nanos(xdist: f64, ydist: f64, move_velocity: f64, result: &mut f64) {
@@ -385,8 +396,14 @@ fn calculate_move_length_nanos(xdist: f64, ydist: f64, move_velocity: f64, resul
 /// ^left   ^res    ^right
 /// res = left + (right - left) * percent
 fn map(v: f64, min: f64, max: f64, left: u16, right: u16) -> u16 {
-    let percent = (max - min) / (v - min);
+    let percent = (v - min) / (max - min);
     let _left = left as i32;
-    let right = right as i32;
-    left + (((right - _left) as f64 * percent) as u16)
+    let _right = right as i32;
+
+    let mapped_len = ((_right - _left).abs() as f64 * percent) as u16;
+    if _left < _right {
+        left + mapped_len
+    } else {
+        right + mapped_len
+    }
 }

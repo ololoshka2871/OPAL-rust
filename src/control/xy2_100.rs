@@ -1,4 +1,4 @@
-use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use alloc::sync::Arc;
 use stm32l4xx_hal::{gpio::gpiod, interrupt};
@@ -21,7 +21,7 @@ static mut BACK_BUF: &mut [u16] = unsafe { &mut OUTPUT_BUF_B };
 
 static mut BACK_BUF_READY: AtomicBool = AtomicBool::new(false);
 
-pub struct xy2_100 {
+pub struct XY2_100 {
     timer7: stm32l4xx_hal::stm32l4::stm32l4x3::TIM7,
     _port: gpiod::Parts,
     dma: stm32l4xx_hal::dma::dma2::C5,
@@ -32,7 +32,7 @@ pub struct xy2_100 {
     pin_data_y_mask: u16,
 }
 
-impl xy2_100 {
+impl XY2_100 {
     pub fn new(
         timer7: stm32l4xx_hal::stm32l4::stm32l4x3::TIM7,
         port: gpiod::Parts,
@@ -176,7 +176,7 @@ impl xy2_100 {
         }
     }
 
-    pub fn set_pos(&self, x: u16, y: u16) {
+    pub fn set_pos(&mut self, x: u16, y: u16) {
         let data_x = Self::build_msg(x);
         let data_y = Self::build_msg(y);
 

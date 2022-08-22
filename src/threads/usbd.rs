@@ -56,7 +56,7 @@ pub fn usbd(
     let serial_container =
         Arc::new(Mutex::new(serial).expect("Failed to create serial guard mutex"));
 
-    let vid_pid = UsbVidPid(0x0483, 0x5720);
+    let vid_pid = UsbVidPid(0x0483, 0x573E);
     defmt::info!("Building usb device: vid={} pid={}", &vid_pid.0, &vid_pid.1);
     let mut usb_dev =
         UsbDeviceBuilder::new(unsafe { USB_BUS.as_ref().unwrap_unchecked() }, vid_pid)

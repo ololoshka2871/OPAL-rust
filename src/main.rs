@@ -13,13 +13,16 @@ extern crate alloc;
 
 mod control;
 mod gcode;
-mod settings;
 mod support;
 mod threads;
+mod time_base;
 mod workmodes;
 
 pub mod config;
 pub mod config_pins;
+
+#[cfg(debug_assertions)]
+mod master_value_stat;
 
 use cortex_m_rt::entry;
 
@@ -64,6 +67,10 @@ where
     mode.ini_static();
     mode.configure_clock();
     mode.print_clock_config();
+
+    #[cfg(debug_assertions)]
+    master_value_stat::init_master_getter(time_base::master_counter::MasterCounter::acquire());
+
     mode.start_threads()
 }
 

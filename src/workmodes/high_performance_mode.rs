@@ -79,7 +79,7 @@ pub struct HighPerformanceMode {
 
     led_pin: PC10<Output<PushPull>>,
 
-    galvo_ctrl: xy2_100::xy2_100,
+    galvo_ctrl: xy2_100::XY2_100,
 }
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
@@ -134,13 +134,11 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             // нижняя флешка
             // via: *  *  *  *  *  *
             // chk: A3 x  A2 B0 x  D11
-            galvo_ctrl: xy2_100::xy2_100::new(dp.TIM7, gpiod, dma_channels.5, 6, 3, 5, 7),
+            galvo_ctrl: xy2_100::XY2_100::new(dp.TIM7, gpiod, dma_channels.5, 6, 3, 5, 7),
         }
     }
 
-    fn ini_static(&mut self) {
-        crate::settings::init(self.flash(), self.crc());
-    }
+    fn ini_static(&mut self) {}
 
     // Работа от внешнего кварца HSE = 12 MHz
     // Установить частоту CPU = 80 MHz (12 / 3 * 40 / 2 == 80)
@@ -206,6 +204,12 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         configure_usb48();
 
+        // stm32l433cc.pdf: figure. 4
+        crate::time_base::master_counter::MasterCounter::init(
+            HighPerformanceClockConfigProvider::master_counter_frequency(),
+            self.interrupt_controller.clone(),
+        );
+
         self.clocks = Some(clocks);
     }
 
@@ -234,7 +238,9 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 .name("Motiond")
                 .stack_size(1024)
                 .priority(TaskPriority(crate::config::MOTIOND_TASK_PRIO))
-                .start(move |_| threads::motion::motion(gcode_queue_out, 0, galvo_ctrl))?;
+                .start(move |_| {
+                    threads::motion::motion(gcode_queue_out, 0, galvo_ctrl, tim_ref_clk)
+                })?;
         }
 
         // --------------------------------------------------------------------

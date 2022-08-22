@@ -14,6 +14,9 @@ pub const GALVO_CLOCK_RATE: u32 = 2_000_000 * 2; // clock needs 2 ticks
 // value + -> prio -
 pub const IRQ_HIGEST_PRIO: u8 = 80;
 
+/// master counter interrupt prio
+pub const MASTER_COUNTER_INTERRUPT_PRIO: u8 = IRQ_HIGEST_PRIO + 10;
+
 /// galvo interface tick prio
 pub const GALVO_INTERFACE_TICK_PRIO: u8 = IRQ_HIGEST_PRIO + 2;
 

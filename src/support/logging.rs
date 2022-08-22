@@ -9,6 +9,7 @@ fn panic() -> ! {
     cortex_m::asm::udf()
 }
 
+/*
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 static COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -18,12 +19,11 @@ defmt::timestamp!("{=usize}", {
     COUNT.store(n + 1, Ordering::Relaxed);
     n
 });
+*/
 
-/*
 use freertos_rust::FreeRtosUtils;
 
 defmt::timestamp!(
     "[{:?}T]",
     crate::workmodes::common::Ticks(FreeRtosUtils::get_tick_count())
 );
-*/
