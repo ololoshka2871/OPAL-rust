@@ -1,9 +1,13 @@
+use core::convert::Infallible;
 use core::fmt::Display;
 
 use alloc::{fmt::format, string::String};
+use embedded_hal::PwmPin;
+use stm32l4xx_hal::prelude::OutputPin;
 
 use crate::config;
 
+use crate::control::laser::Laser;
 use crate::control::xy2_100::XY2_100;
 use crate::time_base::master_counter::MasterTimerInfo;
 
@@ -15,7 +19,12 @@ pub enum MotionStatus {
     INTERPOLATING,
 }
 
-pub struct MotionMGR {
+pub struct MotionMGR<PWM, LASEREN, GALVOEN>
+where
+    PWM: PwmPin<Duty = u16>,
+    GALVOEN: OutputPin<Error = Infallible>,
+    LASEREN: OutputPin<Error = Infallible>,
+{
     _status: MotionStatus,
     is_move_first_interpolation: bool,
 
@@ -46,15 +55,25 @@ pub struct MotionMGR {
     current_laserenabled: bool,
     laser_changed: bool,
 
-    _laser: u32,
-    galvo: XY2_100,
+    laser: Laser<PWM, LASEREN>,
+    galvo: XY2_100<GALVOEN>,
 
     master: MasterTimerInfo,
     to_nanos: f64,
 }
 
-impl MotionMGR {
-    pub fn new(laser: u32, galvo: XY2_100, master: MasterTimerInfo, to_nanos: f64) -> Self {
+impl<PWM, LASEREN, GALVOEN> MotionMGR<PWM, LASEREN, GALVOEN>
+where
+    PWM: PwmPin<Duty = u16>,
+    GALVOEN: OutputPin<Error = Infallible>,
+    LASEREN: OutputPin<Error = Infallible>,
+{
+    pub fn new(
+        laser: Laser<PWM, LASEREN>,
+        galvo: XY2_100<GALVOEN>,
+        master: MasterTimerInfo,
+        to_nanos: f64,
+    ) -> Self {
         Self {
             _status: MotionStatus::IDLE,
             is_move_first_interpolation: false,
@@ -83,7 +102,7 @@ impl MotionMGR {
             current_laserenabled: false,
             laser_changed: false,
 
-            _laser: laser,
+            laser,
             galvo,
 
             master,
@@ -111,13 +130,14 @@ impl MotionMGR {
             }
         }
 
-        if self.current_laserenabled {
-            if self.laser_changed {
+        if self.laser_changed {
+            if self.current_laserenabled {
                 self.set_laser_power(self.current_s);
                 self.laser_changed = false;
+            } else {
+                self.set_laser_power(0f64);
             }
-        } else {
-            self.set_laser_power(0f64);
+            self.laser_changed = false;
         }
 
         self._status
@@ -266,15 +286,20 @@ impl MotionMGR {
                     self.laser_changed = true;
                 }
 
-                5 => self.current_laserenabled = false,
+                5 => {
+                    self.current_laserenabled = false;
+                    self.laser_changed = true;
+                }
 
-                9 => {} /* setNextFWDMSG ??? */
+                8 => { /* Coolant on */ }
+                9 => { /* Coolant off */ }
 
-                17 => { /* TODO enable GALVO */ }
-                18 => { /* TODO disable GALVO */ }
+                17 => self.galvo.enable(),
+                18 => self.galvo.disable(),
 
-                80 => { /* TODO enable LASER */ }
-                81 => { /* TODO disable LASER */ }
+                80 => self.laser.enable(),
+                81 => self.laser.disable(),
+
                 _ => {}
             }
             Ok(())
@@ -336,6 +361,8 @@ impl MotionMGR {
     }
 
     fn set_galvo_position(&mut self, x: f64, y: f64) {
+        use crate::support::map;
+
         let cmd_x = if config::AXIS_INVERSE_X {
             map(
                 x,
@@ -379,31 +406,13 @@ impl MotionMGR {
         (self.master.value64().0 as f64 * self.to_nanos) as u64
     }
 
-    fn set_laser_power(&mut self, _power: f64) {}
+    fn set_laser_power(&mut self, power: f64) {
+        self.laser.set_power(power);
+        defmt::debug!("Laser power: {}%", power);
+    }
 }
 
 fn calculate_move_length_nanos(xdist: f64, ydist: f64, move_velocity: f64, result: &mut f64) {
     let length_of_move = libm::sqrt(xdist * xdist + ydist * ydist);
     *result = length_of_move * 1000.0 * 1000.0 * 1000.0 / move_velocity;
-}
-
-/// Маппинг диопазонов
-/// *-------х-------*
-/// ^min    ^v      ^max
-/// percent = (v - min) / (max - min)
-///
-/// *-------x-------*
-/// ^left   ^res    ^right
-/// res = left + (right - left) * percent
-fn map(v: f64, min: f64, max: f64, left: u16, right: u16) -> u16 {
-    let percent = (v - min) / (max - min);
-    let _left = left as i32;
-    let _right = right as i32;
-
-    let mapped_len = ((_right - _left).abs() as f64 * percent) as u16;
-    if _left < _right {
-        left + mapped_len
-    } else {
-        right + mapped_len
-    }
 }

@@ -1,14 +1,23 @@
+use core::convert::Infallible;
+
 use alloc::sync::Arc;
+use embedded_hal::PwmPin;
 use freertos_rust::{Duration, Queue};
+use stm32l4xx_hal::prelude::OutputPin;
 
 use crate::gcode::{GCode, MotionMGR, MotionStatus};
 
-pub fn motion(
+pub fn motion<PWM, ENABLE, GALVOEN>(
     gcode_queue: Arc<Queue<GCode>>,
-    laser: u32,
-    galvo: crate::control::xy2_100::XY2_100,
+    laser: crate::control::laser::Laser<PWM, ENABLE>,
+    galvo: crate::control::xy2_100::XY2_100<GALVOEN>,
     master_freq: stm32l4xx_hal::time::Hertz,
-) -> ! {
+) -> !
+where
+    PWM: PwmPin<Duty = u16>,
+    ENABLE: OutputPin<Error = Infallible>,
+    GALVOEN: OutputPin<Error = Infallible>,
+{
     let master = crate::time_base::master_counter::MasterCounter::acquire();
 
     let mut motion = MotionMGR::new(

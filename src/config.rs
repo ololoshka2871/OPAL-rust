@@ -62,3 +62,11 @@ pub const MOTION_Z_RANGE: f64 = 1.0;
 // invert axis
 pub const AXIS_INVERSE_X: bool = false;
 pub const AXIS_INVERSE_Y: bool = false;
+
+//-----------------------------------------------------------------------------
+
+// galvo power enable active lvl
+pub const GALVO_EN_ACTIVE_LVL: bool = true;
+
+// laser power enable active lvl
+pub const LASER_EN_ACTIVE_LVL: bool = true;

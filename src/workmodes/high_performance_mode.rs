@@ -4,11 +4,11 @@ use freertos_rust::{Duration, Mutex, Task, TaskPriority};
 #[allow(unused_imports)]
 use stm32l4xx_hal::gpio::{
     Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA11, PA12, PA2, PA3, PA6, PA7, PA8, PB0,
-    PC10, PD10, PD11, PD13, PE12,
+    PB14, PC10, PD10, PD11, PD13, PE12,
 };
 use stm32l4xx_hal::{prelude::*, rcc::PllConfig, stm32, time::Hertz};
 
-use crate::control::xy2_100;
+use crate::control::{laser, xy2_100};
 use crate::support::{interrupt_controller::IInterruptController, InterruptController};
 use crate::threads;
 use crate::workmodes::common::ClockConfigProvider;
@@ -79,7 +79,11 @@ pub struct HighPerformanceMode {
 
     led_pin: PC10<Output<PushPull>>,
 
-    galvo_ctrl: xy2_100::XY2_100,
+    galvo_ctrl: xy2_100::XY2_100<PA2<Output<PushPull>>>,
+
+    laser_pwm_pin: PA2<Alternate<PushPull, 14>>, // CLK
+    laser_enable_pin: PA8<Output<PushPull>>,     //F_PRES
+    tim15: stm32::TIM15,
 }
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
@@ -134,7 +138,19 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             // нижняя флешка
             // via: *  *  *  *  *  *
             // chk: A3 x  A2 B0 x  D11
-            galvo_ctrl: xy2_100::XY2_100::new(dp.TIM7, gpiod, dma_channels.5, 6, 3, 5, 7),
+            galvo_ctrl: xy2_100::XY2_100::new(dp.TIM7, gpiod, dma_channels.5, 6, 3, 5, 7, None),
+
+            // pwm and enable pins
+            laser_pwm_pin: gpioa
+                .pa2
+                .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl)
+                .set_speed(Speed::Medium),
+            laser_enable_pin: gpioa
+                .pa8
+                .into_push_pull_output_in_state(&mut gpioa.moder, &mut gpioa.otyper, PinState::Low)
+                .set_speed(Speed::Low),
+
+            tim15: dp.TIM15,
         }
     }
 
@@ -213,7 +229,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         self.clocks = Some(clocks);
     }
 
-    fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
+    fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
         use crate::gcode::GCode;
 
         let sys_clk = unsafe { self.clocks.unwrap_unchecked().hclk() };
@@ -230,6 +246,15 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         galvo_ctrl.set_pos(0, 0);
 
+        let pwm_pin = self.tim15.pwm(
+            self.laser_pwm_pin,
+            1.kHz(),
+            *self.clocks.as_ref().unwrap(),
+            &mut self.rcc.apb2,
+        );
+
+        let laser = laser::Laser::new(pwm_pin, self.laser_enable_pin);
+
         // --------------------------------------------------------------------
 
         {
@@ -239,7 +264,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 .stack_size(1024)
                 .priority(TaskPriority(crate::config::MOTIOND_TASK_PRIO))
                 .start(move |_| {
-                    threads::motion::motion(gcode_queue_out, 0, galvo_ctrl, tim_ref_clk)
+                    threads::motion::motion(gcode_queue_out, laser, galvo_ctrl, tim_ref_clk)
                 })?;
         }
 

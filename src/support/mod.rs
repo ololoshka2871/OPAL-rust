@@ -8,6 +8,7 @@ pub mod logging;
 pub mod timer_period;
 
 mod freertos_hooks;
+mod map;
 mod new_freertos_timer;
 mod new_global_mutex;
 
@@ -22,3 +23,5 @@ pub mod debug_mcu;
 
 pub use new_freertos_timer::new_freertos_timer;
 pub use new_global_mutex::new_global_mutex;
+
+pub use map::map;

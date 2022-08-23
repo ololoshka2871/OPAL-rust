@@ -1,7 +1,10 @@
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::{
+    convert::Infallible,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use alloc::sync::Arc;
-use stm32l4xx_hal::{gpio::gpiod, interrupt};
+use stm32l4xx_hal::{gpio::gpiod, interrupt, prelude::OutputPin};
 
 use crate::support::interrupt_controller::IInterruptController;
 
@@ -21,7 +24,7 @@ static mut BACK_BUF: &mut [u16] = unsafe { &mut OUTPUT_BUF_B };
 
 static mut BACK_BUF_READY: AtomicBool = AtomicBool::new(false);
 
-pub struct XY2_100 {
+pub struct XY2_100<EN: OutputPin<Error = Infallible>> {
     timer7: stm32l4xx_hal::stm32l4::stm32l4x3::TIM7,
     _port: gpiod::Parts,
     dma: stm32l4xx_hal::dma::dma2::C5,
@@ -30,9 +33,11 @@ pub struct XY2_100 {
     sync_mask: u16,
     pin_data_x_mask: u16,
     pin_data_y_mask: u16,
+
+    enable_pin: Option<EN>,
 }
 
-impl XY2_100 {
+impl<EN: OutputPin<Error = Infallible>> XY2_100<EN> {
     pub fn new(
         timer7: stm32l4xx_hal::stm32l4::stm32l4x3::TIM7,
         port: gpiod::Parts,
@@ -41,6 +46,7 @@ impl XY2_100 {
         sync_pin_n: u16,
         pin_data_x_pin_n: u16,
         pin_data_y_pin_n: u16,
+        enable_pin: Option<EN>,
     ) -> Self {
         for n in [clk_pin_n, sync_pin_n, pin_data_x_pin_n, pin_data_y_pin_n] {
             unsafe {
@@ -74,6 +80,8 @@ impl XY2_100 {
             sync_mask: 1u16 << sync_pin_n,
             pin_data_x_mask: 1u16 << pin_data_x_pin_n,
             pin_data_y_mask: 1u16 << pin_data_y_pin_n,
+
+            enable_pin,
         }
     }
 
@@ -220,6 +228,18 @@ impl XY2_100 {
         let mut res = (0b001u32 << 17) | ((data as u32) << 1);
         res |= Self::parity(res);
         res
+    }
+
+    pub(crate) fn enable(&mut self) {
+        if let Some(en_pin) = self.enable_pin.as_mut() {
+            let _ = en_pin.set_state(crate::config::GALVO_EN_ACTIVE_LVL.into());
+        }
+    }
+
+    pub(crate) fn disable(&mut self) {
+        if let Some(en_pin) = self.enable_pin.as_mut() {
+            let _ = en_pin.set_state((!crate::config::GALVO_EN_ACTIVE_LVL).into());
+        }
     }
 }
 
