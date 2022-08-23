@@ -63,8 +63,8 @@ pub fn usbd(
             .manufacturer("SCTB ELPA")
             .product("OPAL-rust")
             .serial_number("0123456789")
-            //.device_class(0) // Это не нужно для композита
-            .composite_with_iads()
+            .device_class(0)
+            //.composite_with_iads()
             .build();
 
     defmt::trace!("Set usb interrupt prio = {}", interrupt_prio);

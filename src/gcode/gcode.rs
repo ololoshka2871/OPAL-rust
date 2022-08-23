@@ -137,10 +137,10 @@ impl GCode {
             'X', 'Y', 'Z', /*'E', 'A', 'B', 'C',*/ 'F',
             /*'I', 'J', 'P', 'R',*/ 'S', /*'T',*/
         ]) {
-            *field = Self::get_val(letter, text, 0f64).or_else(|e| {
+            *field = Self::get_val(letter, text, 0f64).or_else(|_| {
                 Err(ParceError::Error(format(format_args!(
-                    "Failed to parse {} value ({})",
-                    letter, e
+                    "Failed to parse {} value",
+                    letter
                 ))))
             })?;
         }

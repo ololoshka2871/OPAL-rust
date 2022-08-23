@@ -254,9 +254,9 @@ where
         nlimit: T,
     ) -> Result<(), String> {
         if src > plimit {
-            Err(format(format_args!("{} above limit {}", name, plimit)))
+            Err(format(format_args!("{} above limit", name)))
         } else if src < nlimit {
-            Err(format(format_args!("{} below limit {}", name, nlimit)))
+            Err(format(format_args!("{} below limit", name)))
         } else {
             *dest = src;
             Ok(())
