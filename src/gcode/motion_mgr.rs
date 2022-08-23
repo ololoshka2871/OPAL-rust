@@ -408,7 +408,7 @@ where
 
     fn set_laser_power(&mut self, power: f64) {
         self.laser.set_power(power);
-        defmt::debug!("Laser power: {}%", power);
+        //defmt::trace!("Laser power: {}%", power);
     }
 }
 

@@ -18,7 +18,6 @@ mod interrupt_controller_l433;
 #[cfg(feature = "stm32l433")]
 pub use interrupt_controller_l433::InterruptController;
 
-#[cfg(debug_assertions)]
 pub mod debug_mcu;
 
 pub use new_freertos_timer::new_freertos_timer;

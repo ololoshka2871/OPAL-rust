@@ -1,7 +1,6 @@
 use core::str::FromStr;
 
 use alloc::{fmt::format, string::String};
-use defmt::write;
 
 pub const MAX_LEN: usize = 150;
 
@@ -189,9 +188,10 @@ impl GCode {
     }
 }
 
+/*
 impl defmt::Format for GCode {
     fn format(&self, fmt: defmt::Formatter) {
-        write!(
+        defmt::write!(
             fmt,
             //"{}{}\n\rX{} Y{} Z{}\n\rA{} B{} C{}\n\rI{} J{}\n\rP{}\n\rS{} F{}\n\rR{} T{}",
             "{}{}\n\rX{} Y{} Z{}\n\rS{} F{}",
@@ -217,6 +217,7 @@ impl defmt::Format for GCode {
         )
     }
 }
+*/
 
 impl Default for GCode {
     fn default() -> Self {

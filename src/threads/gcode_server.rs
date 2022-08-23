@@ -20,20 +20,18 @@ impl<'a, B: usb_device::bus::UsbBus> Stream<FreeRtosError> for SerialStream<'a, 
     fn read(&mut self, buf: &mut [u8]) -> Result<(), FreeRtosError> {
         loop {
             match self.serial_container.lock(Duration::infinite()) {
-                Ok(mut serial) => {
-                    match serial.read(buf) {
-                        Ok(count) => {
-                            if count > 0 {
-                                //defmt::trace!("Serial: {} bytes ressived", count);
-                                return Ok(());
-                            } else {
-                                Self::block_thread()
-                            }
+                Ok(mut serial) => match serial.read(buf) {
+                    Ok(count) => {
+                        if count > 0 {
+                            defmt::trace!("Serial: {} bytes ressived", count);
+                            return Ok(());
+                        } else {
+                            Self::block_thread()
                         }
-                        Err(UsbError::WouldBlock) => Self::block_thread(),
-                        Err(_) => panic!(),
                     }
-                }
+                    Err(UsbError::WouldBlock) => Self::block_thread(),
+                    Err(_) => panic!(),
+                },
                 Err(e) => return Err(e),
             }
         }
@@ -123,7 +121,7 @@ pub fn gcode_server<B: usb_device::bus::UsbBus>(
                 }
                 Err(ParceError::Empty) => {
                     // нужно посылать "ok" даже на строки не содержащие кода
-                    defmt::info!("Empty command: {}", defmt::Display2Format(&s));
+                    defmt::trace!("Empty command: {}", defmt::Display2Format(&s));
                     write_responce(&serial_container, "ok\n\r");
                 }
                 Err(ParceError::Error(e)) => write_responce(
@@ -147,7 +145,7 @@ fn write_responce<B: usb_device::bus::UsbBus>(
         match serial_container.lock(Duration::infinite()) {
             Ok(mut serial) => match serial.write(text.as_bytes()) {
                 Ok(len) if len > 0 => {
-                    //defmt::trace!("Serial: {} bytes writen", len);
+                    defmt::trace!("Serial: {} bytes writen", len);
                     if len == text.len() {
                         return;
                     }
