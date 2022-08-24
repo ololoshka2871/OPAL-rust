@@ -36,18 +36,20 @@ where
 
     current_from_x: f64,
     current_from_y: f64,
-    current_from_z: f64,
+    //_current_from_z: f64,
     current_distance_x: f64,
     current_distance_y: f64,
-    _current_distance_z: f64,
+    //_current_distance_z: f64,
     current_to_x: f64,
     current_to_y: f64,
-    current_to_z: f64,
+    //_current_to_z: f64,
     current_cmd_x: f64,
     current_cmd_y: f64,
-    current_cmd_z: f64,
+    //_current_cmd_z: f64,
+    /*
     _current_i: f64,
     _current_j: f64,
+    */
     current_f: f64,
     current_s: f64,
     current_duration: f64,
@@ -76,29 +78,31 @@ where
     ) -> Self {
         Self {
             _status: MotionStatus::IDLE,
-            is_move_first_interpolation: false,
+            is_move_first_interpolation: true,
             current_startnanos: 0,
             current_endnanos: 0,
             _now: 0,
             current_code: 0,
             current_from_x: 0f64,
             current_from_y: 0f64,
-            current_from_z: 0f64,
+            //_current_from_z: 0f64,
             current_distance_x: 0f64,
             current_distance_y: 0f64,
-            _current_distance_z: 0f64,
+            //_current_distance_z: 0f64,
             current_to_x: 0f64,
             current_to_y: 0f64,
-            current_to_z: 0f64,
+            //_current_to_z: 0f64,
             current_cmd_x: 0f64,
             current_cmd_y: 0f64,
-            current_cmd_z: 0f64,
+            //_current_cmd_z: 0f64,
+            /*
             _current_i: 0f64,
             _current_j: 0f64,
-            current_f: 0f64,
+            */
+            current_f: 100f64,
             current_s: 0f64,
             current_duration: 0f64,
-            current_absolute: false,
+            current_absolute: true,
             current_laserenabled: false,
             laser_changed: false,
 
@@ -153,15 +157,20 @@ where
                 }
                 1 => {
                     self.current_code = 1;
-                    Self::set_value(
-                        &mut self.current_f,
-                        gcode.get_f(),
-                        'F',
-                        i32::MAX as f64,
-                        0f64,
-                    )?;
                     {
                         let mut new_s = 0f64;
+                        let mut new_f = 0f64;
+
+                        if let Ok(()) = Self::set_value(
+                            &mut new_f,
+                            gcode.get_f(),
+                            'F',
+                            i32::MAX as f64,
+                            0.01f64,
+                        ) {
+                            self.current_f = new_f;
+                        }
+
                         if let Ok(()) = Self::set_value(
                             &mut new_s,
                             gcode.get_s(),
@@ -180,7 +189,7 @@ where
                     self.current_code = 28;
                     self.current_to_x = 0f64;
                     self.current_to_y = 0f64;
-                    self.current_to_z = 0f64;
+                    //self.current_to_z = 0f64;
                 }
                 _ => return Ok(()),
             }
@@ -209,6 +218,7 @@ where
                 -config::MOTION_Y_RANGE / 2.0,
             )?;
 
+            /*
             Self::set_value(
                 &mut self.current_to_z,
                 gcode.get_z(),
@@ -216,6 +226,7 @@ where
                 config::MOTION_Z_RANGE / 2.0,
                 -config::MOTION_Z_RANGE / 2.0,
             )?;
+            */
         } else {
             Self::set_value_g91(
                 &mut self.current_to_x,
@@ -234,6 +245,7 @@ where
                 -config::MOTION_Y_RANGE / 2.0,
             )?;
 
+            /*
             Self::set_value_g91(
                 &mut self.current_to_z,
                 self.current_from_z,
@@ -242,6 +254,7 @@ where
                 config::MOTION_Z_RANGE / 2.0,
                 -config::MOTION_Z_RANGE / 2.0,
             )?;
+            */
         }
         Ok(())
     }
@@ -291,9 +304,8 @@ where
                     self.laser_changed = true;
                 }
 
-                8 => { /* Coolant on */ }
-                9 => { /* Coolant off */ }
-
+                /* 8 => { Coolant on  } */
+                /* 9 => { Coolant off } */
                 17 => self.galvo.enable(),
                 18 => self.galvo.disable(),
 
@@ -315,10 +327,10 @@ where
                 // don't interpolate
                 self.current_from_x = self.current_to_x;
                 self.current_from_y = self.current_to_y;
-                self.current_from_z = self.current_to_z;
+                //self.current_from_z = self.current_to_z;
                 self.current_cmd_x = self.current_to_x;
                 self.current_cmd_y = self.current_to_y;
-                self.current_cmd_z = self.current_to_z;
+                //self.current_cmd_z = self.current_to_z;
                 self._status = MotionStatus::IDLE;
                 self.is_move_first_interpolation = true;
                 return true;
@@ -344,10 +356,10 @@ where
             //done interpolating
             self.current_from_x = self.current_to_x;
             self.current_from_y = self.current_to_y;
-            self.current_from_z = self.current_to_z;
+            //self.current_from_z = self.current_to_z;
             self.current_cmd_x = self.current_to_x;
             self.current_cmd_y = self.current_to_y;
-            self.current_cmd_z = self.current_to_z;
+            //self.current_cmd_z = self.current_to_z;
             self._status = MotionStatus::IDLE;
             self.is_move_first_interpolation = true;
             return self._now == self.current_endnanos;

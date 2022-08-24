@@ -172,10 +172,12 @@ impl GCode {
         self.y
     }
 
+    /*
     #[inline]
     pub fn get_z(&self) -> f64 {
         self.z
     }
+    */
 
     #[inline]
     pub fn get_s(&self) -> f64 {
