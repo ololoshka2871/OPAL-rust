@@ -36,20 +36,12 @@ where
 
     current_from_x: f64,
     current_from_y: f64,
-    //_current_from_z: f64,
     current_distance_x: f64,
     current_distance_y: f64,
-    //_current_distance_z: f64,
     current_to_x: f64,
     current_to_y: f64,
-    //_current_to_z: f64,
     current_cmd_x: f64,
     current_cmd_y: f64,
-    //_current_cmd_z: f64,
-    /*
-    _current_i: f64,
-    _current_j: f64,
-    */
     current_f: f64,
     current_s: f64,
     current_duration: f64,
@@ -85,20 +77,12 @@ where
             current_code: 0,
             current_from_x: 0f64,
             current_from_y: 0f64,
-            //_current_from_z: 0f64,
             current_distance_x: 0f64,
             current_distance_y: 0f64,
-            //_current_distance_z: 0f64,
             current_to_x: 0f64,
             current_to_y: 0f64,
-            //_current_to_z: 0f64,
             current_cmd_x: 0f64,
             current_cmd_y: 0f64,
-            //_current_cmd_z: 0f64,
-            /*
-            _current_i: 0f64,
-            _current_j: 0f64,
-            */
             current_f: 100f64,
             current_s: 0f64,
             current_duration: 0f64,
@@ -118,9 +102,14 @@ where
         self.set_galvo_position(0.0, 0.0);
     }
 
-    pub fn process(&mut self, gcode: GCode) -> Result<(), String> {
+    pub fn process(&mut self, gcode: &GCode) -> Result<(), String> {
         if self._status == MotionStatus::IDLE {
-            self.process_gcodes(gcode)
+            use super::gcode::Code;
+            match gcode.code() {
+                Code::G(code) => self.process_gcodes(code, gcode),
+                Code::M(code) => self.process_mcodes(code, gcode),
+                Code::Empty => self.process_other(gcode),
+            }
         } else {
             Err("Motion busy!".into())
         }
@@ -147,114 +136,86 @@ where
         self._status
     }
 
-    fn process_gcodes(&mut self, gcode: GCode) -> Result<(), String> {
-        if gcode.is_g_code() && [0, 1, 2, 3, 28, 90, 91].contains(&gcode.code()) {
-            // Valid G-codes
-            match gcode.code() {
-                0 => {
-                    self.current_code = 0;
-                    self.set_xy(&gcode)?;
-                }
-                1 => {
-                    self.current_code = 1;
-                    {
-                        let mut new_s = 0f64;
-                        let mut new_f = 0f64;
-
-                        if let Ok(()) = Self::set_value(
-                            &mut new_f,
-                            gcode.get_f(),
-                            'F',
-                            i32::MAX as f64,
-                            0.01f64,
-                        ) {
-                            self.current_f = new_f;
-                        }
-
-                        if let Ok(()) = Self::set_value(
-                            &mut new_s,
-                            gcode.get_s(),
-                            'S',
-                            config::MOTION_MAX_S,
-                            -0f64,
-                        ) {
-                            self.laser_changed = new_s != self.current_s;
-                            self.current_s = new_s;
-                        }
-                    }
-
-                    self.set_xy(&gcode)?;
-                }
-                28 => {
-                    self.current_code = 28;
-                    self.current_to_x = 0f64;
-                    self.current_to_y = 0f64;
-                    //self.current_to_z = 0f64;
-                }
-                _ => return Ok(()),
+    fn process_gcodes(&mut self, code: u32, gcode: &GCode) -> Result<(), String> {
+        match code {
+            0 => {
+                self.current_code = 0;
+                self.set_xy(&gcode)?;
             }
-            self._status = MotionStatus::INTERPOLATING;
-        } else {
-            // possibly M-Code or prev code continue
-            self.process_mcode(gcode)?
+            1 => {
+                self.current_code = 1;
+
+                if let Some(new_s) = gcode.get_s() {
+                    Self::set_value(
+                        &mut self.current_s,
+                        new_s,
+                        'S',
+                        config::MOTION_MAX_S,
+                        -01f64,
+                    )?;
+                }
+                if let Some(new_f) = gcode.get_f() {
+                    Self::set_value(&mut self.current_f, new_f, 'F', i32::MAX as f64, 0.01f64)?;
+                }
+
+                self.set_xy(&gcode)?;
+            }
+            28 => {
+                self.current_code = 28;
+                self.current_to_x = 0f64;
+                self.current_to_y = 0f64;
+            }
+            _ => return Ok(()),
         }
+
+        self._status = MotionStatus::INTERPOLATING;
+
         Ok(())
     }
 
     fn set_xy(&mut self, gcode: &GCode) -> Result<(), String> {
         if self.current_absolute {
-            Self::set_value(
-                &mut self.current_to_x,
-                gcode.get_x(),
-                'X',
-                config::MOTION_X_RANGE / 2.0,
-                -config::MOTION_X_RANGE / 2.0,
-            )?;
-            Self::set_value(
-                &mut self.current_to_y,
-                gcode.get_y(),
-                'Y',
-                config::MOTION_Y_RANGE / 2.0,
-                -config::MOTION_Y_RANGE / 2.0,
-            )?;
+            if let Some(to_x) = gcode.get_x() {
+                Self::set_value(
+                    &mut self.current_to_x,
+                    to_x,
+                    'X',
+                    config::MOTION_X_RANGE / 2.0,
+                    -config::MOTION_X_RANGE / 2.0,
+                )?;
+            }
 
-            /*
-            Self::set_value(
-                &mut self.current_to_z,
-                gcode.get_z(),
-                'Z',
-                config::MOTION_Z_RANGE / 2.0,
-                -config::MOTION_Z_RANGE / 2.0,
-            )?;
-            */
+            if let Some(to_y) = gcode.get_y() {
+                Self::set_value(
+                    &mut self.current_to_y,
+                    to_y,
+                    'Y',
+                    config::MOTION_Y_RANGE / 2.0,
+                    -config::MOTION_Y_RANGE / 2.0,
+                )?;
+            }
         } else {
-            Self::set_value_g91(
-                &mut self.current_to_x,
-                self.current_from_x,
-                gcode.get_x(),
-                'X',
-                config::MOTION_X_RANGE / 2.0,
-                -config::MOTION_X_RANGE / 2.0,
-            )?;
-            Self::set_value_g91(
-                &mut self.current_to_y,
-                self.current_from_y,
-                gcode.get_y(),
-                'Y',
-                config::MOTION_Y_RANGE / 2.0,
-                -config::MOTION_Y_RANGE / 2.0,
-            )?;
+            if let Some(to_x) = gcode.get_x() {
+                Self::set_value_g91(
+                    &mut self.current_to_x,
+                    self.current_from_x,
+                    to_x,
+                    'X',
+                    config::MOTION_X_RANGE / 2.0,
+                    -config::MOTION_X_RANGE / 2.0,
+                )?;
+            }
 
-            /*
-            Self::set_value_g91(
-                &mut self.current_to_z,
-                self.current_from_z,
-                gcode.get_z(),
-                'Z',
-                config::MOTION_Z_RANGE / 2.0,
-                -config::MOTION_Z_RANGE / 2.0,
-            )?;
-            */
+            if let Some(to_y) = gcode.get_y() {
+                Self::set_value_g91(
+                    &mut self.current_to_y,
+                    self.current_from_y,
+                    to_y,
+                    'Y',
+                    config::MOTION_Y_RANGE / 2.0,
+                    -config::MOTION_Y_RANGE / 2.0,
+                )?;
+            }
         }
         Ok(())
     }
@@ -288,36 +249,38 @@ where
         Self::set_value(dest, to, name, plimit, nlimit)
     }
 
-    fn process_mcode(&mut self, gcode: GCode) -> Result<(), String> {
-        if gcode.is_m_code() {
-            match gcode.code() {
-                3 | 4 => {
-                    let new_s = gcode.get_s();
-
+    fn process_mcodes(&mut self, code: u32, gcode: &GCode) -> Result<(), String> {
+        match code {
+            3 | 4 => {
+                if let Some(new_s) = gcode.get_s() {
                     Self::set_value(&mut self.current_s, new_s, 'S', config::MOTION_MAX_S, -0f64)?;
-                    self.current_laserenabled = true;
-                    self.laser_changed = true;
                 }
-
-                5 => {
-                    self.current_laserenabled = false;
-                    self.laser_changed = true;
-                }
-
-                /* 8 => { Coolant on  } */
-                /* 9 => { Coolant off } */
-                17 => self.galvo.enable(),
-                18 => self.galvo.disable(),
-
-                80 => self.laser.enable(),
-                81 => self.laser.disable(),
-
-                _ => {}
+                self.current_laserenabled = true;
+                self.laser_changed = true;
             }
-            Ok(())
-        } else {
-            /* TODO */
-            Ok(())
+
+            5 => {
+                self.current_laserenabled = false;
+                self.laser_changed = true;
+            }
+
+            /* 8 => { Coolant on  } */
+            /* 9 => { Coolant off } */
+            17 => self.galvo.enable(),
+            18 => self.galvo.disable(),
+
+            80 => self.laser.enable(),
+            81 => self.laser.disable(),
+
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn process_other(&mut self, gcode: &GCode) -> Result<(), String> {
+        match self.current_code {
+            0 | 1 => self.process_gcodes(self.current_code, gcode),
+            c => Err(format(format_args!("Cannot continue move for G{}", c))),
         }
     }
 
@@ -327,10 +290,8 @@ where
                 // don't interpolate
                 self.current_from_x = self.current_to_x;
                 self.current_from_y = self.current_to_y;
-                //self.current_from_z = self.current_to_z;
                 self.current_cmd_x = self.current_to_x;
                 self.current_cmd_y = self.current_to_y;
-                //self.current_cmd_z = self.current_to_z;
                 self._status = MotionStatus::IDLE;
                 self.is_move_first_interpolation = true;
                 return true;
@@ -339,12 +300,13 @@ where
                 // G1
                 self.current_distance_x = self.current_to_x - self.current_from_x;
                 self.current_distance_y = self.current_to_y - self.current_from_y;
-                calculate_move_length_nanos(
+
+                self.current_duration = calculate_move_length_nanos(
                     self.current_distance_x,
                     self.current_distance_y,
                     self.current_f,
-                    &mut self.current_duration,
                 );
+
                 self.current_startnanos = self._now;
                 self.current_endnanos = self._now + libm::round(self.current_duration) as u64;
                 self.is_move_first_interpolation = false;
@@ -356,10 +318,8 @@ where
             //done interpolating
             self.current_from_x = self.current_to_x;
             self.current_from_y = self.current_to_y;
-            //self.current_from_z = self.current_to_z;
             self.current_cmd_x = self.current_to_x;
             self.current_cmd_y = self.current_to_y;
-            //self.current_cmd_z = self.current_to_z;
             self._status = MotionStatus::IDLE;
             self.is_move_first_interpolation = true;
             return self._now == self.current_endnanos;
@@ -424,7 +384,7 @@ where
     }
 }
 
-fn calculate_move_length_nanos(xdist: f64, ydist: f64, move_velocity: f64, result: &mut f64) {
+fn calculate_move_length_nanos(xdist: f64, ydist: f64, move_velocity: f64) -> f64 {
     let length_of_move = libm::sqrt(xdist * xdist + ydist * ydist);
-    *result = length_of_move * 1000.0 * 1000.0 * 1000.0 / move_velocity;
+    length_of_move * 1000.0 * 1000.0 * 1000.0 / move_velocity
 }

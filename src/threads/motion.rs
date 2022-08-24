@@ -30,7 +30,7 @@ where
     loop {
         if motion.tic() == MotionStatus::IDLE {
             if let Ok(gcode) = gcode_queue.receive(Duration::zero()) {
-                if let Err(e) = motion.process(gcode) {
+                if let Err(e) = motion.process(&gcode) {
                     defmt::error!("Failed to process command {}", defmt::Display2Format(&e));
                 } else {
                     defmt::trace!("New commad: {}", gcode);
