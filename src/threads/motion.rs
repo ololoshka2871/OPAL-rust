@@ -2,22 +2,27 @@ use core::convert::Infallible;
 
 use alloc::sync::Arc;
 use embedded_hal::PwmPin;
-use freertos_rust::{Duration, Queue};
+use freertos_rust::{Duration, Mutex, Queue};
 use stm32l4xx_hal::prelude::OutputPin;
+use usbd_serial::SerialPort;
 
 use crate::gcode::{GCode, MotionMGR, MotionStatus};
 
-pub fn motion<PWM, ENABLE, GALVOEN>(
-    gcode_queue: Arc<Queue<GCode>>,
+pub fn motion<B, PWM, ENABLE, GALVOEN>(
+    serial: Arc<Mutex<&'static mut SerialPort<B>>>,
+    gcode_rx_queue: Arc<Queue<GCode>>,
     laser: crate::control::laser::Laser<PWM, ENABLE>,
     galvo: crate::control::xy2_100::XY2_100<GALVOEN>,
     master_freq: stm32l4xx_hal::time::Hertz,
 ) -> !
 where
+    B: usb_device::bus::UsbBus,
     PWM: PwmPin<Duty = u16>,
     ENABLE: OutputPin<Error = Infallible>,
     GALVOEN: OutputPin<Error = Infallible>,
 {
+    use crate::threads::gcode_server::write_responce;
+
     let master = crate::time_base::master_counter::MasterCounter::acquire();
 
     let mut motion = MotionMGR::new(
@@ -29,11 +34,18 @@ where
     motion.begin();
     loop {
         if motion.tic() == MotionStatus::IDLE {
-            if let Ok(gcode) = gcode_queue.receive(Duration::zero()) {
-                if let Err(e) = motion.process(&gcode) {
-                    defmt::error!("Failed to process command {}", defmt::Display2Format(&e));
-                } else {
-                    defmt::trace!("New commad: {}", gcode);
+            if let Ok(gcode) = gcode_rx_queue.receive(Duration::zero()) {
+                match motion.process(&gcode) {
+                    Ok(Some(msg)) => {
+                        write_responce(&serial, msg.as_str());
+                    }
+                    Ok(None) => {
+                        write_responce(&serial, "ok\r\n");
+                    }
+                    Err(e) => {
+                        write_responce(&serial, "error\r\n");
+                        defmt::error!("Failed to process command {}", defmt::Display2Format(&e));
+                    }
                 }
             }
         }

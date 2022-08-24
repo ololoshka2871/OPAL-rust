@@ -9,6 +9,7 @@ pub enum Code {
     G(u32),
     M(u32),
     Empty,
+    ExtCommands(char),
 }
 
 #[derive(Clone, Copy)]
@@ -36,9 +37,18 @@ impl GCode {
         } else {
             let mut new_code = Self::default();
 
-            if Self::has_command('M', text) {
+            if Self::has_command('$', text) {
+                new_code.code = Code::ExtCommands(
+                    match { text.chars().skip_while(|c| *c != '$').skip(1).next() } {
+                        Some(c) => c,
+                        None => Err(ParceError::Error("Failed to parse $ command".into()))?,
+                    },
+                );
+            } else if Self::has_command('?', text) {
+                new_code.code = Code::ExtCommands('?');
+            } else if Self::has_command('M', text) {
                 new_code.code = Code::M(
-                    Self::search_string('M', text)
+                    Self::search_value('M', text)
                         .or_else(|_| Err(ParceError::Error("Failed to parse M command".into())))?,
                 );
 
@@ -46,7 +56,7 @@ impl GCode {
                     .or_else(|_| Err(ParceError::Error("Invalid S value".into())))?;
             } else if Self::has_command('G', text) {
                 new_code.code = Code::G(
-                    Self::search_string('G', text)
+                    Self::search_value('G', text)
                         .or_else(|_| Err(ParceError::Error("Failed to parse M command".into())))?,
                 );
 
@@ -63,7 +73,7 @@ impl GCode {
         text.contains(key)
     }
 
-    fn search_string<T: FromStr>(key: char, text: &str) -> Result<T, T::Err> {
+    fn search_value<T: FromStr>(key: char, text: &str) -> Result<T, T::Err> {
         text.chars()
             .skip_while(|c| *c != key)
             .skip(1)
@@ -74,7 +84,7 @@ impl GCode {
 
     fn get_val<T: FromStr>(key: char, text: &str) -> Result<Option<T>, T::Err> {
         if Self::has_command(key, text) {
-            Ok(Some(Self::search_string(key, text)?))
+            Ok(Some(Self::search_value(key, text)?))
         } else {
             Ok(None)
         }

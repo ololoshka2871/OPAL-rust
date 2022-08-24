@@ -36,9 +36,6 @@ stm32l4xx-hal = { git = "https://github.com/stm32-rs/stm32l4xx-hal.git", feature
 
 freertos-rust = { git = "https://github.com/lobaro/FreeRTOS-rust.git" }
 
-flash-settings-rs = { path = "lib/flash-settings.rs" }
-my-proc-macro = { path = "lib/my-proc-macro" }
-
 [build-dependencies]
 cc = "1.0.52"
 freertos-cargo-build = "0.1.1"

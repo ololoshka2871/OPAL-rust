@@ -12,8 +12,9 @@ use crate::gcode::{self, GCode, ParceError};
 use super::stream::Stream;
 
 struct SerialStream<'a, B: usb_device::bus::UsbBus> {
-    serial_container: Arc<Mutex<SerialPort<'a, B>>>,
+    serial_container: Arc<Mutex<&'a mut SerialPort<'a, B>>>,
     max_size: Option<usize>,
+    endlines: Vec<char>,
 }
 
 impl<'a, B: usb_device::bus::UsbBus> Stream<FreeRtosError> for SerialStream<'a, B> {
@@ -52,21 +53,22 @@ impl<'a, B: usb_device::bus::UsbBus> Stream<FreeRtosError> for SerialStream<'a, 
     fn read_line(&mut self, max_len: Option<usize>) -> Result<String, FreeRtosError> {
         let mut resut = String::new();
         loop {
-            match self.serial_container.lock(Duration::infinite()) {
+            CurrentTask::delay(Duration::ms(1));
+            match self.serial_container.lock(Duration::zero()) {
                 Ok(mut serial) => {
                     let mut buf = [0u8; 1];
                     match serial.read(&mut buf) {
                         Ok(count) => {
                             if count > 0 {
                                 let ch = buf[0] as char;
-                                if ch == '\n' || ch == '\r' {
+                                resut.push(ch);
+                                if self.endlines.contains(&ch) {
                                     if resut.is_empty() {
                                         continue; // empty string
                                     } else {
                                         return Ok(resut);
                                     }
                                 } else {
-                                    resut.push(ch);
                                     if let Some(ml) = max_len {
                                         if resut.len() >= ml {
                                             return Err(FreeRtosError::OutOfMemory);
@@ -81,6 +83,7 @@ impl<'a, B: usb_device::bus::UsbBus> Stream<FreeRtosError> for SerialStream<'a, 
                         Err(_) => panic!(),
                     }
                 }
+                Err(FreeRtosError::MutexTimeout) => { /* ok */ }
                 Err(e) => return Err(e),
             }
         }
@@ -88,10 +91,15 @@ impl<'a, B: usb_device::bus::UsbBus> Stream<FreeRtosError> for SerialStream<'a, 
 }
 
 impl<'a, B: usb_device::bus::UsbBus> SerialStream<'a, B> {
-    fn new(serial_container: Arc<Mutex<SerialPort<'a, B>>>, max_size: Option<usize>) -> Self {
+    fn new(
+        serial_container: Arc<Mutex<&'a mut SerialPort<'a, B>>>,
+        max_size: Option<usize>,
+        endlines: Vec<char>,
+    ) -> Self {
         Self {
             serial_container,
             max_size,
+            endlines,
         }
     }
 
@@ -105,19 +113,18 @@ impl<'a, B: usb_device::bus::UsbBus> SerialStream<'a, B> {
 }
 
 pub fn gcode_server<B: usb_device::bus::UsbBus>(
-    serial_container: Arc<Mutex<SerialPort<B>>>,
-    gcode_queue: Arc<Queue<GCode>>,
+    serial_container: Arc<Mutex<&'static mut SerialPort<B>>>,
+    gcode_tx_queue: Arc<Queue<GCode>>,
 ) -> ! {
-    let mut serial_stream = SerialStream::new(serial_container.clone(), None);
-
-    print_welcome(&serial_container);
+    let mut serial_stream =
+        SerialStream::new(serial_container.clone(), None, vec!['\n', '\r', '?']);
 
     loop {
         match serial_stream.read_line(Some(gcode::MAX_LEN)) {
             Ok(s) => match GCode::from_string(s.as_str()) {
                 Ok(gcode) => {
-                    let _ = gcode_queue.send(gcode, Duration::infinite());
-                    write_responce(&serial_container, "ok\n\r");
+                    let _ = gcode_tx_queue.send(gcode, Duration::infinite());
+                    //write_responce(&serial_container, "ok\n\r");
                 }
                 Err(ParceError::Empty) => {
                     // нужно посылать "ok" даже на строки не содержащие кода
@@ -137,12 +144,12 @@ pub fn gcode_server<B: usb_device::bus::UsbBus>(
     }
 }
 
-fn write_responce<B: usb_device::bus::UsbBus>(
-    serial_container: &Arc<Mutex<SerialPort<B>>>,
+pub fn write_responce<B: usb_device::bus::UsbBus>(
+    serial_container: &Arc<Mutex<&'static mut SerialPort<B>>>,
     mut text: &str,
 ) {
     loop {
-        match serial_container.lock(Duration::infinite()) {
+        match serial_container.lock(Duration::zero()) {
             Ok(mut serial) => match serial.write(text.as_bytes()) {
                 Ok(len) if len > 0 => {
                     defmt::trace!("Serial: {} bytes writen", len);
@@ -153,21 +160,9 @@ fn write_responce<B: usb_device::bus::UsbBus>(
                 }
                 _ => {}
             },
+            Err(FreeRtosError::MutexTimeout) => CurrentTask::delay(Duration::ms(1)),
             Err(e) => panic!("{:?}", e),
         }
         CurrentTask::delay(Duration::ms(1));
     }
-}
-
-fn print_welcome<B: usb_device::bus::UsbBus>(serial_container: &Arc<Mutex<SerialPort<B>>>) {
-    write_responce(
-        serial_container,
-        r#"\n
-********************************************
-* Teensy running OpenGalvo OPAL Firmware   *
-*  -This is BETA Software                  *
-*  -Do not leave any hardware unattended!  *
-* CopyLeft: SCTB_Elpa                      *
-********************************************"#,
-    );
 }

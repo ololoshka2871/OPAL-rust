@@ -102,14 +102,16 @@ where
         self.set_galvo_position(0.0, 0.0);
     }
 
-    pub fn process(&mut self, gcode: &GCode) -> Result<(), String> {
+    pub fn process(&mut self, gcode: &GCode) -> Result<Option<String>, String> {
         if self._status == MotionStatus::IDLE {
             use super::gcode::Code;
             match gcode.code() {
                 Code::G(code) => self.process_gcodes(code, gcode),
                 Code::M(code) => self.process_mcodes(code, gcode),
                 Code::Empty => self.process_other(gcode),
-            }
+                Code::ExtCommands(cmd) => return self.process_dollag_cmd(cmd),
+            }?;
+            Ok(None)
         } else {
             Err("Motion busy!".into())
         }
@@ -281,6 +283,30 @@ where
         match self.current_code {
             0 | 1 => self.process_gcodes(self.current_code, gcode),
             c => Err(format(format_args!("Cannot continue move for G{}", c))),
+        }
+    }
+
+    fn process_dollag_cmd(&self, cmd: char) -> Result<Option<String>, String> {
+        match cmd {
+            '?' => {
+                // re.compile(r"^<(\w*?),
+                // MPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?,
+                // WPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,.*)?>$")
+                Ok(Some(format(format_args!(
+                    "<Idle,MPos:{x:.5},{y:.5},0.0,WPos:{x:.5},{y:.5},0.0>",
+                    x = self.current_cmd_x,
+                    y = self.current_cmd_y,
+                ))))
+            }
+            'G' => Ok(Some(format(format_args!(
+                // https://github.com/gnea/grbl/blob/master/doc/markdown/commands.md#g---view-gcode-parser-state
+                "[GC:G{} G54 G17 G9{} G91.1 G94 G21 G40 G49 M0 M5 M9 T0 S{} F{}]\n\r",
+                self.current_code,
+                (!self.current_absolute as u32),
+                self.current_s,
+                self.current_f,
+            )))),
+            _ => Err(format(format_args!("Unsupported command ${}", cmd))),
         }
     }
 

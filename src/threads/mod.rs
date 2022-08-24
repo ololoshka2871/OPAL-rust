@@ -1,7 +1,6 @@
-//mod protobuf_server;
-
-mod gcode_server;
 mod stream;
+
+pub mod gcode_server;
 
 pub mod motion;
 

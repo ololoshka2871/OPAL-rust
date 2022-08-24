@@ -231,11 +231,22 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
     fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
         use crate::gcode::GCode;
+        use crate::threads::usbd::Usbd;
 
         let sys_clk = unsafe { self.clocks.unwrap_unchecked().hclk() };
         let tim_ref_clk = unsafe { self.clocks.unwrap_unchecked().pclk1() };
 
         crate::support::led::led_init(self.led_pin);
+
+        // --------------------------------------------------------------------
+        defmt::trace!("Creating usb thread...");
+        let usbperith = threads::usbd::UsbdPeriph {
+            usb: self.usb,
+            pin_dp: self.usb_dp,
+            pin_dm: self.usb_dm,
+        };
+        let ic = self.interrupt_controller.clone();
+        Usbd::init(usbperith, ic, crate::config::USB_INTERRUPT_PRIO);
 
         // --------------------------------------------------------------------
 
@@ -258,18 +269,44 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         // --------------------------------------------------------------------
 
         {
+            let serial = Usbd::serial_port();
             let gcode_queue_out = gcode_queue.clone();
+
             Task::new()
                 .name("Motiond")
                 .stack_size(1024)
                 .priority(TaskPriority(crate::config::MOTIOND_TASK_PRIO))
                 .start(move |_| {
-                    threads::motion::motion(gcode_queue_out, laser, galvo_ctrl, tim_ref_clk)
+                    threads::motion::motion(serial, gcode_queue_out, laser, galvo_ctrl, tim_ref_clk)
                 })?;
         }
 
         // --------------------------------------------------------------------
 
+        {
+            let serial = Usbd::serial_port();
+            let gcode_srv = {
+                defmt::trace!("Creating G-Code server thread...");
+                Task::new()
+                    .name("G-CODE")
+                    .stack_size(2048)
+                    .priority(TaskPriority(crate::config::GCODE_TASK_PRIO))
+                    .start(move |_| threads::gcode_server::gcode_server(serial, gcode_queue))
+                    .expect("Failed to create G-CODE server")
+            };
+            Usbd::subsbrbe(gcode_srv);
+        }
+
+        // --------------------------------------------------------------------
+
+        Usbd::strat(
+            usb_device::prelude::UsbVidPid(0x0483, 0x573E),
+            1024,
+            TaskPriority(crate::config::USBD_TASK_PRIO),
+        )
+        .unwrap();
+
+        /*
         {
             defmt::trace!("Creating usb thread...");
             let usbperith = threads::usbd::UsbdPeriph {
@@ -291,6 +328,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                     )
                 })?;
         }
+        */
 
         // --------------------------------------------------------------------
 
