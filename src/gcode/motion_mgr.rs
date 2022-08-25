@@ -56,7 +56,7 @@ where
     to_nanos: f64,
 }
 
-impl<PWM, LASEREN, GALVOEN> MotionMGR<PWM, LASEREN, GALVOEN>
+impl<'a, PWM, LASEREN, GALVOEN> MotionMGR<PWM, LASEREN, GALVOEN>
 where
     PWM: PwmPin<Duty = u16>,
     GALVOEN: OutputPin<Error = Infallible>,
@@ -109,7 +109,6 @@ where
                 Code::G(code) => self.process_gcodes(code, gcode),
                 Code::M(code) => self.process_mcodes(code, gcode),
                 Code::Empty => self.process_other(gcode),
-                Code::ExtCommands(cmd) => return self.process_dollag_cmd(cmd),
             }?;
             Ok(None)
         } else {
@@ -148,13 +147,19 @@ where
                 self.current_code = 1;
 
                 if let Some(new_s) = gcode.get_s() {
-                    Self::set_value(
+                    if let Err(_) = Self::set_value(
                         &mut self.current_s,
                         new_s,
                         'S',
                         config::MOTION_MAX_S,
                         -01f64,
-                    )?;
+                    ) {
+                        if new_s > config::MOTION_MAX_S {
+                            self.current_s = config::MOTION_MAX_S;
+                        } else {
+                            self.current_s = 0.0;
+                        }
+                    }
                 }
                 if let Some(new_f) = gcode.get_f() {
                     Self::set_value(&mut self.current_f, new_f, 'F', i32::MAX as f64, 0.01f64)?;
@@ -255,8 +260,21 @@ where
         match code {
             3 | 4 => {
                 if let Some(new_s) = gcode.get_s() {
-                    Self::set_value(&mut self.current_s, new_s, 'S', config::MOTION_MAX_S, -0f64)?;
+                    if let Err(_) = Self::set_value(
+                        &mut self.current_s,
+                        new_s,
+                        'S',
+                        config::MOTION_MAX_S,
+                        -01f64,
+                    ) {
+                        if new_s > config::MOTION_MAX_S {
+                            self.current_s = config::MOTION_MAX_S;
+                        } else {
+                            self.current_s = 0.0;
+                        }
+                    }
                 }
+
                 self.current_laserenabled = true;
                 self.laser_changed = true;
             }
@@ -286,27 +304,27 @@ where
         }
     }
 
-    fn process_dollag_cmd(&self, cmd: char) -> Result<Option<String>, String> {
-        match cmd {
-            '?' => {
-                // re.compile(r"^<(\w*?),
-                // MPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?,
-                // WPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,.*)?>$")
-                Ok(Some(format(format_args!(
-                    "<Idle,MPos:{x:.5},{y:.5},0.0,WPos:{x:.5},{y:.5},0.0>",
-                    x = self.current_cmd_x,
-                    y = self.current_cmd_y,
-                ))))
-            }
-            'G' => Ok(Some(format(format_args!(
+    pub fn process_req(&self, req: &super::Request) -> Result<Option<String>, String> {
+        match req {
+            super::Request::Dollar('G') => Ok(Some(format(format_args!(
                 // https://github.com/gnea/grbl/blob/master/doc/markdown/commands.md#g---view-gcode-parser-state
-                "[GC:G{} G54 G17 G9{} G91.1 G94 G21 G40 G49 M0 M5 M9 T0 S{} F{}]\n\r",
+                "[GC:G{} G54 G17 G9{} G91.1 G94 G21 G40 G49 M0 M5 M9 T0 S{} F{}]\nok\n",
                 self.current_code,
                 (!self.current_absolute as u32),
                 self.current_s,
                 self.current_f,
             )))),
-            _ => Err(format(format_args!("Unsupported command ${}", cmd))),
+            super::Request::Status => {
+                // re.compile(r"^<(\w*?),
+                // MPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?,
+                // WPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,.*)?>$")
+                Ok(Some(format(format_args!(
+                    "<Idle,MPos:{x:.5},{y:.5},0.0,WPos:{x:.5},{y:.5},0.0>\n",
+                    x = self.current_cmd_x,
+                    y = self.current_cmd_y,
+                ))))
+            }
+            super::Request::Dollar(dl) => Err(format(format_args!("Unsupported command ${}", dl))),
         }
     }
 
@@ -334,7 +352,9 @@ where
                 );
 
                 self.current_startnanos = self._now;
-                self.current_endnanos = self._now + libm::round(self.current_duration) as u64;
+                self.current_endnanos = self
+                    ._now
+                    .wrapping_add(libm::round(self.current_duration) as u64);
                 self.is_move_first_interpolation = false;
             }
         }
@@ -351,7 +371,7 @@ where
             return self._now == self.current_endnanos;
         } else {
             let fraction_of_move =
-                (self._now - self.current_startnanos) as f64 / self.current_duration;
+                self._now.wrapping_sub(self.current_startnanos) as f64 / self.current_duration;
             self.current_cmd_x = self.current_from_x + (self.current_distance_x * fraction_of_move);
             self.current_cmd_y = self.current_from_y + (self.current_distance_y * fraction_of_move);
             return true;

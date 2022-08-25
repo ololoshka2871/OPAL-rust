@@ -7,7 +7,7 @@ use freertos_rust::{CurrentTask, Duration, FreeRtosError, Mutex, Queue};
 use usb_device::UsbError;
 use usbd_serial::SerialPort;
 
-use crate::gcode::{self, GCode, ParceError};
+use crate::gcode::{self, GCode, ParceError, ParceResult, Request};
 
 use super::stream::Stream;
 
@@ -115,6 +115,7 @@ impl<'a, B: usb_device::bus::UsbBus> SerialStream<'a, B> {
 pub fn gcode_server<B: usb_device::bus::UsbBus>(
     serial_container: Arc<Mutex<&'static mut SerialPort<B>>>,
     gcode_tx_queue: Arc<Queue<GCode>>,
+    req_tx_queue: Arc<Queue<Request>>,
 ) -> ! {
     let mut serial_stream =
         SerialStream::new(serial_container.clone(), None, vec!['\n', '\r', '?']);
@@ -122,18 +123,20 @@ pub fn gcode_server<B: usb_device::bus::UsbBus>(
     loop {
         match serial_stream.read_line(Some(gcode::MAX_LEN)) {
             Ok(s) => match GCode::from_string(s.as_str()) {
-                Ok(gcode) => {
+                Ok(ParceResult::GCode(gcode)) => {
                     let _ = gcode_tx_queue.send(gcode, Duration::infinite());
-                    //write_responce(&serial_container, "ok\n\r");
+                }
+                Ok(ParceResult::Request(req)) => {
+                    let _ = req_tx_queue.send(req, Duration::zero());
                 }
                 Err(ParceError::Empty) => {
                     // нужно посылать "ok" даже на строки не содержащие кода
                     defmt::trace!("Empty command: {}", defmt::Display2Format(&s));
-                    write_responce(&serial_container, "ok\n\r");
+                    write_responce(&serial_container, "ok\n");
                 }
                 Err(ParceError::Error(e)) => write_responce(
                     &serial_container,
-                    &alloc::fmt::format(format_args!("Error: {:?}\n\r", e)),
+                    &alloc::fmt::format(format_args!("Error: {:?}\n", e)),
                 ),
             },
             Err(e) => write_responce(

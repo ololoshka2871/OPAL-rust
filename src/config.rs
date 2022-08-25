@@ -33,9 +33,6 @@ pub const DMA_IRQ_PRIO: u8 = IRQ_HIGEST_PRIO + 5;
 /// pseudo-idle task prio
 pub const IDLE_TASK_PRIO: u8 = 0;
 
-// main motion task, prio same as idle
-pub const MOTIOND_TASK_PRIO: u8 = IDLE_TASK_PRIO;
-
 /// usbd task prio
 pub const USBD_TASK_PRIO: u8 = IDLE_TASK_PRIO + 3;
 
@@ -44,6 +41,9 @@ pub const MONITOR_TASK_PRIO: u8 = IDLE_TASK_PRIO + 1;
 
 /// G-Code task prio
 pub const GCODE_TASK_PRIO: u8 = IDLE_TASK_PRIO + 2;
+
+// main motion task, prio same as idle
+pub const MOTIOND_TASK_PRIO: u8 = IDLE_TASK_PRIO;
 
 //-----------------------------------------------------------------------------
 

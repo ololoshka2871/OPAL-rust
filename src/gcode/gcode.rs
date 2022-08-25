@@ -9,7 +9,12 @@ pub enum Code {
     G(u32),
     M(u32),
     Empty,
-    ExtCommands(char),
+}
+
+#[derive(Clone, Copy)]
+pub enum Request {
+    Dollar(char),
+    Status,
 }
 
 #[derive(Clone, Copy)]
@@ -23,30 +28,38 @@ pub struct GCode {
     f: Option<f64>, // FeedRate
 }
 
+pub enum ParceResult {
+    GCode(GCode),
+    Request(Request),
+}
+
 pub enum ParceError {
     Empty,
     Error(String),
 }
 
 impl GCode {
-    pub fn from_string(text: &str) -> Result<GCode, ParceError> {
+    pub fn from_string(text: &str) -> Result<ParceResult, ParceError> {
         let upper_text = text.to_uppercase();
         let text = upper_text.as_str();
-        if ['/', '(', ':'].contains(&text.chars().nth(0).unwrap()) {
+        let first_char = text.chars().nth(0).unwrap();
+        if ['/', '(', ':'].contains(&first_char) {
             Err(ParceError::Empty)
-        } else {
-            let mut new_code = Self::default();
-
-            if Self::has_command('$', text) {
-                new_code.code = Code::ExtCommands(
+        } else if ['?', '$'].contains(&first_char) {
+            Ok(if Self::has_command('$', text) {
+                ParceResult::Request(Request::Dollar(
                     match { text.chars().skip_while(|c| *c != '$').skip(1).next() } {
                         Some(c) => c,
                         None => Err(ParceError::Error("Failed to parse $ command".into()))?,
                     },
-                );
-            } else if Self::has_command('?', text) {
-                new_code.code = Code::ExtCommands('?');
-            } else if Self::has_command('M', text) {
+                ))
+            } else {
+                ParceResult::Request(Request::Status)
+            })
+        } else {
+            let mut new_code = Self::default();
+
+            if Self::has_command('M', text) {
                 new_code.code = Code::M(
                     Self::search_value('M', text)
                         .or_else(|_| Err(ParceError::Error("Failed to parse M command".into())))?,
@@ -64,7 +77,7 @@ impl GCode {
             } else {
                 new_code.fill_letters(text)?;
             }
-            Ok(new_code)
+            Ok(ParceResult::GCode(new_code))
         }
     }
 

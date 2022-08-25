@@ -9,6 +9,7 @@ use stm32l4xx_hal::gpio::{
 use stm32l4xx_hal::{prelude::*, rcc::PllConfig, stm32, time::Hertz};
 
 use crate::control::{laser, xy2_100};
+use crate::gcode::Request;
 use crate::support::{interrupt_controller::IInterruptController, InterruptController};
 use crate::threads;
 use crate::workmodes::common::ClockConfigProvider;
@@ -251,6 +252,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         // --------------------------------------------------------------------
 
         let gcode_queue = Arc::new(freertos_rust::Queue::<GCode>::new(3).unwrap());
+        let req_queue = Arc::new(freertos_rust::Queue::<Request>::new(3).unwrap());
 
         let mut galvo_ctrl = self.galvo_ctrl;
         galvo_ctrl.begin(self.interrupt_controller.clone(), tim_ref_clk);
@@ -271,13 +273,21 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         {
             let serial = Usbd::serial_port();
             let gcode_queue_out = gcode_queue.clone();
+            let req_queue_out = req_queue.clone();
 
             Task::new()
                 .name("Motiond")
                 .stack_size(1024)
                 .priority(TaskPriority(crate::config::MOTIOND_TASK_PRIO))
                 .start(move |_| {
-                    threads::motion::motion(serial, gcode_queue_out, laser, galvo_ctrl, tim_ref_clk)
+                    threads::motion::motion(
+                        serial,
+                        gcode_queue_out,
+                        req_queue_out,
+                        laser,
+                        galvo_ctrl,
+                        tim_ref_clk,
+                    )
                 })?;
         }
 
@@ -288,11 +298,13 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             let gcode_srv = {
                 defmt::trace!("Creating G-Code server thread...");
                 Task::new()
-                    .name("G-CODE")
+                    .name("G-Code")
                     .stack_size(2048)
                     .priority(TaskPriority(crate::config::GCODE_TASK_PRIO))
-                    .start(move |_| threads::gcode_server::gcode_server(serial, gcode_queue))
-                    .expect("Failed to create G-CODE server")
+                    .start(move |_| {
+                        threads::gcode_server::gcode_server(serial, gcode_queue, req_queue)
+                    })
+                    .expect("Failed to create G-Code server")
             };
             Usbd::subsbrbe(gcode_srv);
         }
@@ -305,30 +317,6 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             TaskPriority(crate::config::USBD_TASK_PRIO),
         )
         .unwrap();
-
-        /*
-        {
-            defmt::trace!("Creating usb thread...");
-            let usbperith = threads::usbd::UsbdPeriph {
-                usb: self.usb,
-                pin_dp: self.usb_dp,
-                pin_dm: self.usb_dm,
-            };
-            let ic = self.interrupt_controller.clone();
-            Task::new()
-                .name("Usbd")
-                .stack_size(1024)
-                .priority(TaskPriority(crate::config::USBD_TASK_PRIO))
-                .start(move |_| {
-                    threads::usbd::usbd(
-                        usbperith,
-                        ic,
-                        crate::config::USB_INTERRUPT_PRIO,
-                        gcode_queue,
-                    )
-                })?;
-        }
-        */
 
         // --------------------------------------------------------------------
 
