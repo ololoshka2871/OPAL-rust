@@ -43,7 +43,7 @@ pub const MONITOR_TASK_PRIO: u8 = IDLE_TASK_PRIO + 1;
 pub const GCODE_TASK_PRIO: u8 = IDLE_TASK_PRIO + 2;
 
 // main motion task, prio same as idle
-pub const MOTIOND_TASK_PRIO: u8 = IDLE_TASK_PRIO;
+pub const MOTIOND_TASK_PRIO: u8 = IDLE_TASK_PRIO + 1;
 
 //-----------------------------------------------------------------------------
 

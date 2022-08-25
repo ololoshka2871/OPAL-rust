@@ -2,9 +2,7 @@ use core::ops::DerefMut;
 
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use freertos_rust::{
-    CurrentTask, Duration, FreeRtosError, InterruptContext, Mutex, Task, TaskPriority,
-};
+use freertos_rust::{Duration, FreeRtosError, InterruptContext, Mutex, Task, TaskPriority};
 use stm32_usbd::UsbBus;
 
 use stm32l4xx_hal::gpio::{Alternate, PushPull};
@@ -141,7 +139,15 @@ impl Usbd {
                         Err(_) => true,
                     };
 
-                    if !res {
+                    if res {
+                        //crate::support::led::led_set(1);
+                        _self
+                            .subscribers
+                            .iter()
+                            .for_each(|s| s.notify(freertos_rust::TaskNotification::Increment));
+
+                        support::mast_yield();
+                    } else {
                         //crate::support::led::led_set(0);
                         // block until usb interrupt
                         // interrupt_controller.unpend(Interrupt::USB_FS.into()); // без этого скорость в 1,5 раза выше
@@ -155,15 +161,6 @@ impl Usbd {
                         }
 
                         _self.interrupt_controller.mask(Interrupt::USB_FS.into());
-                    } else {
-                        //crate::support::led::led_set(1);
-                        _self
-                            .subscribers
-                            .iter()
-                            .for_each(|s| s.notify(freertos_rust::TaskNotification::Increment));
-
-                        //support::mast_yield();
-                        CurrentTask::delay(Duration::ms(1));
                     }
                 }
             })?;

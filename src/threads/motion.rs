@@ -72,7 +72,7 @@ where
         }
 
         if !cmd_got {
-            //crate::support::mast_yield();
+            crate::support::mast_yield();
         }
     }
 }
