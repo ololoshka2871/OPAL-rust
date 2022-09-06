@@ -30,7 +30,10 @@ fn alloc_error(_layout: Layout) -> ! {
 
 #[no_mangle]
 fn vApplicationStackOverflowHook(_pxTask: FreeRtosTaskHandle, pcTaskName: FreeRtosCharPtr) {
-    defmt::panic!("Thread {} stack overflow detected!", pcTaskName);
+    defmt::panic!(
+        "Thread {} stack overflow detected!",
+        crate::support::format_c_str::FormatableCStr(pcTaskName)
+    );
 }
 
 #[no_mangle]

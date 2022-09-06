@@ -28,10 +28,7 @@ use cortex_m_rt::entry;
 
 use stm32l4xx_hal::stm32;
 
-use crate::{
-    support::free_rtos_error_ext::FreeRtosErrorContainer,
-    workmodes::{high_performance_mode::HighPerformanceMode, WorkMode},
-};
+use crate::workmodes::{high_performance_mode::HighPerformanceMode, WorkMode};
 
 //---------------------------------------------------------------
 
@@ -50,8 +47,7 @@ fn main() -> ! {
     let p = unsafe { cortex_m::Peripherals::take().unwrap_unchecked() };
     let dp = unsafe { stm32::Peripherals::take().unwrap_unchecked() };
 
-    start_at_mode::<HighPerformanceMode>(p, dp)
-        .unwrap_or_else(|e| defmt::panic!("Failed to start thread: {}", FreeRtosErrorContainer(e)));
+    start_at_mode::<HighPerformanceMode>(p, dp).expect("Failed to start threads");
 
     freertos_rust::FreeRtosUtils::start_scheduler();
 }

@@ -277,7 +277,9 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             Task::new()
                 .name("Motiond")
-                .stack_size(1024)
+                .stack_size(
+                    (crate::config::MOTION_TASK_STACK_SIZE / core::mem::size_of::<u32>()) as u16,
+                )
                 .priority(TaskPriority(crate::config::MOTIOND_TASK_PRIO))
                 .start(move |_| {
                     threads::motion::motion(
@@ -299,7 +301,10 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                 defmt::trace!("Creating G-Code server thread...");
                 Task::new()
                     .name("G-Code")
-                    .stack_size(2048)
+                    .stack_size(
+                        (crate::config::G_CODE_TASK_STACK_SIZE / core::mem::size_of::<u32>())
+                            as u16,
+                    )
                     .priority(TaskPriority(crate::config::GCODE_TASK_PRIO))
                     .start(move |_| {
                         threads::gcode_server::gcode_server(serial, gcode_queue, req_queue)
@@ -313,7 +318,10 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         Usbd::strat(
             usb_device::prelude::UsbVidPid(0x0483, 0x573E),
-            1024,
+            "OPAL-rust",
+            "SCTBElpa",
+            "0",
+            crate::config::USBD_TASK_STACK_SIZE,
             TaskPriority(crate::config::USBD_TASK_PRIO),
         )
         .unwrap();

@@ -1,6 +1,5 @@
-use alloc::string::String;
 use alloc::vec;
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{format, string::String, sync::Arc, vec::Vec};
 
 use freertos_rust::{CurrentTask, Duration, FreeRtosError, Mutex, Queue};
 
@@ -134,15 +133,11 @@ pub fn gcode_server<B: usb_device::bus::UsbBus>(
                     defmt::trace!("Empty command: {}", defmt::Display2Format(&s));
                     write_responce(&serial_container, "ok\n");
                 }
-                Err(ParceError::Error(e)) => write_responce(
-                    &serial_container,
-                    &alloc::fmt::format(format_args!("Error: {:?}\n", e)),
-                ),
+                Err(ParceError::Error(e)) => {
+                    write_responce(&serial_container, format!("Error: {:?}\n", e).as_str())
+                }
             },
-            Err(e) => write_responce(
-                &serial_container,
-                &alloc::fmt::format(format_args!("Error: {:?}\n\r", e)),
-            ),
+            Err(e) => write_responce(&serial_container, format!("Error: {:?}\n\r", e).as_str()),
         }
     }
 }

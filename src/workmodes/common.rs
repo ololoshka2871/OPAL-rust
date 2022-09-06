@@ -88,14 +88,15 @@ pub fn create_monitor(_sysclk: Hertz) -> Result<(), freertos_rust::FreeRtosError
         use crate::threads;
         use freertos_rust::{Task, TaskPriority};
 
-        static MONITOR_STACK_SIZE: u16 = 840;
         pub static MONITOR_MSG_PERIOD: u32 = 1000;
 
         defmt::trace!("Creating monitor thread...");
         let monitoring_period = _sysclk.duration_ms(MONITOR_MSG_PERIOD);
         Task::new()
             .name("Monitord")
-            .stack_size(MONITOR_STACK_SIZE)
+            .stack_size(
+                (crate::config::MONITOR_TASK_STACK_SIZE / core::mem::size_of::<u32>()) as u16,
+            )
             .priority(TaskPriority(crate::config::MONITOR_TASK_PRIO))
             .start(move |_| threads::monitor::monitord(monitoring_period))?;
     }

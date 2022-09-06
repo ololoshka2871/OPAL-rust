@@ -20,7 +20,11 @@ fn generate_free_rtos_config<P: AsRef<Path>>(path: P) -> PathBuf {
             "%RUNTIME_STATS%",
             if cfg!(debug_assertions) { "1" } else { "0" },
         )
-        .replace("%F_CPU%", format!("{}UL", FREERTOS_CONFIG_FREQ).as_str());
+        .replace("%F_CPU%", format!("{}UL", FREERTOS_CONFIG_FREQ).as_str())
+        .replace(
+            "%MAX_TASK_NAME_LEN%",
+            format!("{}UL", MAX_TASK_NAME_LEN).as_str(),
+        );
 
     let mut out_file = outpath.clone();
     out_file.push(config_file);

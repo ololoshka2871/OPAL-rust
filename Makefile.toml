@@ -58,3 +58,11 @@ dependencies = ["build"]
 
 [tasks.fl]
 dependencies = ["flash", "log"]
+
+[tasks.callgraph]
+dependencies = ["build"]
+script_runner = "@shell"
+script = '''
+./gen-callgraph.py --toolprefix arm-none-eabi- --call_cmd b ${executable} | dot -v -Tsvg -o/tmp/callgraph.svg
+xdg-open /tmp/callgraph.svg
+'''

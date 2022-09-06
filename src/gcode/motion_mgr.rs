@@ -1,15 +1,17 @@
 use core::convert::Infallible;
 use core::fmt::Display;
 
-use alloc::{fmt::format, string::String};
+use alloc::format;
+use alloc::string::String;
 use embedded_hal::PwmPin;
 use stm32l4xx_hal::prelude::OutputPin;
 
-use crate::config;
-
-use crate::control::laser::Laser;
-use crate::control::xy2_100::XY2_100;
-use crate::time_base::master_counter::MasterTimerInfo;
+use crate::{
+    config,
+    control::{laser::Laser, xy2_100::XY2_100},
+    support::format_float_simple::format_float_simple,
+    time_base::master_counter::MasterTimerInfo,
+};
 
 use super::GCode;
 
@@ -235,9 +237,9 @@ where
         nlimit: T,
     ) -> Result<(), String> {
         if src > plimit {
-            Err(format(format_args!("{} above limit", name)))
+            Err(format!("{} above limit", name))
         } else if src < nlimit {
-            Err(format(format_args!("{} below limit", name)))
+            Err(format!("{} below limit", name))
         } else {
             *dest = src;
             Ok(())
@@ -300,31 +302,31 @@ where
     fn process_other(&mut self, gcode: &GCode) -> Result<(), String> {
         match self.current_code {
             0 | 1 => self.process_gcodes(self.current_code, gcode),
-            c => Err(format(format_args!("Cannot continue move for G{}", c))),
+            c => Err(format!("Cannot continue move for G{}", c)),
         }
     }
 
     pub fn process_req(&self, req: &super::Request) -> Result<Option<String>, String> {
         match req {
-            super::Request::Dollar('G') => Ok(Some(format(format_args!(
+            super::Request::Dollar('G') => Ok(Some(format!(
                 // https://github.com/gnea/grbl/blob/master/doc/markdown/commands.md#g---view-gcode-parser-state
                 "[GC:G{} G54 G17 G9{} G91.1 G94 G21 G40 G49 M0 M5 M9 T0 S{} F{}]\nok\n",
                 self.current_code,
                 (!self.current_absolute as u32),
-                self.current_s,
+                format_float_simple(self.current_s, 1),
                 self.current_f,
-            )))),
+            ))),
             super::Request::Status => {
                 // re.compile(r"^<(\w*?),
                 // MPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?,
                 // WPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,.*)?>$")
-                Ok(Some(format(format_args!(
+                Ok(Some(format!(
                     "<Idle,MPos:{x:.5},{y:.5},0.0,WPos:{x:.5},{y:.5},0.0>\n",
-                    x = self.current_cmd_x,
-                    y = self.current_cmd_y,
-                ))))
+                    x = format_float_simple(self.current_cmd_x, 5),
+                    y = format_float_simple(self.current_cmd_y, 5),
+                )))
             }
-            super::Request::Dollar(dl) => Err(format(format_args!("Unsupported command ${}", dl))),
+            super::Request::Dollar(dl) => Err(format!("Unsupported command ${}", dl)),
         }
     }
 
@@ -426,7 +428,10 @@ where
 
     fn set_laser_power(&mut self, power: f64) {
         self.laser.set_power(power);
-        //defmt::trace!("Laser power: {}%", power);
+        defmt::trace!(
+            "Laser power: {}%",
+            crate::support::format_float_simple::format_float_simple(power, 1)
+        );
     }
 }
 

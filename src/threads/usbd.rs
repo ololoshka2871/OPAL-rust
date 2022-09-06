@@ -99,23 +99,26 @@ impl Usbd {
 
     pub fn strat(
         vid_pid: UsbVidPid,
-        stack_size: u16,
+        name: &'static str,
+        manufacturer: &'static str,
+        serial: &'static str,
+        stack_size: usize,
         priority: TaskPriority,
     ) -> Result<(), FreeRtosError> {
         let mut _self = Self::get_static_self();
 
         let thread = Task::new()
             .name("Usbd")
-            .stack_size(stack_size)
+            .stack_size((stack_size / core::mem::size_of::<u32>()) as u16)
             .priority(priority)
             .start(move |_| {
                 defmt::info!("Usb thread started!");
                 defmt::info!("Building usb device: vid={} pid={}", &vid_pid.0, &vid_pid.1);
 
                 let mut usb_dev = UsbDeviceBuilder::new(&_self.usb_bus, vid_pid)
-                    .manufacturer("SCTB ELPA")
-                    .product("OPAL-rust")
-                    .serial_number("0123456789")
+                    .manufacturer(manufacturer)
+                    .product(name)
+                    .serial_number(serial)
                     .composite_with_iads()
                     .build();
 

@@ -28,6 +28,11 @@ pub const DMA_IRQ_PRIO: u8 = IRQ_HIGEST_PRIO + 5;
 
 //-----------------------------------------------------------------------------
 
+/// for freeRTOS
+pub const MAX_TASK_NAME_LEN: usize = 16;
+
+//-----------------------------------------------------------------------------
+
 // Приоритеты, обольше -> лучше
 
 /// pseudo-idle task prio
@@ -47,26 +52,40 @@ pub const MOTIOND_TASK_PRIO: u8 = IDLE_TASK_PRIO + 1;
 
 //-----------------------------------------------------------------------------
 
-// max laser S 100 -> 100%
+/// monitor stack size
+pub const USBD_TASK_STACK_SIZE: usize = 1024;
+
+/// monitor stack size
+pub const MONITOR_TASK_STACK_SIZE: usize = 2048 + 1024;
+
+/// motion stack size
+pub const MOTION_TASK_STACK_SIZE: usize = 1024;
+
+/// gcode stack size
+pub const G_CODE_TASK_STACK_SIZE: usize = 1024;
+
+//-----------------------------------------------------------------------------
+
+/// max laser S 100 -> 100%
 pub const MOTION_MAX_S: f64 = 100f64;
 
-// working range X
+/// working range X
 pub const MOTION_X_RANGE: f64 = 250.0;
 
-// working range Y
+/// working range Y
 pub const MOTION_Y_RANGE: f64 = 250.0;
 
-// working range Z (unused)
+/// working range Z (unused)
 pub const MOTION_Z_RANGE: f64 = 1.0;
 
-// invert axis
+/// invert axis
 pub const AXIS_INVERSE_X: bool = false;
 pub const AXIS_INVERSE_Y: bool = false;
 
 //-----------------------------------------------------------------------------
 
-// galvo power enable active lvl
+/// galvo power enable active lvl
 pub const GALVO_EN_ACTIVE_LVL: bool = true;
 
-// laser power enable active lvl
+/// laser power enable active lvl
 pub const LASER_EN_ACTIVE_LVL: bool = true;

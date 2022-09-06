@@ -109,8 +109,8 @@ impl GCode {
         {
             *field = Self::get_val(letter, text).or_else(|_| {
                 Err(ParceError::Error(format(format_args!(
-                    "Failed to parse {} value",
-                    letter
+                    "Failed to parse {} value \"{}\"",
+                    letter, text
                 ))))
             })?;
         }

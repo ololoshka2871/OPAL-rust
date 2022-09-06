@@ -29,6 +29,7 @@ usbd-serial = { path = "lib/usbd-serial" }
 
 # defmt
 defmt = "0.2"
+defmt-macros = "0.2"
 defmt-rtt = "0.2"
 panic-probe = { version = "0.2", features = ["print-defmt"] }
 
@@ -45,6 +46,7 @@ opt-level = "z"
 
 [profile.dev]
 opt-level = "z"
+codegen-units = 1 # better optimizations
 lto = false
 panic = "abort"
 
