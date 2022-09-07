@@ -73,7 +73,7 @@ impl Usbd {
     }
 
     fn get_static_self() -> &'static mut Usbd {
-        unsafe { USBD.as_mut().expect("Call Usbd::init() first!") }
+        unsafe { USBD.as_mut().expect("expect2") }
     }
 
     pub fn serial_port() -> Arc<Mutex<&'static mut SerialPort<'static, UsbBus<UsbPeriph>>>> {
@@ -84,11 +84,11 @@ impl Usbd {
             _self.serial = Some(SerialPort::new(&_self.usb_bus));
 
             _self.serial_port = Some(Arc::new(
-                Mutex::new(_self.serial.as_mut().unwrap())
-                    .expect("Failed to create serial guard mutex"),
+                Mutex::new(unsafe { _self.serial.as_mut().unwrap_unchecked() })
+                    .expect("expect3"),
             ));
         }
-        _self.serial_port.as_ref().unwrap().clone()
+        unsafe { _self.serial_port.as_ref().unwrap_unchecked().clone() }
     }
 
     pub fn subsbrbe(task: Task) {
@@ -132,7 +132,7 @@ impl Usbd {
                 let serial_port = _self
                     .serial_port
                     .as_ref()
-                    .expect("call Usbd::serial_port() before!");
+                    .expect("expect4");
 
                 loop {
                     // Важно! Список передаваемый сюда в том же порядке,

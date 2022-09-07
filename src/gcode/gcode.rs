@@ -1,6 +1,6 @@
+use alloc::format;
+use alloc::string::String;
 use core::str::FromStr;
-
-use alloc::{fmt::format, string::String};
 
 pub const MAX_LEN: usize = 150;
 
@@ -42,7 +42,7 @@ impl GCode {
     pub fn from_string(text: &str) -> Result<ParceResult, ParceError> {
         let upper_text = text.to_uppercase();
         let text = upper_text.as_str();
-        let first_char = text.chars().nth(0).unwrap();
+        let first_char = text.chars().nth(0).unwrap_or_default();
         if ['/', '(', ':'].contains(&first_char) {
             Err(ParceError::Empty)
         } else if ['?', '$'].contains(&first_char) {
@@ -108,10 +108,10 @@ impl GCode {
             [&mut self.x, &mut self.y, &mut self.f, &mut self.s].zip(['X', 'Y', 'F', 'S'])
         {
             *field = Self::get_val(letter, text).or_else(|_| {
-                Err(ParceError::Error(format(format_args!(
+                Err(ParceError::Error(format!(
                     "Failed to parse {} value \"{}\"",
                     letter, text
-                ))))
+                )))
             })?;
         }
         Ok(())

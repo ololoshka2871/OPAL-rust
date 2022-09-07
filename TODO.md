@@ -10,3 +10,11 @@
 [v] Поддержка протокола какой-то из прошивок вроде GRBL для подключения к стандартным программам отправки
     G-кодов
     [v] Работает с bCNC
+
+[v] Попытаться запихнуть в F103CB
+    [x] core::fmt::Formatter::pad - часть внутренней системы форматирования
+    [v] <str as core::fmt::Debug>::fmt - src/support/defmt_string.rs
+    [x] core::str::slice_error_fail - путь вызова неясен, используется где-то в парсере
+    [x] <char as core::fmt::Debug>::fmt
+    [v] Заменить очевидные `.unwrap()` на ``.unwrap_uncheked()`
+    

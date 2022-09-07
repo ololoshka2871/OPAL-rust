@@ -8,6 +8,8 @@ use usbd_serial::SerialPort;
 
 use crate::gcode::{GCode, MotionMGR, MotionStatus, Request};
 
+use crate::support::defmt_string::DefmtString;
+
 use crate::threads::gcode_server::write_responce;
 
 pub fn motion<B, PWM, ENABLE, GALVOEN>(
@@ -47,7 +49,7 @@ where
                     }
                     Err(e) => {
                         write_responce(&serial, "error\n");
-                        defmt::error!("Failed to process command {}", defmt::Display2Format(&e));
+                        defmt::error!("Failed to process command {}", DefmtString(&e));
                     }
                 }
             }
@@ -57,7 +59,7 @@ where
 
         if let Ok(req) = request_queue.receive(Duration::zero()) {
             cmd_got = true;
-            match motion.process_req(&req) {
+            match motion.process_status_req(&req) {
                 Ok(Some(msg)) => {
                     write_responce(&serial, msg.as_str());
                 }
@@ -66,7 +68,7 @@ where
                 }
                 Err(e) => {
                     write_responce(&serial, "error\n");
-                    defmt::error!("Failed to process command {}", defmt::Display2Format(&e));
+                    defmt::error!("Failed to process command {}", DefmtString(&e));
                 }
             }
         }

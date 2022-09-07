@@ -1,7 +1,6 @@
 /*
 pub fn monitord<D: freertos_rust::DurationTicks>(period: D) -> ! {
     use alloc::{format, string::ToString};
-    use defmt::Display2Format;
     use freertos_rust::{CriticalRegion, FreeRtosSchedulerState, FreeRtosUtils};
 
     static HEADER: &str =
@@ -51,7 +50,7 @@ pub fn monitord<D: freertos_rust::DurationTicks>(period: D) -> ! {
             }
         }
 
-        defmt::info!("{}", Display2Format(&stat));
+        defmt::info!("{}", crate::support::defmt_string::DefmtString(&stat));
     }
 }
 */
@@ -59,7 +58,6 @@ pub fn monitord<D: freertos_rust::DurationTicks>(period: D) -> ! {
 pub fn monitord<D: freertos_rust::DurationTicks>(period: D) -> ! {
     use alloc::vec::Vec;
     use alloc::{format, string::ToString};
-    use defmt::Display2Format;
     use freertos_rust::{CriticalRegion, FreeRtosSchedulerState, FreeRtosUtils};
 
     static HEADER: &str = "FreeRTOS threadinfo:\n   ID | Name       | State     | Priority | Stack left | CPU Abs.   |  %\n";
@@ -163,6 +161,6 @@ pub fn monitord<D: freertos_rust::DurationTicks>(period: D) -> ! {
             }
         }
 
-        defmt::info!("{}", Display2Format(&stat));
+        defmt::info!("{}", crate::support::defmt_string::DefmtString(&stat));
     }
 }

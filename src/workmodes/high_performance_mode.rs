@@ -104,10 +104,13 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         */
 
         HighPerformanceMode {
-            flash: Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap()),
-            crc: Arc::new(
-                Mutex::new(super::configure_crc_module(dp.CRC.constrain(&mut rcc.ahb1))).unwrap(),
-            ),
+            flash: unsafe { Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap_unchecked()) },
+            crc: unsafe {
+                Arc::new(
+                    Mutex::new(super::configure_crc_module(dp.CRC.constrain(&mut rcc.ahb1)))
+                        .unwrap_unchecked(),
+                )
+            },
 
             usb: dp.USB,
 
@@ -251,8 +254,12 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         // --------------------------------------------------------------------
 
-        let gcode_queue = Arc::new(freertos_rust::Queue::<GCode>::new(3).unwrap());
-        let req_queue = Arc::new(freertos_rust::Queue::<Request>::new(3).unwrap());
+        let (gcode_queue, req_queue) = unsafe {
+            (
+                Arc::new(freertos_rust::Queue::<GCode>::new(3).unwrap_unchecked()),
+                Arc::new(freertos_rust::Queue::<Request>::new(3).unwrap_unchecked()),
+            )
+        };
 
         let mut galvo_ctrl = self.galvo_ctrl;
         galvo_ctrl.begin(self.interrupt_controller.clone(), tim_ref_clk);
@@ -262,7 +269,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         let pwm_pin = self.tim15.pwm(
             self.laser_pwm_pin,
             1.kHz(),
-            *self.clocks.as_ref().unwrap(),
+            unsafe { *self.clocks.as_ref().unwrap_unchecked() },
             &mut self.rcc.apb2,
         );
 
@@ -309,22 +316,21 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                     .start(move |_| {
                         threads::gcode_server::gcode_server(serial, gcode_queue, req_queue)
                     })
-                    .expect("Failed to create G-Code server")
+                    .expect("expect5")
             };
             Usbd::subsbrbe(gcode_srv);
         }
 
         // --------------------------------------------------------------------
 
-        Usbd::strat(
+        let _ = Usbd::strat(
             usb_device::prelude::UsbVidPid(0x0483, 0x573E),
             "OPAL-rust",
             "SCTBElpa",
             "0",
             crate::config::USBD_TASK_STACK_SIZE,
             TaskPriority(crate::config::USBD_TASK_PRIO),
-        )
-        .unwrap();
+        );
 
         // --------------------------------------------------------------------
 

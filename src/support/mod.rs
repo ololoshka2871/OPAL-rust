@@ -15,6 +15,7 @@ mod new_global_mutex;
 mod mast_yield;
 
 pub mod debug_mcu;
+pub mod defmt_string;
 pub mod format_c_str;
 pub mod format_float_simple;
 

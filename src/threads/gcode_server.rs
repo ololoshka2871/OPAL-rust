@@ -130,7 +130,7 @@ pub fn gcode_server<B: usb_device::bus::UsbBus>(
                 }
                 Err(ParceError::Empty) => {
                     // нужно посылать "ok" даже на строки не содержащие кода
-                    defmt::trace!("Empty command: {}", defmt::Display2Format(&s));
+                    defmt::trace!("Empty command: {}", crate::support::defmt_string::DefmtString(&s));
                     write_responce(&serial_container, "ok\n");
                 }
                 Err(ParceError::Error(e)) => {

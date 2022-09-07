@@ -47,7 +47,7 @@ fn main() -> ! {
     let p = unsafe { cortex_m::Peripherals::take().unwrap_unchecked() };
     let dp = unsafe { stm32::Peripherals::take().unwrap_unchecked() };
 
-    start_at_mode::<HighPerformanceMode>(p, dp).expect("Failed to start threads");
+    start_at_mode::<HighPerformanceMode>(p, dp).expect("expect1");
 
     freertos_rust::FreeRtosUtils::start_scheduler();
 }

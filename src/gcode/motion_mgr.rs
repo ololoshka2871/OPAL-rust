@@ -306,7 +306,7 @@ where
         }
     }
 
-    pub fn process_req(&self, req: &super::Request) -> Result<Option<String>, String> {
+    pub fn process_status_req(&self, req: &super::Request) -> Result<Option<String>, String> {
         match req {
             super::Request::Dollar('G') => Ok(Some(format!(
                 // https://github.com/gnea/grbl/blob/master/doc/markdown/commands.md#g---view-gcode-parser-state
@@ -314,7 +314,7 @@ where
                 self.current_code,
                 (!self.current_absolute as u32),
                 format_float_simple(self.current_s, 1),
-                self.current_f,
+                format_float_simple(self.current_f, 3),
             ))),
             super::Request::Status => {
                 // re.compile(r"^<(\w*?),
