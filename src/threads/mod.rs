@@ -4,7 +4,6 @@ pub mod gcode_server;
 
 pub mod motion;
 
-pub mod usb_periph;
 pub mod usbd;
 
 pub mod free_rtos_delay;

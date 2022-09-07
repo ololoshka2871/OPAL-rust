@@ -66,6 +66,11 @@ pub const G_CODE_TASK_STACK_SIZE: usize = 1024;
 
 //-----------------------------------------------------------------------------
 
+// usb pull up
+pub const USB_PULLUP_ACTVE_LEVEL: bool = false;
+
+//-----------------------------------------------------------------------------
+
 /// max laser S 100 -> 100%
 pub const MOTION_MAX_S: f64 = 100f64;
 

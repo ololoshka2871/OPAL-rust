@@ -1,60 +1,42 @@
-use stm32l4xx_hal::{
-    device::{tim6, RCC},
-    interrupt,
-    stm32l4::stm32l4x3::Interrupt as IRQ,
+use stm32f1xx_hal::{
+    device::{tim2, RCC},
+    stm32::Interrupt as IRQ,
 };
+
+use stm32f1xx_hal::pac::interrupt;
 
 use crate::support::interrupt_controller::{IInterruptController, Interrupt};
 
 use super::MasterCounterInfo;
 
-struct Tim6_7MasterCounter {
+struct AdvancedMasterCounter {
     id: u8,
 }
 
-impl Tim6_7MasterCounter {
-    fn tim(&self) -> &'static tim6::RegisterBlock {
-        let addr = match self.id {
-            6 => 0x4000_1000_usize, // stm32l4-0.12.1/src/stm32l4x2/mod.rs:1032
-            7 => 0x4000_1400_usize, // stm32l4-0.12.1/src/stm32l4x2/mod.rs:1053
-            _ => panic!(),
-        };
-
-        unsafe { &*(addr as *const tim6::RegisterBlock) }
+impl AdvancedMasterCounter {
+    fn tim(&self) -> &'static tim2::RegisterBlock {
+        unsafe { &*(0x4000_0800 as *const tim2::RegisterBlock) } // stm32f1-0.14.0/src/stm32f103/mod.rs:942
     }
 
     fn interrupt_n(&self) -> Interrupt {
-        match self.id {
-            6 => IRQ::TIM6_DAC.into(),
-            7 => IRQ::TIM7.into(),
-            _ => panic!(),
-        }
+        IRQ::TIM4.into()
     }
 }
 
-impl MasterCounterInfo for Tim6_7MasterCounter {
+impl MasterCounterInfo for AdvancedMasterCounter {
     fn id(&self) -> u32 {
         self.id as u32
     }
 
     // stm32l4xx-hal-0.6.0/src/timer.rs
     fn init(&self) {
-        let enr = unsafe { &(*RCC::ptr()).apb1enr1 };
-        let rstr = unsafe { &(*RCC::ptr()).apb1rstr1 };
+        let enr = unsafe { &(*RCC::ptr()).apb1enr };
+        let rstr = unsafe { &(*RCC::ptr()).apb1rstr };
 
-        match self.id {
-            6 => {
-                enr.modify(|_, w| w.tim6en().set_bit());
-                rstr.modify(|_, w| w.tim6rst().set_bit());
-                rstr.modify(|_, w| w.tim6rst().clear_bit());
-            }
-            7 => {
-                enr.modify(|_, w| w.tim7en().set_bit());
-                rstr.modify(|_, w| w.tim7rst().set_bit());
-                rstr.modify(|_, w| w.tim7rst().clear_bit());
-            }
-            _ => panic!(),
-        }
+        // stm32f1xx-hal-0.9.0/src/rcc/enable.rs
+        enr.modify(|_, w| w.tim4en().set_bit());
+        rstr.modify(|_, w| w.tim4rst().set_bit());
+        rstr.modify(|_, w| w.tim4rst().clear_bit());
     }
 
     fn set_interrupt_prio(&self, controller: &dyn IInterruptController, prio: u8) {
@@ -121,19 +103,9 @@ impl MasterCounterInfo for Tim6_7MasterCounter {
     }
 }
 
-pub(crate) static MASTER_LIST: [&dyn MasterCounterInfo; /*2*/ 1] = [
-    &Tim6_7MasterCounter { id: 6 },
-    /*&Tim6_7MasterCounter { id: 7 },*/
-];
+pub(crate) static MASTER_LIST: [&dyn MasterCounterInfo; 1] = [&AdvancedMasterCounter { id: 4 }];
 
 #[interrupt]
-unsafe fn TIM6_DAC() {
-    crate::time_base::master_counter::master_ovf(6);
+unsafe fn TIM4() {
+    crate::time_base::master_counter::master_ovf(4);
 }
-
-/*
-#[interrupt]
-unsafe fn TIM7() {
-    crate::time_base::master_counter::master_ovf(7);
-}
-*/

@@ -4,7 +4,8 @@ use core::{
 };
 
 use alloc::sync::Arc;
-use stm32l4xx_hal::{gpio::gpiod, interrupt, prelude::OutputPin};
+use embedded_hal::digital::v2::OutputPin;
+use stm32f1xx_hal::{gpio::gpiod, pac::interrupt};
 
 use crate::support::interrupt_controller::IInterruptController;
 
@@ -25,9 +26,9 @@ static mut BACK_BUF: &mut [u16] = unsafe { &mut OUTPUT_BUF_B };
 static mut BACK_BUF_READY: AtomicBool = AtomicBool::new(false);
 
 pub struct XY2_100<EN: OutputPin<Error = Infallible>> {
-    timer7: stm32l4xx_hal::stm32l4::stm32l4x3::TIM7,
+    timer7: stm32f1xx_hal::device::TIM4,
     _port: gpiod::Parts,
-    dma: stm32l4xx_hal::dma::dma2::C5,
+    dma: stm32f1xx_hal::dma::dma2::C5, // fixme
 
     clk_mask: u16,
     sync_mask: u16,
@@ -39,9 +40,9 @@ pub struct XY2_100<EN: OutputPin<Error = Infallible>> {
 
 impl<EN: OutputPin<Error = Infallible>> XY2_100<EN> {
     pub fn new(
-        timer7: stm32l4xx_hal::stm32l4::stm32l4x3::TIM7,
+        timer7: stm32f1xx_hal::device::TIM4,
         port: gpiod::Parts,
-        dma2_ch6: stm32l4xx_hal::dma::dma2::C5,
+        dma2_ch6: stm32f1xx_hal::dma::dma2::C5, // fixme
         clk_pin_n: u16,
         sync_pin_n: u16,
         pin_data_x_pin_n: u16,
@@ -88,25 +89,23 @@ impl<EN: OutputPin<Error = Infallible>> XY2_100<EN> {
     pub fn begin(
         &mut self,
         ic: Arc<dyn IInterruptController>,
-        tim_ref_clk: stm32l4xx_hal::time::Hertz,
+        tim_ref_clk: stm32f1xx_hal::time::Hertz,
     ) {
         // configure dma memory -> GPIO by tim7
         {
-            use stm32l4xx_hal::stm32l4::stm32l4x3::Interrupt;
+            use stm32f1xx_hal::device::Interrupt;
 
             // configure dma event src
             self.dma.stop();
             self.dma.set_memory_address(0u32, true); // not ready
             self.dma.set_peripheral_address(
-                unsafe {
-                    &((*stm32l4xx_hal::stm32l4::stm32l4x3::GPIOD::ptr()).odr) as *const _ as u32
-                },
+                unsafe { &((*stm32f1xx_hal::device::GPIOD::ptr()).odr) as *const _ as u32 },
                 false,
             );
             self.dma.set_transfer_length((TX_POCKET_SIZE * 2) as u16); // TX_POCKET_SIZE * 2 транзакций по таймера 16 -> 32
 
             unsafe {
-                let dma_ptr = &*stm32l4xx_hal::device::DMA2::ptr();
+                let dma_ptr = &*stm32f1xx_hal::device::DMA2::ptr();
 
                 // Table 42. DMA2 requests for each channel [3:5]
                 dma_ptr.cselr.modify(|_, w| w.c5s().map3());
@@ -139,7 +138,7 @@ impl<EN: OutputPin<Error = Infallible>> XY2_100<EN> {
         // init timer
         {
             use crate::support::debug_mcu::DEBUG_MCU;
-            use stm32l4xx_hal::device::RCC;
+            use stm32f1xx_hal::device::RCC;
 
             let enr = unsafe { &(*RCC::ptr()).apb1enr1 };
             let rstr = unsafe { &(*RCC::ptr()).apb1rstr1 };
@@ -248,8 +247,8 @@ unsafe fn start_tx() {
         return;
     }
 
-    let tim7 = &*stm32l4xx_hal::device::TIM7::ptr();
-    let dma = &*stm32l4xx_hal::device::DMA2::ptr();
+    let tim7 = &*stm32f1xx_hal::device::TIM4::ptr();
+    let dma = &*stm32f1xx_hal::device::DMA2::ptr();
 
     if tim7.cr1.read().cen().bit_is_set() {
         return; /* not ready */
@@ -280,8 +279,8 @@ unsafe fn start_tx() {
 // вся передача завершена
 #[interrupt]
 unsafe fn DMA2_CH5() {
-    let dma = &*stm32l4xx_hal::device::DMA2::ptr();
-    let tim7 = &*stm32l4xx_hal::device::TIM7::ptr();
+    let dma = &*stm32f1xx_hal::device::DMA2::ptr();
+    let tim7 = &*stm32f1xx_hal::device::TIM7::ptr();
 
     // clear event
     dma.ifcr.write(|w| w.cgif5().set_bit());

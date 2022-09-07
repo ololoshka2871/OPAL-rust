@@ -1,9 +1,8 @@
 use core::convert::Infallible;
 
 use alloc::sync::Arc;
-use embedded_hal::PwmPin;
+use embedded_hal::{digital::v2::OutputPin, PwmPin};
 use freertos_rust::{Duration, Mutex, Queue};
-use stm32l4xx_hal::prelude::OutputPin;
 use usbd_serial::SerialPort;
 
 use crate::gcode::{GCode, MotionMGR, MotionStatus, Request};
@@ -18,7 +17,7 @@ pub fn motion<B, PWM, ENABLE, GALVOEN>(
     request_queue: Arc<Queue<Request>>,
     laser: crate::control::laser::Laser<PWM, ENABLE>,
     galvo: crate::control::xy2_100::XY2_100<GALVOEN>,
-    master_freq: stm32l4xx_hal::time::Hertz,
+    master_freq: stm32f1xx_hal::time::Hertz,
 ) -> !
 where
     B: usb_device::bus::UsbBus,

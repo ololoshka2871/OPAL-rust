@@ -17,5 +17,5 @@ use freertos_rust::FreeRtosUtils;
 
 defmt::timestamp!(
     "[{:?}T]",
-    crate::workmodes::common::Ticks(FreeRtosUtils::get_tick_count())
+    crate::support::ticks_format::Ticks(FreeRtosUtils::get_tick_count())
 );

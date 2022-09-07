@@ -1,7 +1,6 @@
 use core::convert::Infallible;
 
-use embedded_hal::PwmPin;
-use stm32l4xx_hal::prelude::OutputPin;
+use embedded_hal::{PwmPin, digital::v2::OutputPin};
 
 pub struct Laser<PWM, ENABLE: OutputPin<Error = Infallible>> {
     laser_pwm_pin: PWM,

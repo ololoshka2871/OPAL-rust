@@ -1,12 +1,18 @@
 use alloc::sync::Arc;
+
 use freertos_rust::{Duration, Mutex, Task, TaskPriority};
 
-#[allow(unused_imports)]
-use stm32l4xx_hal::gpio::{
-    Alternate, Analog, Output, PushPull, Speed, PA0, PA1, PA11, PA12, PA2, PA3, PA6, PA7, PA8, PB0,
-    PB14, PC10, PD10, PD11, PD13, PE12,
+use stm32f1xx_hal::{
+    flash,
+    gpio::{
+        Alternate, Analog, Floating, Input, Output, PinState, PushPull, PA0, PA1, PA11, PA12, PA2,
+        PA3, PA6, PA7, PA8, PB0, PB14, PB8, PC10, PD10, PD11, PD13, PE12,
+    },
+    prelude::*,
+    rcc::{HPre, PPre},
+    stm32,
+    time::Hertz,
 };
-use stm32l4xx_hal::{prelude::*, rcc::PllConfig, stm32, time::Hertz};
 
 use crate::control::{laser, xy2_100};
 use crate::gcode::Request;
@@ -17,123 +23,138 @@ use crate::workmodes::common::ClockConfigProvider;
 use super::WorkMode;
 
 mod clock_config_72;
-use clock_config_72::{APB1_DEVIDER, APB2_DEVIDER, PLL_CFG, SAI_DIVIDER, SAI_MULTIPLIER};
+use clock_config_72::{ADC_DEVIDER, AHB_DEVIDER, APB1_DEVIDER, APB2_DEVIDER, PLL_MUL, USB_DEVIDER};
 
 struct HighPerformanceClockConfigProvider;
 
+impl HighPerformanceClockConfigProvider {
+    fn ahb_dev2val(ahb_dev: HPre) -> u32 {
+        match ahb_dev {
+            HPre::DIV1 => 1,
+            HPre::DIV2 => 2,
+            HPre::DIV4 => 4,
+            HPre::DIV8 => 8,
+            HPre::DIV16 => 16,
+            HPre::DIV64 => 64,
+            HPre::DIV128 => 128,
+            HPre::DIV256 => 256,
+            HPre::DIV512 => 512,
+        }
+    }
+
+    fn apb_dev2val(apb_dev: PPre) -> u32 {
+        match apb_dev {
+            PPre::DIV1 => 1,
+            PPre::DIV2 => 2,
+            PPre::DIV4 => 4,
+            PPre::DIV8 => 8,
+            PPre::DIV16 => 16,
+        }
+    }
+
+    fn pll_mul_bits(mul: u32) -> u8 {
+        (mul - 2) as u8
+    }
+}
+
 impl ClockConfigProvider for HighPerformanceClockConfigProvider {
     fn core_frequency() -> Hertz {
-        let f = crate::config::XTAL_FREQ * PLL_CFG.1 / (PLL_CFG.0 * PLL_CFG.2);
+        let f = crate::config::XTAL_FREQ * PLL_MUL / Self::ahb_dev2val(AHB_DEVIDER);
         Hertz::Hz(f)
     }
 
     fn apb1_frequency() -> Hertz {
-        Hertz::Hz(Self::core_frequency().to_Hz() / APB1_DEVIDER)
+        Hertz::Hz(Self::core_frequency().to_Hz() / Self::apb_dev2val(APB1_DEVIDER))
     }
 
     fn apb2_frequency() -> Hertz {
-        Hertz::Hz(Self::core_frequency().to_Hz() / APB2_DEVIDER)
+        Hertz::Hz(Self::core_frequency().to_Hz() / Self::apb_dev2val(APB2_DEVIDER))
     }
 
     // stm32_cube: if APB devider > 1, timers freq APB*2
     fn master_counter_frequency() -> Hertz {
-        if APB1_DEVIDER > 1 {
-            Hertz::Hz(Self::apb1_frequency().to_Hz() * 2)
-        } else {
-            Self::apb1_frequency()
-        }
+        Self::apb2_frequency() // TIM1 -> master
     }
 
-    fn pll_config() -> PllConfig {
-        PllConfig::new(
-            PLL_CFG.0 as u8,
-            PLL_CFG.1 as u8,
-            crate::workmodes::common::to_pll_devider(PLL_CFG.2),
-        )
+    fn xtal2master_freq_multiplier() -> f32 {
+        PLL_MUL as f32 / (Self::ahb_dev2val(AHB_DEVIDER) * Self::apb_dev2val(APB2_DEVIDER)) as f32
     }
 
-    fn xtal2master_freq_multiplier() -> f64 {
-        if APB1_DEVIDER > 1 {
-            PLL_CFG.1 as f64 / (PLL_CFG.0 * PLL_CFG.2) as f64 / APB1_DEVIDER as f64 * 2.0
-        } else {
-            PLL_CFG.1 as f64 / (PLL_CFG.0 * PLL_CFG.2) as f64
+    fn to_config() -> stm32f1xx_hal::rcc::Config {
+        stm32f1xx_hal::rcc::Config {
+            hse: Some(crate::config::XTAL_FREQ),
+            pllmul: Some(Self::pll_mul_bits(PLL_MUL)),
+            hpre: AHB_DEVIDER,
+            ppre1: APB1_DEVIDER,
+            ppre2: APB2_DEVIDER,
+            usbpre: USB_DEVIDER,
+            adcpre: ADC_DEVIDER,
         }
     }
 }
 
 #[allow(unused)]
 pub struct HighPerformanceMode {
-    rcc: stm32l4xx_hal::rcc::Rcc,
-    flash: Arc<Mutex<stm32l4xx_hal::flash::Parts>>,
-    pwr: stm32l4xx_hal::pwr::Pwr,
+    flash: Arc<Mutex<stm32f1xx_hal::flash::Parts>>,
 
-    clocks: Option<stm32l4xx_hal::rcc::Clocks>,
+    clocks: stm32f1xx_hal::rcc::Clocks,
 
-    usb: stm32l4xx_hal::stm32::USB,
+    usb: stm32f1xx_hal::stm32::USB,
 
-    usb_dm: PA11<Alternate<PushPull, 10>>,
-    usb_dp: PA12<Alternate<PushPull, 10>>,
+    usb_dm: PA11<Input<Floating>>,
+    usb_dp: PA12<Input<Floating>>,
+    usb_pull_up: PB8<Output<PushPull>>,
 
     interrupt_controller: Arc<dyn IInterruptController>,
 
-    crc: Arc<Mutex<stm32l4xx_hal::crc::Crc>>,
-
-    led_pin: PC10<Output<PushPull>>,
+    crc: Arc<Mutex<stm32f1xx_hal::crc::Crc>>,
 
     galvo_ctrl: xy2_100::XY2_100<PA2<Output<PushPull>>>,
 
-    laser_pwm_pin: PA2<Alternate<PushPull, 14>>, // CLK
-    laser_enable_pin: PA8<Output<PushPull>>,     //F_PRES
-    tim15: stm32::TIM15,
+    laser_pwm_pin: PA2<Alternate<PushPull>>,
+    laser_enable_pin: PA8<Output<PushPull>>,
+    tim15: stm32::TIM2,
 }
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
-    fn new(p: cortex_m::Peripherals, dp: stm32l4xx_hal::stm32l4::stm32l4x3::Peripherals) -> Self {
-        let mut rcc = dp.RCC.constrain();
+    fn new(p: cortex_m::Peripherals, dp: stm32f1xx_hal::stm32::Peripherals) -> Self {
+        let rcc = dp.RCC.constrain();
+        let mut flash = dp.FLASH.constrain();
+
         let ic = Arc::new(InterruptController::new(p.NVIC));
-        let dma_channels = dp.DMA2.split(&mut rcc.ahb1);
+        let dma_channels = dp.DMA2.split();
 
-        let mut gpioa = dp.GPIOA.split(&mut rcc.ahb2);
-        let mut gpioc = dp.GPIOC.split(&mut rcc.ahb2);
+        let mut gpioa = dp.GPIOA.split();
+        let mut gpiob = dp.GPIOB.split();
+        let mut gpioc = dp.GPIOC.split();
 
-        let gpiod = dp.GPIOD.split(&mut rcc.ahb2);
-
-        /*
-        let mut gpiob = dp.GPIOB.split(&mut rcc.ahb2);
-        let mut gpioe = dp.GPIOE.split(&mut rcc.ahb2);
-        */
+        let gpiod = dp.GPIOD.split();
 
         HighPerformanceMode {
-            flash: unsafe { Arc::new(Mutex::new(dp.FLASH.constrain()).unwrap_unchecked()) },
+            clocks: rcc.cfgr.freeze_with_config(
+                HighPerformanceClockConfigProvider::to_config(),
+                &mut flash.acr,
+            ),
+
+            flash: unsafe { Arc::new(Mutex::new(flash).unwrap_unchecked()) },
             crc: unsafe {
-                Arc::new(
-                    Mutex::new(super::configure_crc_module(dp.CRC.constrain(&mut rcc.ahb1)))
-                        .unwrap_unchecked(),
-                )
+                Arc::new(Mutex::new(super::configure_crc_module(dp.CRC.new())).unwrap_unchecked())
             },
 
             usb: dp.USB,
 
-            usb_dm: gpioa
-                .pa11
-                .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrh)
-                .set_speed(Speed::VeryHigh),
-            usb_dp: gpioa
-                .pa12
-                .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrh)
-                .set_speed(Speed::VeryHigh),
-
-            pwr: dp.PWR.constrain(&mut rcc.apb1r1),
-            clocks: None,
+            usb_dm: gpioa.pa11,
+            usb_dp: gpioa.pa12,
+            usb_pull_up: gpiob.pb8.into_push_pull_output_with_state(
+                &mut gpiob.crh,
+                if !crate::config::USB_PULLUP_ACTVE_LEVEL {
+                    stm32f1xx_hal::gpio::PinState::High
+                } else {
+                    stm32f1xx_hal::gpio::PinState::Low
+                },
+            ),
 
             interrupt_controller: ic,
-
-            rcc,
-
-            led_pin: gpioc
-                .pc10
-                .into_push_pull_output_in_state(&mut gpioc.moder, &mut gpioc.otyper, PinState::High)
-                .set_speed(Speed::Low),
 
             // PCB
             // верхняя флешка
@@ -145,14 +166,10 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             galvo_ctrl: xy2_100::XY2_100::new(dp.TIM7, gpiod, dma_channels.5, 6, 3, 5, 7, None),
 
             // pwm and enable pins
-            laser_pwm_pin: gpioa
-                .pa2
-                .into_alternate(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrl)
-                .set_speed(Speed::Medium),
+            laser_pwm_pin: gpioa.pa2.into_alternate_push_pull(&mut gpioa.crl),
             laser_enable_pin: gpioa
                 .pa8
-                .into_push_pull_output_in_state(&mut gpioa.moder, &mut gpioa.otyper, PinState::Low)
-                .set_speed(Speed::Low),
+                .into_push_pull_output_with_state(&mut gpioa.crh, PinState::Low),
 
             tim15: dp.TIM15,
         }
@@ -160,87 +177,19 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
     fn ini_static(&mut self) {}
 
-    // Работа от внешнего кварца HSE = 12 MHz
-    // Установить частоту CPU = 80 MHz (12 / 3 * 40 / 2 == 80)
-    // USB работает от PLLSAI1Q = 48 MHz (12 / 3 * 24 / 2 == 48)
     fn configure_clock(&mut self) {
-        fn configure_usb48() {
-            let _rcc = unsafe { &*stm32::RCC::ptr() };
-
-            // set USB 48Mhz clock src to PLLSAI1Q
-            // mast be configured only before PLL enable
-
-            _rcc.cr.modify(|_, w| w.pllsai1on().clear_bit());
-            while _rcc.cr.read().pllsai1rdy().bit_is_set() {}
-
-            _rcc.pllsai1cfgr.modify(|_, w| unsafe {
-                w.pllsai1n()
-                    .bits(SAI_MULTIPLIER)
-                    .pllsai1q()
-                    .bits(SAI_DIVIDER)
-                    .pllsai1qen()
-                    .set_bit() // enable PLLSAI1Q
-            });
-
-            _rcc.cr.modify(|_, w| w.pllsai1on().set_bit());
-            while _rcc.cr.read().pllsai1rdy().bit_is_set() {}
-
-            // PLLSAI1Q -> CLK48MHz
-            unsafe { _rcc.ccipr.modify(|_, w| w.clk48sel().bits(0b01)) };
-        }
-
-        fn setup_cfgr(work_cfgr: &mut stm32l4xx_hal::rcc::CFGR) {
-            let mut cfgr = unsafe {
-                core::mem::MaybeUninit::<stm32l4xx_hal::rcc::CFGR>::zeroed().assume_init()
-            };
-
-            core::mem::swap(&mut cfgr, work_cfgr);
-
-            let mut cfgr = cfgr
-                .hsi48(false)
-                .hse(
-                    Hertz::Hz(crate::config::XTAL_FREQ), // onboard crystall
-                    stm32l4xx_hal::rcc::CrystalBypass::Disable,
-                    stm32l4xx_hal::rcc::ClockSecuritySystem::Enable,
-                )
-                .sysclk_with_pll(
-                    HighPerformanceClockConfigProvider::core_frequency(),
-                    HighPerformanceClockConfigProvider::pll_config(),
-                )
-                .pll_source(stm32l4xx_hal::rcc::PllSource::HSE)
-                .pclk1(HighPerformanceClockConfigProvider::apb1_frequency())
-                .pclk2(HighPerformanceClockConfigProvider::apb2_frequency());
-
-            core::mem::swap(&mut cfgr, work_cfgr);
-        }
-
-        setup_cfgr(&mut self.rcc.cfgr);
-
-        let clocks = if let Ok(mut flash) = self.flash.lock(Duration::infinite()) {
-            self.rcc.cfgr.freeze(&mut flash.acr, &mut self.pwr)
-        } else {
-            panic!()
-        };
-
-        configure_usb48();
-
-        // stm32l433cc.pdf: figure. 4
         crate::time_base::master_counter::MasterCounter::init(
             HighPerformanceClockConfigProvider::master_counter_frequency(),
             self.interrupt_controller.clone(),
         );
-
-        self.clocks = Some(clocks);
     }
 
     fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
         use crate::gcode::GCode;
         use crate::threads::usbd::Usbd;
 
-        let sys_clk = unsafe { self.clocks.unwrap_unchecked().hclk() };
-        let tim_ref_clk = unsafe { self.clocks.unwrap_unchecked().pclk1() };
-
-        crate::support::led::led_init(self.led_pin);
+        let sys_clk = self.clocks.hclk();
+        let tim_ref_clk = self.clocks.pclk1();
 
         // --------------------------------------------------------------------
         defmt::trace!("Creating usb thread...");
@@ -248,9 +197,15 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             usb: self.usb,
             pin_dp: self.usb_dp,
             pin_dm: self.usb_dm,
+            usb_pull_up: self.usb_pull_up,
         };
         let ic = self.interrupt_controller.clone();
-        Usbd::init(usbperith, ic, crate::config::USB_INTERRUPT_PRIO);
+        Usbd::init(
+            usbperith,
+            ic,
+            crate::config::USB_INTERRUPT_PRIO,
+            crate::config::USB_PULLUP_ACTVE_LEVEL.into(),
+        );
 
         // --------------------------------------------------------------------
 
@@ -268,9 +223,9 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
         let pwm_pin = self.tim15.pwm(
             self.laser_pwm_pin,
+            0,
             1.kHz(),
-            unsafe { *self.clocks.as_ref().unwrap_unchecked() },
-            &mut self.rcc.apb2,
+            &self.clocks,
         );
 
         let laser = laser::Laser::new(pwm_pin, self.laser_enable_pin);
@@ -318,7 +273,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
                     })
                     .expect("expect5")
             };
-            Usbd::subsbrbe(gcode_srv);
+            Usbd::subscribe(gcode_srv);
         }
 
         // --------------------------------------------------------------------
@@ -340,14 +295,14 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     }
 
     fn print_clock_config(&self) {
-        super::common::print_clock_config(&self.clocks, "HSI48");
+        super::common::print_clock_config(&self.clocks);
     }
 
-    fn flash(&mut self) -> Arc<Mutex<stm32l4xx_hal::flash::Parts>> {
+    fn flash(&mut self) -> Arc<Mutex<stm32f1xx_hal::flash::Parts>> {
         self.flash.clone()
     }
 
-    fn crc(&mut self) -> Arc<Mutex<stm32l4xx_hal::crc::Crc>> {
+    fn crc(&mut self) -> Arc<Mutex<stm32f1xx_hal::crc::Crc>> {
         self.crc.clone()
     }
 }

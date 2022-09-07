@@ -3,7 +3,7 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use alloc::sync::Arc;
-use stm32l4xx_hal::time::Hertz;
+use stm32f1xx_hal::time::Hertz;
 
 use crate::support::interrupt_controller::IInterruptController;
 

@@ -4,7 +4,7 @@ use core::fmt::Display;
 use alloc::format;
 use alloc::string::String;
 use embedded_hal::PwmPin;
-use stm32l4xx_hal::prelude::OutputPin;
+use embedded_hal::digital::v2::OutputPin;
 
 use crate::{
     config,

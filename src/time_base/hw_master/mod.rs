@@ -33,10 +33,10 @@ pub(crate) trait MasterCounterInfo: Sync + Send {
     fn uif_cpy_mask(&self) -> Option<u32>;
 }
 
-#[cfg(feature = "stm32l433")]
-mod master_l433;
-#[cfg(feature = "stm32l433")]
-use master_l433::MASTER_LIST;
+#[cfg(feature = "stm32f103")]
+mod master_f103;
+#[cfg(feature = "stm32f103")]
+use master_f103::MASTER_LIST;
 
 use crate::support::interrupt_controller::IInterruptController;
 

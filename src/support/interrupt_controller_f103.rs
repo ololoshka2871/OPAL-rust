@@ -1,6 +1,6 @@
 use super::interrupt_controller::{self, Interrupt};
 use cortex_m::{interrupt::InterruptNumber, peripheral::NVIC};
-use stm32l4xx_hal::stm32l4::stm32l4x3::Interrupt as IRQ;
+use stm32f1xx_hal::stm32::Interrupt as IRQ;
 
 pub struct InterruptController(cortex_m::peripheral::NVIC);
 

@@ -29,7 +29,7 @@ mod master_value_stat;
 
 use cortex_m_rt::entry;
 
-use stm32l4xx_hal::stm32;
+use stm32f1xx_hal::stm32;
 
 use crate::workmodes::{high_performance_mode::HighPerformanceMode, WorkMode};
 

@@ -1,7 +1,10 @@
-// /PD *M /AD
-pub(crate) const PLL_CFG: (u32, u32, u32) = (1, 24, 4);
-pub(crate) const APB1_DEVIDER: u32 = 1;
-pub(crate) const APB2_DEVIDER: u32 = 1;
+use stm32f1xx_hal::rcc::{AdcPre, HPre, PPre, UsbPre};
 
-pub(crate) const SAI_MULTIPLIER: u8 = 8;
-pub(crate) const SAI_DIVIDER: u8 = 0b00;
+// /PD *M /AD
+pub(crate) const PLL_MUL: u32 = 6;
+pub(crate) const APB1_DEVIDER: PPre = PPre::DIV2;
+pub(crate) const APB2_DEVIDER: PPre = PPre::DIV1;
+
+pub(crate) const AHB_DEVIDER: HPre = HPre::DIV1;
+pub(crate) const USB_DEVIDER: UsbPre = UsbPre::DIV1_5;
+pub(crate) const ADC_DEVIDER: AdcPre = AdcPre::DIV8;
