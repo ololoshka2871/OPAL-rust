@@ -11,6 +11,9 @@
 
 extern crate alloc;
 
+// экономим место
+use panic_halt as _;
+
 mod control;
 mod gcode;
 mod support;
