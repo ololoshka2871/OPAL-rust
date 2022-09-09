@@ -17,6 +17,8 @@ pub mod debug_mcu;
 pub mod defmt_string;
 pub mod format_c_str;
 pub mod format_float_simple;
+pub mod parallel_input_bus;
+pub mod parallel_output_bus;
 pub mod ticks_format;
 
 #[cfg(feature = "stm32f103")]

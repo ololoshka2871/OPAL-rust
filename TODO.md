@@ -16,10 +16,15 @@
     [v] <str as core::fmt::Debug>::fmt - src/support/defmt_string.rs
     [x] core::str::slice_error_fail - путь вызова неясен, используется где-то в парсере
     [x] <char as core::fmt::Debug>::fmt
-    [v] Заменить очевидные `.unwrap()` на ``.unwrap_uncheked()`
+    [v] Заменить очевидные `.unwrap()` на `.unwrap_uncheked()`
     [v] Включить LTO и добиться его работы в сторону уменьшения размера кода.
     
 [v] Портирование на STM32F103
     [v] Замена HAL
     [v] Рапределение счетчиков
     [v] Распределение пинов
+
+[_] Шаблоны с неорпделенным количеством аргументов приводят к макросам
+    https://doc.rust-lang.org/rust-by-example/macros/variadics.html
+    [_] Шина ввода
+    [_] Шина вывода

@@ -8,6 +8,7 @@
 #![feature(int_abs_diff)]
 #![feature(array_zip)]
 #![feature(core_intrinsics)]
+#![feature(macro_metavar_expr)]
 
 extern crate alloc;
 

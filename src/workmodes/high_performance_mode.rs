@@ -1,3 +1,5 @@
+use core::convert::Infallible;
+
 use alloc::sync::Arc;
 
 use freertos_rust::{Duration, Mutex, Task, TaskPriority};
@@ -94,6 +96,19 @@ impl ClockConfigProvider for HighPerformanceClockConfigProvider {
     }
 }
 
+crate::simple_parallel_output_bus! { LaserDataBus: u8 =>
+    (
+        pin PA0<Output<PushPull>>,
+        pin PA1<Output<PushPull>>,
+        pin PA2<Output<PushPull>>,
+        pin PA3<Output<PushPull>>,
+        pin PA4<Output<PushPull>>,
+        pin PA5<Output<PushPull>>,
+        pin PA6<Output<PushPull>>,
+        pin PA7<Output<PushPull>>
+    )
+}
+
 #[allow(unused)]
 pub struct HighPerformanceMode {
     flash: Arc<Mutex<stm32f1xx_hal::flash::Parts>>,
@@ -113,16 +128,7 @@ pub struct HighPerformanceMode {
 
     laser_timer: stm32::TIM4,
     laser_red_bam_timer: stm32::TIM1,
-    laser_power_bus: (
-        PA0<Output<PushPull>>,
-        PA1<Output<PushPull>>,
-        PA2<Output<PushPull>>,
-        PA3<Output<PushPull>>,
-        PA4<Output<PushPull>>,
-        PA5<Output<PushPull>>,
-        PA6<Output<PushPull>>,
-        PA7<Output<PushPull>>,
-    ),
+    laser_power_bus: LaserDataBus,
     laser_power_latch: PA9<Output<PushPull>>,
     laser_status: (
         PC13<Input<Floating>>,
@@ -175,20 +181,12 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             interrupt_controller: ic,
 
-            galvo_ctrl: xy2_100::XY2_100::new(
-                dp.TIM2,
-                &mut gpiob,
-                dma_channels.2,
-                3,
-                4,
-                5,
-                6,
-            ),
+            galvo_ctrl: todo!(),//xy2_100::XY2_100::new(dp.TIM2, &mut gpiob, dma_channels.2, 3, 4, 5, 6),
 
             // pwm and enable pins
             laser_timer: dp.TIM4,
             laser_red_bam_timer: dp.TIM1,
-            laser_power_bus: (
+            laser_power_bus: LaserDataBus(
                 gpioa.pa0.into_push_pull_output(&mut gpioa.crl),
                 gpioa.pa1.into_push_pull_output(&mut gpioa.crl),
                 gpioa.pa2.into_push_pull_output(&mut gpioa.crl),

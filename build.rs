@@ -37,7 +37,7 @@ fn generate_free_rtos_config<P: AsRef<Path>>(path: P) -> PathBuf {
 fn build_freertos(mut b: freertos_cargo_build::Builder) {
     // Path to FreeRTOS kernel or set ENV "FREERTOS_SRC" instead
     b.freertos("./FreeRTOS-Kernel");
-    b.freertos_port(String::from("GCC/ARM_CM4F")); // Port dir relativ to 'FreeRTOS-Kernel/portable'
+    b.freertos_port(String::from("GCC/ARM_CM3")); // Port dir relativ to 'FreeRTOS-Kernel/portable'
 
     b.freertos_config(&generate_free_rtos_config("src/configTemplate"));
 
