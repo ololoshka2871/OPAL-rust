@@ -1,6 +1,6 @@
 use embedded_hal::digital::v2::OutputPin;
 
-pub trait ParallelOutputBus<T: OutputPin> {
+pub trait ParallelOutputBus {
     type Output;
     fn set(&self, value: Self::Output);
 }
@@ -10,8 +10,7 @@ macro_rules! simple_parallel_output_bus {
     ($name:ident: $valtype:ty => ($(pin $pint:ty),+)) => {
         struct $name($( pub $pint ),* );
 
-        impl<T: embedded_hal::digital::v2::OutputPin>
-            crate::support::parallel_output_bus::ParallelOutputBus<T> for $name {
+        impl crate::support::parallel_output_bus::ParallelOutputBus for $name {
             type Output = $valtype;
 
             fn set(&self, value: Self::Output) {
