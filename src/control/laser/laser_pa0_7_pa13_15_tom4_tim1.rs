@@ -36,6 +36,8 @@ where
 
             current_power_seting: 0,
             current_em_mod_seting: 0,
+
+            enabled: false,
         }
     }
 
@@ -60,18 +62,21 @@ where
     OUTPIN: OutputPin<Error = Infallible>,
 {
     fn enable(&mut self) {
-        self.set_pump_power(self.current_power_seting);
+        if !self.enabled {
+            self.set_pump_power(self.current_power_seting);
 
-        self.laser_sync.set_duty(self.laser_sync.get_max_duty() / 2);
-        self.laser_sync.enable();
+            self.laser_sync.set_duty(self.laser_sync.get_max_duty() / 2);
+            self.laser_sync.enable();
 
-        self.laser_emission_enable
-            .set_duty(self.laser_emission_enable.get_max_duty());
-        self.laser_emission_modulation.enable();
+            self.laser_emission_enable
+                .set_duty(self.laser_emission_enable.get_max_duty());
+            self.laser_emission_modulation.enable();
 
-        self.laser_emission_modulation
-            .set_duty(self.current_em_mod_seting);
-        self.laser_emission_modulation.enable();
+            self.laser_emission_modulation
+                .set_duty(self.current_em_mod_seting);
+            self.laser_emission_modulation.enable();
+            self.enabled = true;
+        }
     }
 
     fn disable(&mut self) {
@@ -87,6 +92,8 @@ where
         self.laser_sync.disable();
 
         self.set_pump_power(0);
+
+        self.enabled = false;
     }
 
     fn set_power_pwm(&mut self, mut power: f32) {
@@ -112,11 +119,10 @@ where
     }
 
     fn get_status(&self) -> super::LaserStatus {
-        num::FromPrimitive::from_u8(self.alarm_bus.get())
-            .unwrap_or(super::LaserStatus::SystemAlarm)
+        num::FromPrimitive::from_u8(self.alarm_bus.get()).unwrap_or(super::LaserStatus::SystemAlarm)
     }
 
-    fn set_red_laser_enable(&mut self, power: f32) {
+    fn set_red_laser_power(&mut self, power: f32) {
         if power > 0.0 {
             self.laser_red_beam
                 .set_duty(Self::power2_pwm(power, self.laser_red_beam.get_max_duty()));

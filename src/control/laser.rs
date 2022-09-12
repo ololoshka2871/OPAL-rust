@@ -39,7 +39,7 @@ pub trait LaserInterface {
     fn get_status(&self) -> LaserStatus;
 
     /// установить мощность красного лазера
-    fn set_red_laser_enable(&mut self, power: f32);
+    fn set_red_laser_power(&mut self, power: f32);
 }
 
 pub struct Laser<PBUS, ABUS, OUTPIN, EM, EE, ES, RL>
@@ -61,6 +61,8 @@ where
 
     current_power_seting: u8,
     current_em_mod_seting: u16,
+
+    enabled: bool,
 }
 
 pub mod laser_pa0_7_pa13_15_tom4_tim1;

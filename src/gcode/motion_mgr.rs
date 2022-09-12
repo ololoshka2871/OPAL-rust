@@ -40,9 +40,11 @@ where
     current_cmd_y: f32,
     current_f: f32,
     current_s: f32,
+    current_p: u8,
     current_duration: f32,
     current_absolute: bool,
     current_laserenabled: bool,
+    current_red_laserenabled: bool,
     laser_changed: bool,
 
     laser: LASER,
@@ -75,9 +77,11 @@ where
             current_cmd_y: 0f32,
             current_f: 100f32,
             current_s: 0f32,
+            current_p: 0,
             current_duration: 0f32,
             current_absolute: true,
             current_laserenabled: false,
+            current_red_laserenabled: false,
             laser_changed: false,
 
             laser,
@@ -116,11 +120,19 @@ where
 
         if self.laser_changed {
             if self.current_laserenabled {
-                self.set_laser_power(self.current_s);
-                self.laser_changed = false;
+                self.laser.set_pump_power(self.current_p);
+                self.laser.set_power_pwm(self.current_s);
+                self.laser.enable();
             } else {
-                self.set_laser_power(0f32);
+                self.laser.disable()
             }
+
+            if self.current_red_laserenabled {
+                self.laser.set_red_laser_power(self.current_s)
+            } else {
+                self.laser.set_red_laser_power(0.0);
+            }
+
             self.laser_changed = false;
         }
 
@@ -250,13 +262,9 @@ where
         match code {
             3 | 4 => {
                 if let Some(new_s) = gcode.get_s() {
-                    if let Err(_) = Self::set_value(
-                        &mut self.current_s,
-                        new_s,
-                        'S',
-                        config::MOTION_MAX_S,
-                        -01f32,
-                    ) {
+                    if let Err(_) =
+                        Self::set_value(&mut self.current_s, new_s, 'S', config::MOTION_MAX_S, 0.0)
+                    {
                         if new_s > config::MOTION_MAX_S {
                             self.current_s = config::MOTION_MAX_S;
                         } else {
@@ -265,22 +273,30 @@ where
                     }
                 }
 
-                self.current_laserenabled = true;
+                if let Some(new_p) = gcode.get_p() {
+                    if let Err(_) = Self::set_value(&mut self.current_p, new_p as u8, 'P', 0xff, 0)
+                    {
+                        if new_p > 255.0 {
+                            self.current_p = 0xff;
+                        } else {
+                            self.current_p = 0;
+                        }
+                    }
+                }
+
+                if code == 3 {
+                    self.current_laserenabled = true;
+                } else {
+                    self.current_red_laserenabled = true;
+                }
                 self.laser_changed = true;
             }
 
             5 => {
                 self.current_laserenabled = false;
+                self.current_red_laserenabled = true;
                 self.laser_changed = true;
             }
-
-            /* 8 => { Coolant on  } */
-            /* 9 => { Coolant off } */
-            /* 17 => self.galvo.enable(), */
-            /* 18 => self.galvo.disable(), */
-
-            80 => self.laser.enable(),
-            81 => self.laser.disable(),
 
             _ => {}
         }
@@ -412,14 +428,6 @@ where
 
     fn nanos(&self) -> u64 {
         (self.master.value64().0 as f32 * self.to_nanos) as u64
-    }
-
-    fn set_laser_power(&mut self, power: f32) {
-        self.laser.set_power_pwm(power);
-        defmt::trace!(
-            "Laser power: {}%",
-            crate::support::format_float_simple::format_float_simple(power, 1)
-        );
     }
 }
 

@@ -24,7 +24,8 @@ pub struct GCode {
     x: Option<f32>,
     y: Option<f32>,
 
-    s: Option<f32>, // Laser Power
+    s: Option<f32>, // Laser pwm Power
+    p: Option<f32>, // Laser pump Power
     f: Option<f32>, // FeedRate
 }
 
@@ -67,6 +68,8 @@ impl GCode {
 
                 new_code.s = Self::get_val('S', text)
                     .or_else(|_| Err(ParceError::Error("Invalid S value".into())))?;
+                new_code.p = Self::get_val('P', text)
+                    .or_else(|_| Err(ParceError::Error("Invalid P value".into())))?;
             } else if Self::has_command('G', text) {
                 new_code.code = Code::G(
                     Self::search_value('G', text)
@@ -138,6 +141,11 @@ impl GCode {
     }
 
     #[inline]
+    pub fn get_p(&self) -> Option<f32> {
+        self.p
+    }
+
+    #[inline]
     pub fn get_f(&self) -> Option<f32> {
         self.f
     }
@@ -150,6 +158,7 @@ impl Default for GCode {
             x: None,
             y: None,
             s: None,
+            p: None,
             f: None,
         }
     }
