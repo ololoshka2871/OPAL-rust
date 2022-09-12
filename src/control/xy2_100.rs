@@ -1,11 +1,7 @@
-use core::{
-    convert::Infallible,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use core::sync::atomic::AtomicBool;
 
 use alloc::sync::Arc;
-use embedded_hal::digital::v2::OutputPin;
-use stm32f1xx_hal::{gpio::gpiod, pac::interrupt};
+use stm32f1xx_hal::{pac::interrupt};
 
 use crate::support::interrupt_controller::IInterruptController;
 
@@ -25,64 +21,33 @@ static mut BACK_BUF: &mut [u16] = unsafe { &mut OUTPUT_BUF_B };
 
 static mut BACK_BUF_READY: AtomicBool = AtomicBool::new(false);
 
-pub struct XY2_100<EN: OutputPin<Error = Infallible>> {
-    timer7: stm32f1xx_hal::device::TIM4,
-    _port: gpiod::Parts,
-    dma: stm32f1xx_hal::dma::dma2::C5, // fixme
+pub mod tim2_GPIOB_3456;
 
-    clk_mask: u16,
-    sync_mask: u16,
-    pin_data_x_mask: u16,
-    pin_data_y_mask: u16,
-
-    enable_pin: Option<EN>,
+pub trait XY2_100Interface {
+    fn begin<IC: IInterruptController>(&mut self, ic: Arc<IC>, tim_ref_clk: stm32f1xx_hal::time::Hertz);
+    fn set_pos(&mut self, x: u16, y: u16);
 }
 
-impl<EN: OutputPin<Error = Infallible>> XY2_100<EN> {
+pub struct XY2_100<TIMER, DMACH, OUTPUTS> {
+    timer: TIMER,
+    dma: DMACH,
+    port_addr: usize,
+    outputs: OUTPUTS,
+}
+
+/*
+impl XY2_100 {
     pub fn new(
-        timer7: stm32f1xx_hal::device::TIM4,
-        port: gpiod::Parts,
-        dma2_ch6: stm32f1xx_hal::dma::dma2::C5, // fixme
-        clk_pin_n: u16,
-        sync_pin_n: u16,
-        pin_data_x_pin_n: u16,
-        pin_data_y_pin_n: u16,
-        enable_pin: Option<EN>,
+        timer2: stm32f1xx_hal::device::TIM2,
+        dma2_ch6: stm32f1xx_hal::dma::dma1::C2,
+        port: u32,
+        outputs: u32,
     ) -> Self {
-        for n in [clk_pin_n, sync_pin_n, pin_data_x_pin_n, pin_data_y_pin_n] {
-            unsafe {
-                // stm32l4xx-hal/src/gpio/convert.rs
-                const PUPDR: u32 = 0b00;
-                const MODER: u32 = 0b01;
-                const OTYPER: Option<u32> = Some(0b0);
-
-                let offset = 2 * n;
-
-                let ptr = &*stm32l4xx_hal::stm32l4::stm32l4x3::GPIOD::ptr();
-                ptr.pupdr
-                    .modify(|r, w| w.bits((r.bits() & !(0b11 << offset)) | (PUPDR << offset)));
-
-                if let Some(otyper) = OTYPER {
-                    ptr.otyper
-                        .modify(|r, w| w.bits(r.bits() & !(0b1 << n) | (otyper << n)));
-                }
-
-                ptr.moder
-                    .modify(|r, w| w.bits((r.bits() & !(0b11 << offset)) | (MODER << offset)));
-            }
-        }
-
         Self {
-            timer7,
-            _port: port,
+            timer2,
+            port: port,
             dma: dma2_ch6,
-
-            clk_mask: 1u16 << clk_pin_n,
-            sync_mask: 1u16 << sync_pin_n,
-            pin_data_x_mask: 1u16 << pin_data_x_pin_n,
-            pin_data_y_mask: 1u16 << pin_data_y_pin_n,
-
-            enable_pin,
+            outputs,
         }
     }
 
@@ -91,7 +56,7 @@ impl<EN: OutputPin<Error = Infallible>> XY2_100<EN> {
         ic: Arc<dyn IInterruptController>,
         tim_ref_clk: stm32f1xx_hal::time::Hertz,
     ) {
-        // configure dma memory -> GPIO by tim7
+        // configure dma memory -> GPIO by tim2_up
         {
             use stm32f1xx_hal::device::Interrupt;
 
@@ -290,3 +255,4 @@ unsafe fn DMA2_CH5() {
         start_tx();
     }
 }
+*/

@@ -1,15 +1,10 @@
-use core::convert::Infallible;
 use core::fmt::Display;
 
 use alloc::format;
 use alloc::string::String;
-use embedded_hal::PwmPin;
-use embedded_hal::digital::v2::OutputPin;
 
 use crate::{
-    config,
-    control::{laser::Laser, xy2_100::XY2_100},
-    support::format_float_simple::format_float_simple,
+    config, support::format_float_simple::format_float_simple,
     time_base::master_counter::MasterTimerInfo,
 };
 
@@ -21,11 +16,10 @@ pub enum MotionStatus {
     INTERPOLATING,
 }
 
-pub struct MotionMGR<PWM, LASEREN, GALVOEN>
+pub struct MotionMGR<LASER, GALVO>
 where
-    PWM: PwmPin<Duty = u16>,
-    GALVOEN: OutputPin<Error = Infallible>,
-    LASEREN: OutputPin<Error = Infallible>,
+    GALVO: crate::control::xy2_100::XY2_100Interface,
+    LASER: crate::control::laser::LaserInterface,
 {
     _status: MotionStatus,
     is_move_first_interpolation: bool,
@@ -51,25 +45,19 @@ where
     current_laserenabled: bool,
     laser_changed: bool,
 
-    laser: Laser<PWM, LASEREN>,
-    galvo: XY2_100<GALVOEN>,
+    laser: LASER,
+    galvo: GALVO,
 
     master: MasterTimerInfo,
     to_nanos: f64,
 }
 
-impl<'a, PWM, LASEREN, GALVOEN> MotionMGR<PWM, LASEREN, GALVOEN>
+impl<LASER, GALVO> MotionMGR<LASER, GALVO>
 where
-    PWM: PwmPin<Duty = u16>,
-    GALVOEN: OutputPin<Error = Infallible>,
-    LASEREN: OutputPin<Error = Infallible>,
+    GALVO: crate::control::xy2_100::XY2_100Interface,
+    LASER: crate::control::laser::LaserInterface,
 {
-    pub fn new(
-        laser: Laser<PWM, LASEREN>,
-        galvo: XY2_100<GALVOEN>,
-        master: MasterTimerInfo,
-        to_nanos: f64,
-    ) -> Self {
+    pub fn new(galvo: GALVO, laser: LASER, master: MasterTimerInfo, to_nanos: f64) -> Self {
         Self {
             _status: MotionStatus::IDLE,
             is_move_first_interpolation: true,
@@ -288,8 +276,8 @@ where
 
             /* 8 => { Coolant on  } */
             /* 9 => { Coolant off } */
-            17 => self.galvo.enable(),
-            18 => self.galvo.disable(),
+            /* 17 => self.galvo.enable(), */
+            /* 18 => self.galvo.disable(), */
 
             80 => self.laser.enable(),
             81 => self.laser.disable(),

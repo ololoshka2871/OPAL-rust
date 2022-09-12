@@ -1,7 +1,18 @@
 use core::convert::Infallible;
 
-use embedded_hal::{PwmPin, digital::v2::OutputPin};
+use embedded_hal::digital::v2::OutputPin;
 
+use crate::support::{
+    parallel_input_bus::ParallelInputBus, parallel_output_bus::ParallelOutputBus,
+};
+
+pub trait LaserInterface {
+    fn enable(&mut self);
+    fn disable(&mut self);
+    fn set_power(&mut self, power: f64);
+}
+
+/*
 pub struct Laser<PWM, ENABLE: OutputPin<Error = Infallible>> {
     laser_pwm_pin: PWM,
     laser_enable_pin: ENABLE,
@@ -44,3 +55,24 @@ impl<PWM: PwmPin<Duty = u16>, ENABLE: OutputPin<Error = Infallible>> Laser<PWM, 
         self.laser_pwm_pin.set_duty(power);
     }
 }
+*/
+
+pub struct Laser<PBUS, ABUS, OUTPIN, EM, EE, ES, RL>
+where
+    PBUS: ParallelOutputBus<Output = u8>,
+    ABUS: ParallelInputBus<Input = u8>,
+    OUTPIN: OutputPin<Error = Infallible>,
+{
+    power_set_bus: PBUS,
+    power_latch_pin: OUTPIN,
+
+    alarm_bus: ABUS,
+
+    laser_emission_modulation: EM,
+    laser_emission_enable: EE,
+    laser_sync: ES,
+
+    laser_red_beam: RL,
+}
+
+pub mod laser_PA0_7_PA13_15_TIM4_TIM1;

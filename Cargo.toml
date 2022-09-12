@@ -60,7 +60,7 @@ default = [
 
 stm32f103b = ["stm32f103"]
 monitor-heap = ["monitor"]
-stm32f103 = ["stm32f1xx-hal/stm32f103" ]
+stm32f103 = ["stm32f1xx-hal/stm32f103", "stm32f1xx-hal/medium"] # косяк либы, для f103 не включена поддержка таймера 4
 monitor = []
 led-blink = []
 

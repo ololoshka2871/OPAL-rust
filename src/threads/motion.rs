@@ -1,7 +1,5 @@
-use core::convert::Infallible;
-
 use alloc::sync::Arc;
-use embedded_hal::{digital::v2::OutputPin, PwmPin};
+use embedded_hal::PwmPin;
 use freertos_rust::{Duration, Mutex, Queue};
 use usbd_serial::SerialPort;
 
@@ -11,25 +9,24 @@ use crate::support::defmt_string::DefmtString;
 
 use crate::threads::gcode_server::write_responce;
 
-pub fn motion<B, PWM, ENABLE, GALVOEN>(
+pub fn motion<B, LASER, GALVO>(
     serial: Arc<Mutex<&'static mut SerialPort<B>>>,
     gcode_queue: Arc<Queue<GCode>>,
     request_queue: Arc<Queue<Request>>,
-    laser: crate::control::laser::Laser<PWM, ENABLE>,
-    galvo: crate::control::xy2_100::XY2_100<GALVOEN>,
+    laser: LASER,
+    galvo: GALVO,
     master_freq: stm32f1xx_hal::time::Hertz,
 ) -> !
 where
     B: usb_device::bus::UsbBus,
-    PWM: PwmPin<Duty = u16>,
-    ENABLE: OutputPin<Error = Infallible>,
-    GALVOEN: OutputPin<Error = Infallible>,
+    GALVO: crate::control::xy2_100::XY2_100Interface,
+    LASER: crate::control::laser::LaserInterface,
 {
     let master = crate::time_base::master_counter::MasterCounter::acquire();
 
     let mut motion = MotionMGR::new(
-        laser,
         galvo,
+        laser,
         master,
         1_000_000_000f64 / master_freq.to_Hz() as f64,
     );

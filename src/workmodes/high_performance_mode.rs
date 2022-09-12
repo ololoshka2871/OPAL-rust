@@ -1,25 +1,26 @@
-use core::convert::Infallible;
-
 use alloc::sync::Arc;
 
-use freertos_rust::{Duration, Mutex, Task, TaskPriority};
+use freertos_rust::{Mutex, Task, TaskPriority};
 
 use stm32f1xx_hal::{
-    flash,
-    gpio::{
-        Alternate, Analog, Floating, Input, Output, PinState, PushPull, PA0, PA1, PA10, PA11, PA12,
-        PA15, PA2, PA3, PA4, PA5, PA6, PA7, PA8, PA9, PB0, PB14, PB7, PB8, PB9, PC10, PC13, PC14,
-        PC15, PD10, PD11, PD13, PE12,
-    },
+    device::{GPIOB, TIM1, TIM4},
     prelude::*,
     rcc::{HPre, PPre},
-    stm32,
     time::Hertz,
+    timer::{PwmChannel, Timer},
 };
 
-use crate::control::{laser, xy2_100};
+use stm32f1xx_hal::gpio::{
+    Floating, Input, Output, PushPull, PA0, PA1, PA11, PA12, PA15, PA2, PA3, PA4, PA5, PA6, PA7,
+    PA9, PB3, PB4, PB5, PB6, PC13, PC14, PC15,
+};
+
+use crate::control::{
+    laser,
+    xy2_100::{self, XY2_100Interface},
+};
 use crate::gcode::Request;
-use crate::support::{interrupt_controller::IInterruptController, InterruptController};
+use crate::support::InterruptController;
 use crate::threads;
 use crate::workmodes::common::ClockConfigProvider;
 
@@ -96,6 +97,8 @@ impl ClockConfigProvider for HighPerformanceClockConfigProvider {
     }
 }
 
+//-----------------------------------------------------------------------------
+
 crate::simple_parallel_output_bus! { LaserDataBus: u8 =>
     (
         pin PA0<Output<PushPull>>,
@@ -109,6 +112,16 @@ crate::simple_parallel_output_bus! { LaserDataBus: u8 =>
     )
 }
 
+crate::simple_parallel_input_bus! { LaserAlarmBus: u8 =>
+    (
+        pin PC13<Input<Floating>>,
+        pin PC14<Input<Floating>>,
+        pin PC15<Input<Floating>>
+    )
+}
+
+//-----------------------------------------------------------------------------
+
 #[allow(unused)]
 pub struct HighPerformanceMode {
     flash: Arc<Mutex<stm32f1xx_hal::flash::Parts>>,
@@ -120,25 +133,30 @@ pub struct HighPerformanceMode {
     usb_dp: PA12<Input<Floating>>,
     usb_pull_up: PA15<Output<PushPull>>,
 
-    interrupt_controller: Arc<dyn IInterruptController>,
+    interrupt_controller: Arc<InterruptController>,
 
     crc: Arc<Mutex<stm32f1xx_hal::crc::Crc>>,
 
-    galvo_ctrl: xy2_100::XY2_100<PA2<Output<PushPull>>>,
+    galvo_ctrl: xy2_100::XY2_100<
+        stm32f1xx_hal::device::TIM2,
+        stm32f1xx_hal::dma::dma1::C2,
+        (
+            PB3<Output<PushPull>>,
+            PB4<Output<PushPull>>,
+            PB5<Output<PushPull>>,
+            PB6<Output<PushPull>>,
+        ),
+    >,
 
-    laser_timer: stm32::TIM4,
-    laser_red_bam_timer: stm32::TIM1,
-    laser_power_bus: LaserDataBus,
-    laser_power_latch: PA9<Output<PushPull>>,
-    laser_status: (
-        PC13<Input<Floating>>,
-        PC14<Input<Floating>>,
-        PC15<Input<Floating>>,
-    ),
-    laser_emission_modulatiuon: PB8<Alternate<PushPull>>,
-    laser_emission_enable: PB9<Alternate<PushPull>>,
-    laser_sync: PB7<Alternate<PushPull>>,
-    laser_red_bam: PA10<Alternate<PushPull>>,
+    laser: laser::Laser<
+        LaserDataBus,
+        LaserAlarmBus,
+        PA9<Output<PushPull>>,
+        PwmChannel<TIM4, 2>,
+        PwmChannel<TIM4, 3>,
+        PwmChannel<TIM4, 1>,
+        PwmChannel<TIM1, 2>,
+    >,
 }
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
@@ -147,7 +165,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         let mut flash = dp.FLASH.constrain();
 
         let ic = Arc::new(InterruptController::new(p.NVIC));
-        let dma_channels = dp.DMA2.split();
+        let dma_channels = dp.DMA1.split();
 
         let mut gpioa = dp.GPIOA.split();
         let mut gpiob = dp.GPIOB.split();
@@ -156,11 +174,55 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         let mut afio = dp.AFIO.constrain();
         let (pa15, pb3, pb4) = afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
 
+        let laser_power_bus = LaserDataBus(
+            gpioa.pa0.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa1.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa2.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa3.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa4.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa5.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa6.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa7.into_push_pull_output(&mut gpioa.crl),
+        );
+
+        let laser_alarm_bus = LaserAlarmBus(
+            gpioc.pc13.into_floating_input(&mut gpioc.crh),
+            gpioc.pc14.into_floating_input(&mut gpioc.crh),
+            gpioc.pc15.into_floating_input(&mut gpioc.crh),
+        );
+
+        let clocks = rcc.cfgr.freeze_with_config(
+            HighPerformanceClockConfigProvider::to_config(),
+            &mut flash.acr,
+        );
+
+        let (l_sync, l_em, l_ee): (
+            //может и неправильно
+            PwmChannel<TIM4, 1>,
+            PwmChannel<TIM4, 2>,
+            PwmChannel<TIM4, 3>,
+        ) = Timer::new(dp.TIM4, &clocks)
+            .pwm_hz(
+                (
+                    gpiob.pb7.into_alternate_push_pull(&mut gpiob.crl),
+                    gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh),
+                    gpiob.pb9.into_alternate_push_pull(&mut gpiob.crh),
+                ),
+                &mut afio.mapr,
+                Hertz::kHz(crate::config::LASER_SYNC_CLOCK_KHZ),
+            )
+            .split();
+
+        let laser_red_beam_pwm = Timer::new(dp.TIM1, &clocks)
+            .pwm_hz(
+                gpioa.pa10.into_alternate_push_pull(&mut gpioa.crh),
+                &mut afio.mapr,
+                Hertz::kHz(crate::config::LASER_RED_FREQ_KHZ),
+            )
+            .split();
+
         HighPerformanceMode {
-            clocks: rcc.cfgr.freeze_with_config(
-                HighPerformanceClockConfigProvider::to_config(),
-                &mut flash.acr,
-            ),
+            clocks,
 
             flash: unsafe { Arc::new(Mutex::new(flash).unwrap_unchecked()) },
             crc: unsafe {
@@ -181,31 +243,27 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             interrupt_controller: ic,
 
-            galvo_ctrl: todo!(),//xy2_100::XY2_100::new(dp.TIM2, &mut gpiob, dma_channels.2, 3, 4, 5, 6),
+            galvo_ctrl: xy2_100::XY2_100::new(
+                dp.TIM2,
+                dma_channels.2,
+                GPIOB::ptr(),
+                (
+                    pb3.into_push_pull_output(&mut gpiob.crl),
+                    pb4.into_push_pull_output(&mut gpiob.crl),
+                    gpiob.pb5.into_push_pull_output(&mut gpiob.crl),
+                    gpiob.pb6.into_push_pull_output(&mut gpiob.crl),
+                ),
+            ),
 
-            // pwm and enable pins
-            laser_timer: dp.TIM4,
-            laser_red_bam_timer: dp.TIM1,
-            laser_power_bus: LaserDataBus(
-                gpioa.pa0.into_push_pull_output(&mut gpioa.crl),
-                gpioa.pa1.into_push_pull_output(&mut gpioa.crl),
-                gpioa.pa2.into_push_pull_output(&mut gpioa.crl),
-                gpioa.pa3.into_push_pull_output(&mut gpioa.crl),
-                gpioa.pa4.into_push_pull_output(&mut gpioa.crl),
-                gpioa.pa5.into_push_pull_output(&mut gpioa.crl),
-                gpioa.pa6.into_push_pull_output(&mut gpioa.crl),
-                gpioa.pa7.into_push_pull_output(&mut gpioa.crl),
+            laser: laser::Laser::new(
+                laser_power_bus,
+                gpioa.pa9.into_push_pull_output(&mut gpioa.crh),
+                laser_alarm_bus,
+                l_em,
+                l_ee,
+                l_sync,
+                laser_red_beam_pwm,
             ),
-            laser_power_latch: gpioa.pa9.into_push_pull_output(&mut gpioa.crh),
-            laser_status: (
-                gpioc.pc13.into_floating_input(&mut gpioc.crh),
-                gpioc.pc14.into_floating_input(&mut gpioc.crh),
-                gpioc.pc15.into_floating_input(&mut gpioc.crh),
-            ),
-            laser_emission_modulatiuon: todo!(),
-            laser_emission_enable: todo!(),
-            laser_sync: todo!(),
-            laser_red_bam: todo!(),
         }
     }
 
@@ -218,7 +276,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         );
     }
 
-    fn start_threads(mut self) -> Result<(), freertos_rust::FreeRtosError> {
+    fn start_threads(self) -> Result<(), freertos_rust::FreeRtosError> {
         use crate::gcode::GCode;
         use crate::threads::usbd::Usbd;
 
@@ -250,21 +308,17 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             )
         };
 
-        let mut galvo_ctrl = self.galvo_ctrl;
-        galvo_ctrl.begin(self.interrupt_controller.clone(), tim_ref_clk);
-
-        galvo_ctrl.set_pos(0, 0);
-
-        let pwm_pin = self.tim15.pwm(self.laser_pwm_pin, 0, 1.kHz(), &self.clocks);
-
-        let laser = laser::Laser::new(pwm_pin, self.laser_enable_pin);
-
         // --------------------------------------------------------------------
 
         {
             let serial = Usbd::serial_port();
             let gcode_queue_out = gcode_queue.clone();
             let req_queue_out = req_queue.clone();
+            let laser = self.laser;
+
+            let mut galvo_ctrl = self.galvo_ctrl;
+            galvo_ctrl.begin(self.interrupt_controller.clone(), tim_ref_clk);
+            galvo_ctrl.set_pos(0, 0);
 
             Task::new()
                 .name("Motiond")

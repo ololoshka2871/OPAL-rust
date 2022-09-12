@@ -1,9 +1,9 @@
-use embedded_hal::digital::v2::OutputPin;
-
 pub trait ParallelOutputBus {
     type Output;
-    fn set(&self, value: Self::Output);
+    fn set(&mut self, value: Self::Output);
 }
+
+// pin_id
 
 #[macro_export]
 macro_rules! simple_parallel_output_bus {
@@ -13,7 +13,7 @@ macro_rules! simple_parallel_output_bus {
         impl crate::support::parallel_output_bus::ParallelOutputBus for $name {
             type Output = $valtype;
 
-            fn set(&self, value: Self::Output) {
+            fn set(&mut self, value: Self::Output) {
                 $(
                     {
                         ${ignore(pint)}

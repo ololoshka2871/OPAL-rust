@@ -94,3 +94,11 @@ pub const GALVO_EN_ACTIVE_LVL: bool = true;
 
 /// laser power enable active lvl
 pub const LASER_EN_ACTIVE_LVL: bool = true;
+
+//-----------------------------------------------------------------------------
+
+/// main laser sync frequency - from laser head docs
+pub const LASER_SYNC_CLOCK_KHZ: u32 = 45;
+
+/// red mark laser pwm frequency
+pub const LASER_RED_FREQ_KHZ: u32 = 1;
