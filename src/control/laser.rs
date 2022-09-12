@@ -1,61 +1,46 @@
 use core::convert::Infallible;
 
 use embedded_hal::digital::v2::OutputPin;
+use num_derive::FromPrimitive;
 
 use crate::support::{
     parallel_input_bus::ParallelInputBus, parallel_output_bus::ParallelOutputBus,
 };
 
+/// Table 5 Definition of alarm status.
+#[derive(Debug, Clone, Copy, FromPrimitive)]
+pub enum LaserStatus {
+    TemperatureAlarm = 0,
+    Normal = 1,
+    SystemAlarm = 3,
+    SupplyVoltageAlarm = 4,
+}
+
 pub trait LaserInterface {
+    /// устанавливает Power Setting
+    /// Включает меандр на Sync
+    /// Включает laser_emission_enable
+    /// laser_emission_modulation duty = 0
     fn enable(&mut self);
+
+    /// laser_emission_modulation duty = 0
+    /// Выключает laser_emission_enable
+    /// Выключает меандр на Sync
+    /// устанавливает Power Setting = 0
     fn disable(&mut self);
-    fn set_power(&mut self, power: f64);
+
+    /// Устанавливает laser_emission_modulation 0 - 100
+    fn set_power_pwm(&mut self, power: f32);
+
+    /// Устанваливает Power Setting
+    fn set_pump_power(&mut self, power_code: u8);
+
+    /// прочитать статус лазера
+    fn get_status(&self) -> LaserStatus;
+
+    /// установить мощность красного лазера
+    fn set_red_laser_enable(&mut self, power: f32);
 }
-
-/*
-pub struct Laser<PWM, ENABLE: OutputPin<Error = Infallible>> {
-    laser_pwm_pin: PWM,
-    laser_enable_pin: ENABLE,
-}
-
-impl<PWM: PwmPin<Duty = u16>, ENABLE: OutputPin<Error = Infallible>> Laser<PWM, ENABLE> {
-    pub fn new(mut laser_pwm_pin: PWM, laser_enable_pin: ENABLE) -> Self {
-        laser_pwm_pin.enable();
-
-        let mut res = Self {
-            laser_pwm_pin,
-            laser_enable_pin,
-        };
-
-        res.set_power(0f64);
-
-        res
-    }
-
-    pub(crate) fn enable(&mut self) {
-        let _ = self
-            .laser_enable_pin
-            .set_state(crate::config::LASER_EN_ACTIVE_LVL.into());
-    }
-
-    pub(crate) fn disable(&mut self) {
-        let _ = self
-            .laser_enable_pin
-            .set_state((!crate::config::LASER_EN_ACTIVE_LVL).into());
-    }
-
-    pub(crate) fn set_power(&mut self, power: f64) {
-        let power = crate::support::map(
-            power,
-            0.0,
-            crate::config::MOTION_MAX_S,
-            0,
-            self.laser_pwm_pin.get_max_duty(),
-        );
-        self.laser_pwm_pin.set_duty(power);
-    }
-}
-*/
 
 pub struct Laser<PBUS, ABUS, OUTPIN, EM, EE, ES, RL>
 where
@@ -64,7 +49,7 @@ where
     OUTPIN: OutputPin<Error = Infallible>,
 {
     power_set_bus: PBUS,
-    power_latch_pin: OUTPIN,
+    power_latch_pin: Option<OUTPIN>,
 
     alarm_bus: ABUS,
 
@@ -73,6 +58,9 @@ where
     laser_sync: ES,
 
     laser_red_beam: RL,
+
+    current_power_seting: u8,
+    current_em_mod_seting: u16,
 }
 
-pub mod laser_PA0_7_PA13_15_TIM4_TIM1;
+pub mod laser_pa0_7_pa13_15_tom4_tim1;

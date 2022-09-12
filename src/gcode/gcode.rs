@@ -21,11 +21,11 @@ pub enum Request {
 pub struct GCode {
     code: Code,
 
-    x: Option<f64>,
-    y: Option<f64>,
+    x: Option<f32>,
+    y: Option<f32>,
 
-    s: Option<f64>, // Laser Power
-    f: Option<f64>, // FeedRate
+    s: Option<f32>, // Laser Power
+    f: Option<f32>, // FeedRate
 }
 
 pub enum ParceResult {
@@ -123,22 +123,22 @@ impl GCode {
     }
 
     #[inline]
-    pub fn get_x(&self) -> Option<f64> {
+    pub fn get_x(&self) -> Option<f32> {
         self.x
     }
 
     #[inline]
-    pub fn get_y(&self) -> Option<f64> {
+    pub fn get_y(&self) -> Option<f32> {
         self.y
     }
 
     #[inline]
-    pub fn get_s(&self) -> Option<f64> {
+    pub fn get_s(&self) -> Option<f32> {
         self.s
     }
 
     #[inline]
-    pub fn get_f(&self) -> Option<f64> {
+    pub fn get_f(&self) -> Option<f32> {
         self.f
     }
 }

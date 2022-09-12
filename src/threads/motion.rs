@@ -1,5 +1,5 @@
 use alloc::sync::Arc;
-use embedded_hal::PwmPin;
+
 use freertos_rust::{Duration, Mutex, Queue};
 use usbd_serial::SerialPort;
 
@@ -28,7 +28,7 @@ where
         galvo,
         laser,
         master,
-        1_000_000_000f64 / master_freq.to_Hz() as f64,
+        1_000_000_000f32 / master_freq.to_Hz() as f32,
     );
     motion.begin();
     loop {

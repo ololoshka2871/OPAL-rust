@@ -257,7 +257,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
 
             laser: laser::Laser::new(
                 laser_power_bus,
-                gpioa.pa9.into_push_pull_output(&mut gpioa.crh),
+                Some(gpioa.pa9.into_push_pull_output(&mut gpioa.crh)),
                 laser_alarm_bus,
                 l_em,
                 l_ee,

@@ -30,17 +30,17 @@ where
     _now: u64,
     current_code: u32,
 
-    current_from_x: f64,
-    current_from_y: f64,
-    current_distance_x: f64,
-    current_distance_y: f64,
-    current_to_x: f64,
-    current_to_y: f64,
-    current_cmd_x: f64,
-    current_cmd_y: f64,
-    current_f: f64,
-    current_s: f64,
-    current_duration: f64,
+    current_from_x: f32,
+    current_from_y: f32,
+    current_distance_x: f32,
+    current_distance_y: f32,
+    current_to_x: f32,
+    current_to_y: f32,
+    current_cmd_x: f32,
+    current_cmd_y: f32,
+    current_f: f32,
+    current_s: f32,
+    current_duration: f32,
     current_absolute: bool,
     current_laserenabled: bool,
     laser_changed: bool,
@@ -49,7 +49,7 @@ where
     galvo: GALVO,
 
     master: MasterTimerInfo,
-    to_nanos: f64,
+    to_nanos: f32,
 }
 
 impl<LASER, GALVO> MotionMGR<LASER, GALVO>
@@ -57,7 +57,7 @@ where
     GALVO: crate::control::xy2_100::XY2_100Interface,
     LASER: crate::control::laser::LaserInterface,
 {
-    pub fn new(galvo: GALVO, laser: LASER, master: MasterTimerInfo, to_nanos: f64) -> Self {
+    pub fn new(galvo: GALVO, laser: LASER, master: MasterTimerInfo, to_nanos: f32) -> Self {
         Self {
             _status: MotionStatus::IDLE,
             is_move_first_interpolation: true,
@@ -65,17 +65,17 @@ where
             current_endnanos: 0,
             _now: 0,
             current_code: 0,
-            current_from_x: 0f64,
-            current_from_y: 0f64,
-            current_distance_x: 0f64,
-            current_distance_y: 0f64,
-            current_to_x: 0f64,
-            current_to_y: 0f64,
-            current_cmd_x: 0f64,
-            current_cmd_y: 0f64,
-            current_f: 100f64,
-            current_s: 0f64,
-            current_duration: 0f64,
+            current_from_x: 0f32,
+            current_from_y: 0f32,
+            current_distance_x: 0f32,
+            current_distance_y: 0f32,
+            current_to_x: 0f32,
+            current_to_y: 0f32,
+            current_cmd_x: 0f32,
+            current_cmd_y: 0f32,
+            current_f: 100f32,
+            current_s: 0f32,
+            current_duration: 0f32,
             current_absolute: true,
             current_laserenabled: false,
             laser_changed: false,
@@ -119,7 +119,7 @@ where
                 self.set_laser_power(self.current_s);
                 self.laser_changed = false;
             } else {
-                self.set_laser_power(0f64);
+                self.set_laser_power(0f32);
             }
             self.laser_changed = false;
         }
@@ -142,7 +142,7 @@ where
                         new_s,
                         'S',
                         config::MOTION_MAX_S,
-                        -01f64,
+                        -01f32,
                     ) {
                         if new_s > config::MOTION_MAX_S {
                             self.current_s = config::MOTION_MAX_S;
@@ -152,15 +152,15 @@ where
                     }
                 }
                 if let Some(new_f) = gcode.get_f() {
-                    Self::set_value(&mut self.current_f, new_f, 'F', i32::MAX as f64, 0.01f64)?;
+                    Self::set_value(&mut self.current_f, new_f, 'F', i32::MAX as f32, 0.01f32)?;
                 }
 
                 self.set_xy(&gcode)?;
             }
             28 => {
                 self.current_code = 28;
-                self.current_to_x = 0f64;
-                self.current_to_y = 0f64;
+                self.current_to_x = 0f32;
+                self.current_to_y = 0f32;
             }
             _ => return Ok(()),
         }
@@ -255,7 +255,7 @@ where
                         new_s,
                         'S',
                         config::MOTION_MAX_S,
-                        -01f64,
+                        -01f32,
                     ) {
                         if new_s > config::MOTION_MAX_S {
                             self.current_s = config::MOTION_MAX_S;
@@ -344,7 +344,7 @@ where
                 self.current_startnanos = self._now;
                 self.current_endnanos = self
                     ._now
-                    .wrapping_add(libm::round(self.current_duration) as u64);
+                    .wrapping_add(libm::roundf(self.current_duration) as u64);
                 self.is_move_first_interpolation = false;
             }
         }
@@ -361,14 +361,14 @@ where
             return self._now == self.current_endnanos;
         } else {
             let fraction_of_move =
-                self._now.wrapping_sub(self.current_startnanos) as f64 / self.current_duration;
+                self._now.wrapping_sub(self.current_startnanos) as f32 / self.current_duration;
             self.current_cmd_x = self.current_from_x + (self.current_distance_x * fraction_of_move);
             self.current_cmd_y = self.current_from_y + (self.current_distance_y * fraction_of_move);
             return true;
         }
     }
 
-    fn set_galvo_position(&mut self, x: f64, y: f64) {
+    fn set_galvo_position(&mut self, x: f32, y: f32) {
         use crate::support::map;
 
         let cmd_x = if config::AXIS_INVERSE_X {
@@ -411,11 +411,11 @@ where
     }
 
     fn nanos(&self) -> u64 {
-        (self.master.value64().0 as f64 * self.to_nanos) as u64
+        (self.master.value64().0 as f32 * self.to_nanos) as u64
     }
 
-    fn set_laser_power(&mut self, power: f64) {
-        self.laser.set_power(power);
+    fn set_laser_power(&mut self, power: f32) {
+        self.laser.set_power_pwm(power);
         defmt::trace!(
             "Laser power: {}%",
             crate::support::format_float_simple::format_float_simple(power, 1)
@@ -423,7 +423,7 @@ where
     }
 }
 
-fn calculate_move_length_nanos(xdist: f64, ydist: f64, move_velocity: f64) -> f64 {
-    let length_of_move = libm::sqrt(xdist * xdist + ydist * ydist);
+fn calculate_move_length_nanos(xdist: f32, ydist: f32, move_velocity: f32) -> f32 {
+    let length_of_move = libm::sqrtf(xdist * xdist + ydist * ydist);
     length_of_move * 1000.0 * 1000.0 * 1000.0 / move_velocity
 }

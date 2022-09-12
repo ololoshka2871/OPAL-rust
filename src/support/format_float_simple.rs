@@ -1,7 +1,7 @@
 use alloc::{format, string::String};
 use num::traits::float::FloatCore;
 
-pub fn format_float_simple(v: f64, percision: i32) -> String {
+pub fn format_float_simple(v: f32, percision: i32) -> String {
     let a = v.floor();
     format!(
         "{}.{}",
