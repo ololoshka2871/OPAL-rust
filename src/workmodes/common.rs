@@ -20,9 +20,7 @@ pub fn print_clock_config(clocks: &stm32f1xx_hal::rcc::Clocks) {
     );
 }
 
-pub fn create_monitor(
-    _sysclk: Hertz,
-) -> Result<(), freertos_rust::FreeRtosError> {
+pub fn create_monitor(_sysclk: Hertz) -> Result<(), freertos_rust::FreeRtosError> {
     #[cfg(feature = "monitor")]
     #[cfg(debug_assertions)]
     {

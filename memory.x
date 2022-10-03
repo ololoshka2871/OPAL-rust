@@ -8,7 +8,7 @@ MEMORY
   FLASH : ORIGIN = 0x08000000, LENGTH = 128K /* 256K */
 
   RAM : ORIGIN = 0x20000000, LENGTH = 64K
-  RAM2 : ORIGIN = 0x10000000, LENGTH = 0x4000
+  /* RAM2 : ORIGIN = 0x10000000, LENGTH = 0x4000 */
 }
 
 /* This is where the call stack will be allocated. */
@@ -16,7 +16,7 @@ MEMORY
 /* You may want to use this variable to locate the call stack and static
    variables in different memory regions. Below is shown the default value */
 /* stack -> RAM2 */
-_stack_start = ORIGIN(RAM2) + LENGTH(RAM2);
+/* _stack_start = ORIGIN(RAM2) + LENGTH(RAM2); */
 
 /* You can use this symbol to customize the location of the .text section */
 /* If omitted the .text section will be placed right after the .vector_table
@@ -38,6 +38,7 @@ _stack_start = ORIGIN(RAM2) + LENGTH(RAM2);
    } INSERT AFTER .bss;
 */
 
+/*
 SECTIONS {
    .settings (NOLOAD) : ALIGN(8)
    {
@@ -45,3 +46,4 @@ SECTIONS {
       KEEP(*(.settings*));
    } > SETTINGS
 }
+*/

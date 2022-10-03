@@ -2,7 +2,7 @@
 
 [env]
 #executable={script=["cargo run --bin 2>&1 > /dev/null | tail -n2 | sed -e 's/^ *//;s/ *$//' -e '/^$/d'"]}
-path="target/thumbv7em-none-eabihf/debug"
+path="target/thumbv7m-none-eabi/debug"
 executable = { script = ["find ${path} -maxdepth 1 -type f ! -name \"*.*\""] }
 
 rtt_addr = { script = ["nm -S ${executable} | grep RTT"] }

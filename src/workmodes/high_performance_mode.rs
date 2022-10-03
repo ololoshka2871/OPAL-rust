@@ -27,7 +27,9 @@ use crate::workmodes::common::ClockConfigProvider;
 use super::WorkMode;
 
 mod clock_config_72;
-use clock_config_72::{ADC_DEVIDER, AHB_DEVIDER, APB1_DEVIDER, APB2_DEVIDER, PLL_MUL, USB_DEVIDER};
+use clock_config_72::{
+    ADC_DEVIDER, AHB_DEVIDER, APB1_DEVIDER, APB2_DEVIDER, PLL_MUL, PLL_P_DIV, USB_DEVIDER,
+};
 
 struct HighPerformanceClockConfigProvider;
 
@@ -59,11 +61,92 @@ impl HighPerformanceClockConfigProvider {
     fn pll_mul_bits(mul: u32) -> u8 {
         (mul - 2) as u8
     }
+
+    fn ppl_div2val(div: stm32f1xx_hal::device::rcc::cfgr::PLLXTPRE_A) -> u32 {
+        match div {
+            stm32f1xx_hal::device::rcc::cfgr::PLLXTPRE_A::DIV1 => 1,
+            stm32f1xx_hal::device::rcc::cfgr::PLLXTPRE_A::DIV2 => 2,
+        }
+    }
+
+    fn freeze(_acr: &mut stm32f1xx_hal::flash::ACR) -> stm32f1xx_hal::rcc::Clocks {
+        use stm32f1xx_hal::time::MHz;
+
+        let cfg = Self::to_config();
+
+        let clocks = cfg.get_clocks();
+        // adjust flash wait states
+        let acr = unsafe { &*stm32f1xx_hal::device::FLASH::ptr() };
+        unsafe {
+            acr.acr.write(|w| {
+                w.latency().bits(if clocks.sysclk() <= MHz(24) {
+                    0b000
+                } else if clocks.sysclk() <= MHz(48) {
+                    0b001
+                } else {
+                    0b010
+                })
+            })
+        }
+
+        let rcc = unsafe { &*stm32f1xx_hal::device::RCC::ptr() };
+
+        if cfg.hse.is_some() {
+            // enable HSE and wait for it to be ready
+
+            rcc.cr.modify(|_, w| w.hseon().set_bit());
+
+            while rcc.cr.read().hserdy().bit_is_clear() {}
+        }
+
+        if let Some(pllmul_bits) = cfg.pllmul {
+            // enable PLL and wait for it to be ready
+
+            #[allow(unused_unsafe)]
+            rcc.cfgr
+                .modify(|_, w| unsafe { w.pllxtpre().variant(PLL_P_DIV) });
+
+            #[allow(unused_unsafe)]
+            rcc.cfgr.modify(|_, w| unsafe {
+                w.pllmul().bits(pllmul_bits).pllsrc().bit(cfg.hse.is_some())
+            });
+
+            rcc.cr.modify(|_, w| w.pllon().set_bit());
+
+            while rcc.cr.read().pllrdy().bit_is_clear() {}
+        }
+
+        rcc.cfgr.modify(|_, w| unsafe {
+            w.adcpre().variant(cfg.adcpre);
+            w.ppre2()
+                .bits(cfg.ppre2 as u8)
+                .ppre1()
+                .bits(cfg.ppre1 as u8)
+                .hpre()
+                .bits(cfg.hpre as u8)
+                .usbpre()
+                .variant(cfg.usbpre)
+                .sw()
+                .bits(if cfg.pllmul.is_some() {
+                    // PLL
+                    0b10
+                } else if cfg.hse.is_some() {
+                    // HSE
+                    0b1
+                } else {
+                    // HSI
+                    0b0
+                })
+        });
+
+        clocks
+    }
 }
 
 impl ClockConfigProvider for HighPerformanceClockConfigProvider {
     fn core_frequency() -> Hertz {
-        let f = crate::config::XTAL_FREQ * PLL_MUL / Self::ahb_dev2val(AHB_DEVIDER);
+        let f = crate::config::XTAL_FREQ / Self::ppl_div2val(PLL_P_DIV) * PLL_MUL
+            / Self::ahb_dev2val(AHB_DEVIDER);
         Hertz::Hz(f)
     }
 
@@ -81,7 +164,10 @@ impl ClockConfigProvider for HighPerformanceClockConfigProvider {
     }
 
     fn xtal2master_freq_multiplier() -> f32 {
-        PLL_MUL as f32 / (Self::ahb_dev2val(AHB_DEVIDER) * Self::apb_dev2val(APB2_DEVIDER)) as f32
+        PLL_MUL as f32
+            / (Self::ppl_div2val(PLL_P_DIV)
+                * Self::ahb_dev2val(AHB_DEVIDER)
+                * Self::apb_dev2val(APB2_DEVIDER)) as f32
     }
 
     fn to_config() -> stm32f1xx_hal::rcc::Config {
@@ -161,7 +247,6 @@ pub struct HighPerformanceMode {
 
 impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
     fn new(p: cortex_m::Peripherals, dp: stm32f1xx_hal::stm32::Peripherals) -> Self {
-        let rcc = dp.RCC.constrain();
         let mut flash = dp.FLASH.constrain();
 
         let ic = Arc::new(InterruptController::new(p.NVIC));
@@ -191,13 +276,9 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
             gpioc.pc15.into_floating_input(&mut gpioc.crh),
         );
 
-        let clocks = rcc.cfgr.freeze_with_config(
-            HighPerformanceClockConfigProvider::to_config(),
-            &mut flash.acr,
-        );
+        let clocks = HighPerformanceClockConfigProvider::freeze(&mut flash.acr);
 
         let (l_sync, l_em, l_ee): (
-            //может и неправильно
             PwmChannel<TIM4, 1>,
             PwmChannel<TIM4, 2>,
             PwmChannel<TIM4, 3>,

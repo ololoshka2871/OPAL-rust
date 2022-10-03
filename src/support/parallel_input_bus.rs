@@ -21,7 +21,7 @@ macro_rules! simple_parallel_input_bus {
                             res |= 1 << i;
                         }
                     }
-                )* 
+                )*
                 res
             }
         }

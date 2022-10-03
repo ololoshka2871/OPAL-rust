@@ -11,7 +11,7 @@
             "name": "cortex-debug (Debug)",
             "type": "cortex-debug",
             "cwd": "${workspaceRoot}",
-            "executable": "./target/thumbv7em-none-eabihf/debug/opal-rust", // бинарь
+            "executable": "./target/thumbv7m-none-eabi/debug/opal-rust", // бинарь
             "request": "attach", // позволяет не прошивать таргет при запуске
             "loadFiles": false, 
             "svdFile": "STM32L4x3-qspi.svd",
@@ -21,7 +21,7 @@
                 "skip -rfunction ^core::",
                 "skip -rfu ^compiler_builtins::",
                 "skip -rfu ^alloc::",
-                "break main",
+                //"break main",
                 "monitor reset halt"
             ]
         },
@@ -29,7 +29,7 @@
             "name": "cortex-debug (Release)",
             "type": "cortex-debug",
             "cwd": "${workspaceRoot}",
-            "executable": "./target/thumbv7em-none-eabihf/release/opal-rust", // бинарь
+            "executable": "./target/thumbv7m-none-eabi/release/opal-rust", // бинарь
             "request": "attach", // позволяет не прошивать таргет при запуске
             "loadFiles": false, 
             "svdFile": "STM32L4x3-qspi.svd",

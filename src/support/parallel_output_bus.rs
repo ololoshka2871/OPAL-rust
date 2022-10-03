@@ -24,7 +24,7 @@ macro_rules! simple_parallel_output_bus {
                             self.${index()}.set_low();
                         }
                     }
-                )* 
+                )*
             }
         }
     }
