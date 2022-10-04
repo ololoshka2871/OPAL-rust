@@ -186,7 +186,7 @@ impl
         let tim2 = &*stm32f1xx_hal::device::TIM2::ptr();
 
         // clear event
-        dma.ifcr.write(|w| w.cgif5().set_bit());
+        dma.ifcr.write(|w| w.cgif2().set_bit());
 
         tim2.cr1.modify(|_, w| w.cen().clear_bit());
         if BACK_BUF_READY.load(Ordering::SeqCst) {
