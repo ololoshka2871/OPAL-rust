@@ -29,7 +29,7 @@ pub const DMA_IRQ_PRIO: u8 = IRQ_HIGEST_PRIO + 5;
 //-----------------------------------------------------------------------------
 
 /// for freeRTOS
-pub const MAX_TASK_NAME_LEN: usize = 16;
+pub const MAX_TASK_NAME_LEN: usize = 8;
 
 //-----------------------------------------------------------------------------
 

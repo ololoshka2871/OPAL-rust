@@ -41,15 +41,6 @@ fn build_freertos(mut b: freertos_cargo_build::Builder) {
 
     b.freertos_config(&generate_free_rtos_config("src/configTemplate"));
 
-    /*
-    // Location of `FreeRTOSConfig.h`
-    if cfg!(debug_assertions) {
-        b.freertos_config("src/configDebug");
-    } else {
-        b.freertos_config("src/configRelease");
-    }
-    */
-
     // выбор не работает
     // b.heap(String::from("heap4.c")); // Set the heap_?.c allocator to use from
     // 'FreeRTOS-Kernel/portable/MemMang' (Default: heap_4.c)

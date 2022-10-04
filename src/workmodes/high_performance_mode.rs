@@ -24,7 +24,7 @@ use crate::support::InterruptController;
 use crate::threads;
 use crate::workmodes::common::ClockConfigProvider;
 
-use super::WorkMode;
+use super::{common::MyConfig, WorkMode};
 
 mod clock_config_72;
 use clock_config_72::{
@@ -170,8 +170,9 @@ impl ClockConfigProvider for HighPerformanceClockConfigProvider {
                 * Self::apb_dev2val(APB2_DEVIDER)) as f32
     }
 
-    fn to_config() -> stm32f1xx_hal::rcc::Config {
-        stm32f1xx_hal::rcc::Config {
+    fn to_config() -> MyConfig {
+        MyConfig {
+            hse_p_div: PLL_P_DIV,
             hse: Some(crate::config::XTAL_FREQ),
             pllmul: Some(Self::pll_mul_bits(PLL_MUL)),
             hpre: AHB_DEVIDER,

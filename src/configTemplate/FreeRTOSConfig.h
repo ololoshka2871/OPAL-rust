@@ -97,7 +97,7 @@ extern void vAssertCalled( unsigned long ulLine, const char * const pcFileName )
 #define configTICK_RATE_HZ				( ( TickType_t ) 1000 ) //1000=1ms per tick, 100=10ms per tick
 #define configMAX_PRIORITIES			( 9 )
 #define configMINIMAL_STACK_SIZE		( ( unsigned short ) 80 )
-#define configTOTAL_HEAP_SIZE			( ( size_t ) ( 32 * 1024 ) ) // was 15
+#define configTOTAL_HEAP_SIZE			( ( size_t ) ( 17 * 1024 ) )
 #define configMAX_TASK_NAME_LEN			( %MAX_TASK_NAME_LEN% )
 #define configUSE_TRACE_FACILITY		1
 #define configUSE_16_BIT_TICKS			0
@@ -114,7 +114,7 @@ extern void vAssertCalled( unsigned long ulLine, const char * const pcFileName )
 //http://www.freertos.org/Configuring-a-real-time-RTOS-application-to-use-software-timers.html
 #define configUSE_TIMERS				1
 #define configTIMER_TASK_PRIORITY		(configMAX_PRIORITIES - 1)
-#define configTIMER_QUEUE_LENGTH		10
+#define configTIMER_QUEUE_LENGTH		3
 #define configTIMER_TASK_STACK_DEPTH	200
 
 //Lobaro specifig configs
