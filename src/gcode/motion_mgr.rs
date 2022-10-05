@@ -40,7 +40,7 @@ where
     current_cmd_y: f32,
     current_f: f32,
     current_s: f32,
-    current_p: u8,
+    current_a: u8,
     current_duration: f32,
     current_absolute: bool,
     current_laserenabled: bool,
@@ -77,7 +77,7 @@ where
             current_cmd_y: 0f32,
             current_f: 100f32,
             current_s: 0f32,
-            current_p: 0,
+            current_a: 0,
             current_duration: 0f32,
             current_absolute: true,
             current_laserenabled: false,
@@ -120,7 +120,7 @@ where
 
         if self.laser_changed {
             if self.current_laserenabled {
-                self.laser.set_pump_power(self.current_p);
+                self.laser.set_pump_power(self.current_a);
                 self.laser.set_power_pwm(self.current_s);
                 self.laser.enable();
             } else {
@@ -273,13 +273,13 @@ where
                     }
                 }
 
-                if let Some(new_p) = gcode.get_p() {
-                    if let Err(_) = Self::set_value(&mut self.current_p, new_p as u8, 'P', 0xff, 0)
+                if let Some(new_p) = gcode.get_a() {
+                    if let Err(_) = Self::set_value(&mut self.current_a, new_p as u8, 'A', 0xff, 0)
                     {
                         if new_p > 255.0 {
-                            self.current_p = 0xff;
+                            self.current_a = 0xff;
                         } else {
-                            self.current_p = 0;
+                            self.current_a = 0;
                         }
                     }
                 }
@@ -294,7 +294,7 @@ where
 
             5 => {
                 self.current_laserenabled = false;
-                self.current_red_laserenabled = true;
+                self.current_red_laserenabled = false;
                 self.laser_changed = true;
             }
 

@@ -46,6 +46,33 @@ where
     }
 }
 
+impl<PBUS, ABUS, OUTPIN>
+    super::Laser<
+        PBUS,
+        ABUS,
+        OUTPIN,
+        PwmChannel<TIM4, 2>,
+        PwmChannel<TIM4, 3>,
+        PwmChannel<TIM4, 1>,
+        PwmChannel<TIM1, 2>,
+    >
+where
+    PBUS: ParallelOutputBus<Output = u8>,
+    ABUS: parallel_input_bus::ParallelInputBus<Input = u8>,
+    OUTPIN: OutputPin<Error = Infallible>,
+{
+    fn impl_set_pump_power(&mut self, power_code: u8) {
+        self.power_set_bus.set(power_code);
+        if let Some(latch) = &mut self.power_latch_pin {
+            let _ = latch.set_high();
+            for _ in 0..100 {
+                unsafe { asm!("nop") };
+            }
+            let _ = latch.set_low();
+        }
+    }
+}
+
 impl<PBUS, ABUS, OUTPIN> super::LaserInterface
     for super::Laser<
         PBUS,
@@ -63,7 +90,7 @@ where
 {
     fn enable(&mut self) {
         if !self.enabled {
-            self.set_pump_power(self.current_power_seting);
+            self.impl_set_pump_power(self.current_power_seting);
 
             self.laser_sync.set_duty(self.laser_sync.get_max_duty() / 2);
             self.laser_sync.enable();
@@ -80,8 +107,6 @@ where
     }
 
     fn disable(&mut self) {
-        self.set_power_pwm(0.0);
-
         self.laser_emission_modulation.set_duty(0);
         self.laser_emission_modulation.disable();
 
@@ -91,7 +116,7 @@ where
         self.laser_sync.set_duty(0);
         self.laser_sync.disable();
 
-        self.set_pump_power(0);
+        self.impl_set_pump_power(0);
 
         self.enabled = false;
     }
@@ -108,14 +133,7 @@ where
     }
 
     fn set_pump_power(&mut self, power_code: u8) {
-        self.power_set_bus.set(power_code);
-        if let Some(latch) = &mut self.power_latch_pin {
-            let _ = latch.set_high();
-            for _ in 0..1000 {
-                unsafe { asm!("nop") };
-            }
-            let _ = latch.set_low();
-        }
+        self.current_power_seting = power_code;
     }
 
     fn get_status(&self) -> super::LaserStatus {
