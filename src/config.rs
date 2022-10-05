@@ -56,7 +56,7 @@ pub const MOTIOND_TASK_PRIO: u8 = IDLE_TASK_PRIO + 1;
 pub const USBD_TASK_STACK_SIZE: usize = 1024;
 
 /// monitor stack size
-pub const MONITOR_TASK_STACK_SIZE: usize = 2048 + 1024;
+pub const MONITOR_TASK_STACK_SIZE: usize = 2048 + 2048;
 
 /// motion stack size
 pub const MOTION_TASK_STACK_SIZE: usize = 1024;

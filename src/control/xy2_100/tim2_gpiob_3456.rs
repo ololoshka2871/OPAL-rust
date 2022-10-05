@@ -176,7 +176,7 @@ impl
         Self {
             timer,
             dma,
-            port_addr: unsafe { &(*port_ptr).bsrr as *const _ as u32 },
+            port_addr: unsafe { &(*port_ptr).odr as *const _ as u32 },
             outputs,
         }
     }

@@ -21,7 +21,7 @@
                 "skip -rfunction ^core::",
                 "skip -rfu ^compiler_builtins::",
                 "skip -rfu ^alloc::",
-                //"break main",
+                "break main",
                 "monitor reset halt"
             ]
         },
@@ -39,7 +39,7 @@
                 "skip -rfunction ^core::",
                 "skip -rfu ^compiler_builtins::",
                 "skip -rfu ^alloc::",
-                //"break main",
+                "break main",
                 "monitor reset halt"
             ]
         }
