@@ -1,3 +1,5 @@
+// MASTER == TIM3
+
 use stm32f1xx_hal::{
     device::{tim2, RCC},
     stm32::Interrupt as IRQ,
@@ -15,11 +17,11 @@ struct AdvancedMasterCounter {
 
 impl AdvancedMasterCounter {
     fn tim(&self) -> &'static tim2::RegisterBlock {
-        unsafe { &*(0x4000_0800 as *const tim2::RegisterBlock) } // stm32f1-0.14.0/src/stm32f103/mod.rs:942
+        unsafe { &*(0x4000_0400 as *const tim2::RegisterBlock) } // stm32f1-0.14.0/src/stm32f103/mod.rs:942
     }
 
     fn interrupt_n(&self) -> Interrupt {
-        IRQ::TIM4.into()
+        IRQ::TIM3.into()
     }
 }
 
@@ -34,9 +36,9 @@ impl MasterCounterInfo for AdvancedMasterCounter {
         let rstr = unsafe { &(*RCC::ptr()).apb1rstr };
 
         // stm32f1xx-hal-0.9.0/src/rcc/enable.rs
-        enr.modify(|_, w| w.tim4en().set_bit());
-        rstr.modify(|_, w| w.tim4rst().set_bit());
-        rstr.modify(|_, w| w.tim4rst().clear_bit());
+        enr.modify(|_, w| w.tim3en().set_bit());
+        rstr.modify(|_, w| w.tim3rst().set_bit());
+        rstr.modify(|_, w| w.tim3rst().clear_bit());
     }
 
     fn set_interrupt_prio(&self, controller: &dyn IInterruptController, prio: u8) {
@@ -95,7 +97,7 @@ impl MasterCounterInfo for AdvancedMasterCounter {
     }
 
     fn uif_cpy_mask(&self) -> Option<u32> {
-        Some(1u32 << 31)
+        None // not supported in f103
     }
 
     fn is_irq_pending(&self, controller: &dyn IInterruptController) -> bool {
@@ -103,9 +105,9 @@ impl MasterCounterInfo for AdvancedMasterCounter {
     }
 }
 
-pub(crate) static MASTER_LIST: [&dyn MasterCounterInfo; 1] = [&AdvancedMasterCounter { id: 4 }];
+pub(crate) static MASTER_LIST: [&dyn MasterCounterInfo; 1] = [&AdvancedMasterCounter { id: 3 }];
 
 #[interrupt]
-unsafe fn TIM4() {
-    crate::time_base::master_counter::master_ovf(4);
+unsafe fn TIM3() {
+    crate::time_base::master_counter::master_ovf(3);
 }

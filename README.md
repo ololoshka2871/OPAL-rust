@@ -26,3 +26,4 @@
 * TIM1 (CH3) - Красный лазер
 * TIM2 - триггер для DMA
 * DMA1 - TIM2_UP (CHANNEL2) - Копирует из буфера в регистр GPIOB -> GALVO
+* TIM3 - Master counter

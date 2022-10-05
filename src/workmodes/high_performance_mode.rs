@@ -160,7 +160,12 @@ impl ClockConfigProvider for HighPerformanceClockConfigProvider {
 
     // stm32_cube: if APB devider > 1, timers freq APB*2
     fn master_counter_frequency() -> Hertz {
-        Self::apb2_frequency() // TIM1 -> master
+        // TIM3 - APB1
+        if APB2_DEVIDER == PPre::DIV1 {
+            Self::core_frequency()
+        } else {
+            Self::core_frequency() * 2
+        }
     }
 
     fn xtal2master_freq_multiplier() -> f32 {

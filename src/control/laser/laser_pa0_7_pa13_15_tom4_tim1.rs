@@ -44,23 +44,7 @@ where
     fn power2_pwm(power: f32, max_duty: u16) -> u16 {
         (max_duty as f32 / 100.0 * power) as u16
     }
-}
 
-impl<PBUS, ABUS, OUTPIN>
-    super::Laser<
-        PBUS,
-        ABUS,
-        OUTPIN,
-        PwmChannel<TIM4, 2>,
-        PwmChannel<TIM4, 3>,
-        PwmChannel<TIM4, 1>,
-        PwmChannel<TIM1, 2>,
-    >
-where
-    PBUS: ParallelOutputBus<Output = u8>,
-    ABUS: parallel_input_bus::ParallelInputBus<Input = u8>,
-    OUTPIN: OutputPin<Error = Infallible>,
-{
     fn impl_set_pump_power(&mut self, power_code: u8) {
         self.power_set_bus.set(power_code);
         if let Some(latch) = &mut self.power_latch_pin {
@@ -97,7 +81,7 @@ where
 
             self.laser_emission_enable
                 .set_duty(self.laser_emission_enable.get_max_duty());
-            self.laser_emission_modulation.enable();
+            self.laser_emission_enable.enable();
 
             self.laser_emission_modulation
                 .set_duty(self.current_em_mod_seting);
