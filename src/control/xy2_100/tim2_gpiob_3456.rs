@@ -24,6 +24,29 @@ impl super::XY2_100Interface
         ic: Arc<IC>,
         tim_ref_clk: stm32f1xx_hal::time::Hertz,
     ) {
+        /*
+        {
+            use core::sync::atomic::compiler_fence;
+
+            compiler_fence(Ordering::SeqCst);
+            self.outputs.0.set_high();
+            self.outputs.0.set_low();
+            compiler_fence(Ordering::SeqCst);
+
+            self.outputs.1.set_high();
+            self.outputs.1.set_low();
+            compiler_fence(Ordering::SeqCst);
+
+            self.outputs.2.set_high();
+            self.outputs.2.set_low();
+            compiler_fence(Ordering::SeqCst);
+
+            self.outputs.3.set_high();
+            self.outputs.3.set_low();
+            compiler_fence(Ordering::SeqCst);
+        }
+        */
+
         // configure dma memory -> GPIO by tim2_up
         {
             use stm32f1xx_hal::device::Interrupt;
@@ -81,7 +104,7 @@ impl super::XY2_100Interface
             // autoreload
             tim.arr.write(|w| unsafe {
                 w.bits(tim_ref_clk.to_Hz() / crate::config::GALVO_CLOCK_RATE - 1)
-                // Calibrate for 2MHz CLK TICK rate
+                // Calibrate for 2MHz CLK TICK rate (*2)
             });
 
             // Trigger an update event to load the prescaler value to the clock

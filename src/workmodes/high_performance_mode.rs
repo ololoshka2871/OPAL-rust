@@ -363,7 +363,7 @@ impl WorkMode<HighPerformanceMode> for HighPerformanceMode {
         use crate::threads::usbd::Usbd;
 
         let sys_clk = self.clocks.hclk();
-        let tim_ref_clk = self.clocks.pclk1();
+        let tim_ref_clk = self.clocks.pclk1_tim();
 
         // --------------------------------------------------------------------
         defmt::trace!("Creating usb thread...");

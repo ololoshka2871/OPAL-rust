@@ -134,13 +134,13 @@ pub fn gcode_server<B: usb_device::bus::UsbBus>(
                         "Empty command: {}",
                         crate::support::defmt_string::DefmtString(&s)
                     );
-                    write_responce(&serial_container, "ok\n");
+                    write_responce(&serial_container, "ok\r\n");
                 }
                 Err(ParceError::Error(e)) => {
-                    write_responce(&serial_container, format!("Error: {:?}\n", e).as_str())
+                    write_responce(&serial_container, format!("Error: {:?}\r\n", e).as_str())
                 }
             },
-            Err(e) => write_responce(&serial_container, format!("Error: {:?}\n\r", e).as_str()),
+            Err(e) => write_responce(&serial_container, format!("Error: {:?}\r\n", e).as_str()),
         }
     }
 }
