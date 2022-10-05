@@ -68,8 +68,6 @@ impl GCode {
 
                 new_code.s = Self::get_val('S', text)
                     .or_else(|_| Err(ParceError::Error("Invalid S value".into())))?;
-                new_code.a = Self::get_val('A', text)
-                    .or_else(|_| Err(ParceError::Error("Invalid A value".into())))?;
             } else if Self::has_command('G', text) {
                 new_code.code = Code::G(
                     Self::search_value('G', text)
@@ -107,8 +105,14 @@ impl GCode {
     }
 
     fn fill_letters(&mut self, text: &str) -> Result<(), ParceError> {
-        for (field, letter) in
-            [&mut self.x, &mut self.y, &mut self.f, &mut self.s].zip(['X', 'Y', 'F', 'S'])
+        for (field, letter) in [
+            &mut self.x,
+            &mut self.y,
+            &mut self.a,
+            &mut self.f,
+            &mut self.s,
+        ]
+        .zip(['X', 'Y', 'A', 'F', 'S'])
         {
             *field = Self::get_val(letter, text).or_else(|_| {
                 Err(ParceError::Error(format!(

@@ -143,7 +143,7 @@ where
         match code {
             0 => {
                 self.current_code = 0;
-                self.set_xy(&gcode)?;
+                self.set_xya(&gcode)?;
             }
             1 => {
                 self.current_code = 1;
@@ -167,7 +167,7 @@ where
                     Self::set_value(&mut self.current_f, new_f, 'F', i32::MAX as f32, 0.01f32)?;
                 }
 
-                self.set_xy(&gcode)?;
+                self.set_xya(&gcode)?;
             }
             28 => {
                 self.current_code = 28;
@@ -182,7 +182,7 @@ where
         Ok(())
     }
 
-    fn set_xy(&mut self, gcode: &GCode) -> Result<(), String> {
+    fn set_xya(&mut self, gcode: &GCode) -> Result<(), String> {
         if self.current_absolute {
             if let Some(to_x) = gcode.get_x() {
                 Self::set_value(
@@ -226,6 +226,17 @@ where
                 )?;
             }
         }
+
+        if let Some(new_a) = gcode.get_a() {
+            if let Err(_) = Self::set_value(&mut self.current_a, new_a as u8, 'A', 0xff, 0) {
+                if new_a > 255.0 {
+                    self.current_a = 0xff;
+                } else {
+                    self.current_a = 0;
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -269,17 +280,6 @@ where
                             self.current_s = config::MOTION_MAX_S;
                         } else {
                             self.current_s = 0.0;
-                        }
-                    }
-                }
-
-                if let Some(new_p) = gcode.get_a() {
-                    if let Err(_) = Self::set_value(&mut self.current_a, new_p as u8, 'A', 0xff, 0)
-                    {
-                        if new_p > 255.0 {
-                            self.current_a = 0xff;
-                        } else {
-                            self.current_a = 0;
                         }
                     }
                 }
