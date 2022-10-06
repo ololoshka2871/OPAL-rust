@@ -174,6 +174,9 @@ where
                 self.current_to_x = 0f32;
                 self.current_to_y = 0f32;
             }
+            90 => self.current_absolute = true,
+            91 => self.current_absolute = false,
+
             _ => return Ok(()),
         }
 
@@ -314,7 +317,7 @@ where
         match req {
             super::Request::Dollar('G') => Ok(Some(format!(
                 // https://github.com/gnea/grbl/blob/master/doc/markdown/commands.md#g---view-gcode-parser-state
-                "[GC:G{} G54 G17 G9{} G91.1 G94 G21 G40 G49 M0 M5 M9 T0 S{} F{}]\nok\n",
+                "[GC:G{} G54 G17 G9{} G91.1 G94 G21 G40 G49 M0 M5 M9 T0 S{} F{}]\n\rok\n\r",
                 self.current_code,
                 (!self.current_absolute as u32),
                 format_float_simple(self.current_s, 1),
@@ -325,7 +328,7 @@ where
                 // MPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?,
                 // WPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,.*)?>$")
                 Ok(Some(format!(
-                    "<Idle,MPos:{x:.5},{y:.5},0.0,WPos:{x:.5},{y:.5},0.0>\n",
+                    "<Idle,MPos:{x:.5},{y:.5},0.0,WPos:{x:.5},{y:.5},0.0>\n\r",
                     x = format_float_simple(self.current_cmd_x, 5),
                     y = format_float_simple(self.current_cmd_y, 5),
                 )))

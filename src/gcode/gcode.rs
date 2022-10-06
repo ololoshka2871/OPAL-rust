@@ -4,7 +4,7 @@ use core::str::FromStr;
 
 pub const MAX_LEN: usize = 150;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Code {
     G(u32),
     M(u32),
@@ -32,6 +32,7 @@ pub struct GCode {
 pub enum ParceResult {
     GCode(GCode),
     Request(Request),
+    Partial(GCode, usize),
 }
 
 pub enum ParceError {
@@ -73,6 +74,10 @@ impl GCode {
                     Self::search_value('G', text)
                         .or_else(|_| Err(ParceError::Error("Failed to parse M command".into())))?,
                 );
+
+                if new_code.code == Code::G(90) || new_code.code == Code::G(91) {
+                    return Ok(ParceResult::Partial(new_code, 3));
+                }
 
                 new_code.fill_letters(text)?;
             } else {

@@ -41,10 +41,10 @@ where
                         write_responce(&serial, msg.as_str());
                     }
                     Ok(None) => {
-                        write_responce(&serial, "ok\n");
+                        write_responce(&serial, "ok\n\r");
                     }
                     Err(e) => {
-                        write_responce(&serial, "error\n");
+                        write_responce(&serial, "error\n\r");
                         defmt::error!("Failed to process command {}", DefmtString(&e));
                     }
                 }
@@ -60,10 +60,10 @@ where
                     write_responce(&serial, msg.as_str());
                 }
                 Ok(None) => {
-                    write_responce(&serial, "ok\n");
+                    write_responce(&serial, "ok\n\r");
                 }
                 Err(e) => {
-                    write_responce(&serial, "error\n");
+                    write_responce(&serial, "error\n\r");
                     defmt::error!("Failed to process command {}", DefmtString(&e));
                 }
             }

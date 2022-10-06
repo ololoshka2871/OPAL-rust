@@ -121,26 +121,40 @@ pub fn gcode_server<B: usb_device::bus::UsbBus>(
 
     loop {
         match serial_stream.read_line(Some(gcode::MAX_LEN)) {
-            Ok(s) => match GCode::from_string(s.as_str()) {
-                Ok(ParceResult::GCode(gcode)) => {
-                    let _ = gcode_tx_queue.send(gcode, Duration::infinite());
+            Ok(s) => {
+                let mut s = s.as_str();
+                'partial: loop {
+                    match GCode::from_string(s) {
+                        Ok(ParceResult::GCode(gcode)) => {
+                            let _ = gcode_tx_queue.send(gcode, Duration::infinite());
+                            break 'partial;
+                        }
+                        Ok(ParceResult::Request(req)) => {
+                            let _ = req_tx_queue.send(req, Duration::zero());
+                            break 'partial;
+                        }
+                        Ok(ParceResult::Partial(gcode, offset)) => {
+                            let _ = gcode_tx_queue.send(gcode, Duration::infinite());
+                            s = &s[offset..];
+                            continue 'partial;
+                        }
+                        Err(ParceError::Empty) => {
+                            // нужно посылать "ok" даже на строки не содержащие кода
+                            defmt::trace!("Empty command: {}", s);
+                            write_responce(&serial_container, "ok\n\r");
+                            break 'partial;
+                        }
+                        Err(ParceError::Error(e)) => {
+                            write_responce(
+                                &serial_container,
+                                format!("Error: {:?}\n\r", e).as_str(),
+                            );
+                            break 'partial;
+                        }
+                    }
                 }
-                Ok(ParceResult::Request(req)) => {
-                    let _ = req_tx_queue.send(req, Duration::zero());
-                }
-                Err(ParceError::Empty) => {
-                    // нужно посылать "ok" даже на строки не содержащие кода
-                    defmt::trace!(
-                        "Empty command: {}",
-                        crate::support::defmt_string::DefmtString(&s)
-                    );
-                    write_responce(&serial_container, "ok\r\n");
-                }
-                Err(ParceError::Error(e)) => {
-                    write_responce(&serial_container, format!("Error: {:?}\r\n", e).as_str())
-                }
-            },
-            Err(e) => write_responce(&serial_container, format!("Error: {:?}\r\n", e).as_str()),
+            }
+            Err(e) => write_responce(&serial_container, format!("Error: {:?}\n\r", e).as_str()),
         }
     }
 }
