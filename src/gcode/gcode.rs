@@ -15,6 +15,7 @@ pub enum Code {
 #[derive(Clone, Copy)]
 pub enum Request {
     Dollar(char),
+    Jog(GCode),
     Status,
 }
 
@@ -50,21 +51,39 @@ impl GCode {
                 c
             })
             .collect::<heapless::String<N>>();
-        let text = upper_text.as_str();
+        Self::from_string_private::<N>(upper_text.as_str())
+    }
+
+    fn from_string_private<const N: usize>(text: &str) -> Result<ParceResult, ParceError> {
         let first_char = text.chars().nth(0).unwrap_or_default();
         if ['/', '(', ':'].contains(&first_char) {
             Err(ParceError::Empty)
         } else if ['?', '$'].contains(&first_char) {
-            Ok(if Self::has_command('$', text) {
-                ParceResult::Request(Request::Dollar(
-                    match { text.chars().skip_while(|c| *c != '$').skip(1).next() } {
-                        Some(c) => c,
-                        None => Err(ParceError::Error("Failed to parse $ command".into()))?,
-                    },
-                ))
+            if Self::has_command('$', text) {
+                if Self::has_command('J', text) {
+                    // Jog
+                    let mut new_code = Self::default();
+                    if Self::has_command('G', text) {
+                        new_code.code = Code::G(Self::search_value('G', text).or_else(|_| {
+                            Err(ParceError::Error("Failed to parse M command".into()))
+                        })?);
+                        new_code.fill_letters(text)?;
+
+                        Ok(ParceResult::Request(Request::Jog(new_code)))
+                    } else {
+                        Err(ParceError::Error(HlString::from_str("jog error").unwrap()))
+                    }
+                } else {
+                    Ok(ParceResult::Request(Request::Dollar(
+                        match { text.chars().skip_while(|c| *c != '$').skip(1).next() } {
+                            Some(c) => c,
+                            None => Err(ParceError::Error("Failed to parse $ command".into()))?,
+                        },
+                    )))
+                }
             } else {
-                ParceResult::Request(Request::Status)
-            })
+                Ok(ParceResult::Request(Request::Status))
+            }
         } else {
             let mut new_code = Self::default();
 

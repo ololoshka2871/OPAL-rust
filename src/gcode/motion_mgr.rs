@@ -1,9 +1,10 @@
 use core::fmt::{Display, Write};
+use core::str::FromStr;
 
 use crate::config;
 use crate::config::HlString as String;
 
-pub type LongString = heapless::String<256>;
+pub type LongString = heapless::String<384>;
 
 use super::GCode;
 
@@ -95,7 +96,7 @@ where
         if self._status == MotionStatus::IDLE {
             use super::gcode::Code;
             match gcode.code() {
-                Code::G(code) => self.process_gcodes(code, gcode),
+                Code::G(_) => self.process_gcodes(gcode),
                 Code::M(code) => self.process_mcodes(code, gcode),
                 Code::Empty => self.process_other(gcode),
             }?;
@@ -134,13 +135,14 @@ where
         self._status
     }
 
-    fn process_gcodes(&mut self, code: u32, gcode: &GCode) -> Result<(), String> {
-        match code {
-            0 => {
+    fn process_gcodes(&mut self, gcode: &GCode) -> Result<(), String> {
+        use super::gcode::Code;
+        match gcode.code() {
+            Code::G(0) => {
                 self.current_code = 0;
                 self.set_xya(&gcode)?;
             }
-            1 => {
+            Code::G(1) => {
                 self.current_code = 1;
 
                 if let Some(new_s) = gcode.get_s() {
@@ -164,13 +166,21 @@ where
 
                 self.set_xya(&gcode)?;
             }
-            28 => {
+            Code::G(28) => {
                 self.current_code = 28;
                 self.current_to_x = 0f32;
                 self.current_to_y = 0f32;
             }
-            90 => self.current_absolute = true,
-            91 => self.current_absolute = false,
+            Code::G(90) => self.current_absolute = true,
+            Code::G(91) => {
+                self.current_absolute = false;
+
+                // ignore F
+                if gcode.get_x().is_some() || gcode.get_y().is_some() {
+                    self.current_code = 0;
+                    self.set_xya(&gcode)?;
+                }
+            }
 
             _ => return Ok(()),
         }
@@ -307,7 +317,7 @@ where
 
     fn process_other(&mut self, gcode: &GCode) -> Result<(), String> {
         match self.current_code {
-            0 | 1 => self.process_gcodes(self.current_code, gcode),
+            0 | 1 => self.process_gcodes(gcode),
             c => {
                 let mut s = String::new();
                 write!(&mut s, "Cannot continue move for G{}", c).unwrap();
@@ -316,40 +326,50 @@ where
         }
     }
 
-    pub fn process_status_req(&self, req: &super::Request) -> Result<Option<LongString>, String> {
+    pub fn process_status_req(
+        &mut self,
+        req: &super::Request,
+    ) -> Result<Option<LongString>, String> {
+        use super::Request;
         use crate::support::format_float_simple;
         match req {
-            super::Request::Dollar('G') => {
-                // https://github.com/gnea/grbl/blob/master/doc/markdown/commands.md#g---view-gcode-parser-state
+            Request::Dollar('G') => {
                 let mut s = LongString::new();
                 write!(
                     &mut s,
-                    "[GC:G{} G54 G17 G9{} G91.1 G94 G21 G40 G49 M0 M5 M9 T0 S{} F{}]\n\rok\n\r",
-                    self.current_code,
-                    (!self.current_absolute as u32),
-                    format_float_simple(self.current_s, 1),
-                    format_float_simple(self.current_f, 3),
+                    "[GC:G{g1} G54 G17 G21 G9{g9} G94 M5 M9 T0 F{f} S{s}]\r\nok\r\n",
+                    g1 = self.current_code,
+                    g9 = (!self.current_absolute as u32),
+                    s = format_float_simple(self.current_s, 1),
+                    f = format_float_simple(self.current_f, 3),
                 )
                 .unwrap();
                 Ok(Some(s))
             }
-            super::Request::Status => {
-                // re.compile(r"^<(\w*?),
-                // MPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?,
-                // WPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,.*)?>$")
+            Request::Jog(code) => {
+                //like a $J=G91 X1 F100000
+                if self.is_busy() {
+                    Err(String::from_str("busy\r\n").unwrap())
+                } else {
+                    self.process_gcodes(&code)?;
+                    Ok(Some(LongString::from_str("ok\r\n").unwrap()))
+                }
+            }
+            Request::Status => {
                 let mut s = LongString::new();
                 write!(
                     &mut s,
-                    "<Idle,MPos:{x:.5},{y:.5},0.0,WPos:{x:.5},{y:.5},0.0>\n\r",
+                    "<{state}|MPos:{x:.3},{y:.3},0.000>\r\n",
+                    state = if self.is_busy() { "Run" } else { "Idle" },
                     x = format_float_simple(self.current_cmd_x, 5),
                     y = format_float_simple(self.current_cmd_y, 5),
                 )
                 .unwrap();
                 Ok(Some(s))
             }
-            super::Request::Dollar(dl) => {
+            Request::Dollar(dl) => {
                 let mut s = String::new();
-                write!(&mut s, "Unsupported command ${}", dl).unwrap();
+                write!(&mut s, "Unsupported command ${}\r\n", dl).unwrap();
                 Err(s)
             }
         }
