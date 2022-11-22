@@ -1,6 +1,9 @@
 use core::sync::atomic::AtomicBool;
 
-//use stm32f1xx_hal::pac::interrupt;
+use alloc::sync::Arc;
+use stm32f1xx_hal::pac::interrupt;
+
+use crate::support::interrupt_controller::IInterruptController;
 
 // 1. Таймер триггерит DMA которая копирует u16 из памяти в GPIO (32)
 // 2. В буфере 40 u16 -> это 20 CLOCKов
@@ -19,7 +22,11 @@ static mut BACK_BUF: &mut [u16] = unsafe { &mut OUTPUT_BUF_B };
 static mut BACK_BUF_READY: AtomicBool = AtomicBool::new(false);
 
 pub trait XY2_100Interface {
-    fn begin(&mut self, tim_ref_clk: stm32f1xx_hal::time::Hertz);
+    fn begin<IC: IInterruptController>(
+        &mut self,
+        ic: Arc<IC>,
+        tim_ref_clk: stm32f1xx_hal::time::Hertz,
+    );
     fn set_pos(&mut self, x: u16, y: u16);
 }
 
@@ -30,16 +37,14 @@ pub struct XY2_100<TIMER, DMACH, OUTPUTS> {
     outputs: OUTPUTS,
 }
 
-//static mut DMA1_CH2_IT: Option<unsafe fn()> = None;
+static mut DMA1_CH2_IT: Option<unsafe fn()> = None;
 
 pub mod tim2_gpiob_3456;
 
-/*
 #[interrupt]
 unsafe fn DMA1_CHANNEL2() {
     (DMA1_CH2_IT.expect("DMA1_CHANNEL2 not registred!"))();
 }
-*/
 
 fn build_msg(data: u16) -> u32 {
     // ... [0 0 1 <data16> <parity>] = 20 bit total

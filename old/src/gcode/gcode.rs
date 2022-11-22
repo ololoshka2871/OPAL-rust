@@ -1,7 +1,6 @@
-use core::fmt::Write;
+use alloc::format;
+use alloc::string::String;
 use core::str::FromStr;
-
-use crate::config::HlString;
 
 pub const MAX_LEN: usize = 150;
 
@@ -38,18 +37,12 @@ pub enum ParceResult {
 
 pub enum ParceError {
     Empty,
-    Error(HlString),
+    Error(String),
 }
 
 impl GCode {
-    pub fn from_string<const N: usize>(text: &str) -> Result<ParceResult, ParceError> {
-        let upper_text = text
-            .chars()
-            .map(|mut c| {
-                c.make_ascii_uppercase();
-                c
-            })
-            .collect::<heapless::String<N>>();
+    pub fn from_string(text: &str) -> Result<ParceResult, ParceError> {
+        let upper_text = text.to_uppercase();
         let text = upper_text.as_str();
         let first_char = text.chars().nth(0).unwrap_or_default();
         if ['/', '(', ':'].contains(&first_char) {
@@ -104,7 +97,7 @@ impl GCode {
             .skip_while(|c| *c != key)
             .skip(1)
             .take_while(|c| ['.', '+', '-'].contains(c) || c.is_numeric())
-            .collect::<HlString>()
+            .collect::<String>()
             .parse()
     }
 
@@ -127,9 +120,10 @@ impl GCode {
         .zip(['X', 'Y', 'A', 'F', 'S'])
         {
             *field = Self::get_val(letter, text).or_else(|_| {
-                let mut str = HlString::new();
-                let _ = write!(&mut str, r#"Failed to parse {} value "{}""#, letter, text);
-                Err(ParceError::Error(str))
+                Err(ParceError::Error(format!(
+                    r#"Failed to parse {} value "{}""#,
+                    letter, text
+                )))
             })?;
         }
         Ok(())

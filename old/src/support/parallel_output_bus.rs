@@ -8,7 +8,7 @@ pub trait ParallelOutputBus {
 #[macro_export]
 macro_rules! simple_parallel_output_bus {
     ($name:ident: $valtype:ty => ($(pin $pint:ty),+)) => {
-        pub struct $name($( pub $pint ),* );
+        struct $name($( pub $pint ),* );
 
         impl crate::support::parallel_output_bus::ParallelOutputBus for $name {
             type Output = $valtype;

@@ -121,13 +121,7 @@ where
     }
 
     fn get_status(&self) -> super::LaserStatus {
-        match self.alarm_bus.get() {
-            0 => super::LaserStatus::TemperatureAlarm,
-            1 => super::LaserStatus::Normal,
-            3 => super::LaserStatus::SystemAlarm,
-            4 => super::LaserStatus::SupplyVoltageAlarm,
-            _ => super::LaserStatus::SystemAlarm,
-        }
+        num::FromPrimitive::from_u8(self.alarm_bus.get()).unwrap_or(super::LaserStatus::SystemAlarm)
     }
 
     fn set_red_laser_power(&mut self, power: f32) {

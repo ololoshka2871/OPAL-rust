@@ -1,6 +1,9 @@
 use core::sync::atomic::Ordering;
 
+use alloc::sync::Arc;
 use stm32f1xx_hal::gpio::{Output, PinExt, PushPull, PB3, PB4, PB5, PB6};
+
+use crate::support::interrupt_controller::IInterruptController;
 
 use super::{build_msg, BACK_BUF, BACK_BUF_READY, TX_BUF, TX_POCKET_SIZE};
 
@@ -16,10 +19,37 @@ impl super::XY2_100Interface
         ),
     >
 {
-    fn begin(&mut self, tim_ref_clk: stm32f1xx_hal::time::Hertz) {
+    fn begin<IC: IInterruptController>(
+        &mut self,
+        ic: Arc<IC>,
+        tim_ref_clk: stm32f1xx_hal::time::Hertz,
+    ) {
+        /*
+        {
+            use core::sync::atomic::compiler_fence;
+
+            compiler_fence(Ordering::SeqCst);
+            self.outputs.0.set_high();
+            self.outputs.0.set_low();
+            compiler_fence(Ordering::SeqCst);
+
+            self.outputs.1.set_high();
+            self.outputs.1.set_low();
+            compiler_fence(Ordering::SeqCst);
+
+            self.outputs.2.set_high();
+            self.outputs.2.set_low();
+            compiler_fence(Ordering::SeqCst);
+
+            self.outputs.3.set_high();
+            self.outputs.3.set_low();
+            compiler_fence(Ordering::SeqCst);
+        }
+        */
+
         // configure dma memory -> GPIO by tim2_up
         {
-            //use stm32f1xx_hal::device::Interrupt;
+            use stm32f1xx_hal::device::Interrupt;
 
             // configure dma event src
             self.dma.stop();
@@ -49,13 +79,13 @@ impl super::XY2_100Interface
             }
 
             // transfer complead interrupt
-            //ic.set_priority(Interrupt::DMA1_CHANNEL2.into(), crate::config::DMA_IRQ_PRIO);
-            //ic.unmask(Interrupt::DMA1_CHANNEL2.into());
+            ic.set_priority(Interrupt::DMA1_CHANNEL2.into(), crate::config::DMA_IRQ_PRIO);
+            ic.unmask(Interrupt::DMA1_CHANNEL2.into());
         }
 
         // init timer
         {
-            //use crate::support::debug_mcu::DEBUG_MCU;
+            use crate::support::debug_mcu::DEBUG_MCU;
             use stm32f1xx_hal::device::RCC;
 
             let enr = unsafe { &(*RCC::ptr()).apb1enr };
@@ -89,14 +119,12 @@ impl super::XY2_100Interface
             // DMA request on overflow
             tim.dier.modify(|_, w| w.ude().set_bit());
 
-            /*
             // SET_BIT(DBGMCU->APB1FZR1, DBGMCU_APB1FZR1_DBG_TIM2_STOP[0])
             unsafe {
                 (*DEBUG_MCU)
                     .apb1fzr1
                     .set((*DEBUG_MCU).apb1fzr1.get() | (1 << 0));
             }
-            */
         }
     }
 
@@ -166,7 +194,7 @@ impl
             PB6<Output<PushPull>>,
         ),
     ) -> Self {
-        //unsafe { super::DMA1_CH2_IT = Some(Self::dma_event) };
+        unsafe { super::DMA1_CH2_IT = Some(Self::dma_event) };
 
         Self {
             timer,
@@ -176,7 +204,7 @@ impl
         }
     }
 
-    pub unsafe fn dma_event() {
+    unsafe fn dma_event() {
         let dma = &*stm32f1xx_hal::device::DMA1::ptr();
         let tim2 = &*stm32f1xx_hal::device::TIM2::ptr();
 

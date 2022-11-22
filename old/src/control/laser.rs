@@ -1,13 +1,14 @@
 use core::convert::Infallible;
 
 use embedded_hal::digital::v2::OutputPin;
+use num_derive::FromPrimitive;
 
 use crate::support::{
     parallel_input_bus::ParallelInputBus, parallel_output_bus::ParallelOutputBus,
 };
 
 /// Table 5 Definition of alarm status.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, FromPrimitive)]
 pub enum LaserStatus {
     TemperatureAlarm = 0,
     Normal = 1,

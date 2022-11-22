@@ -6,7 +6,7 @@ pub trait ParallelInputBus {
 #[macro_export]
 macro_rules! simple_parallel_input_bus {
     ($name:ident: $valtype:ty => ($(pin $pint:ty),+)) => {
-        pub struct $name($( pub $pint ),* );
+        struct $name($( pub $pint ),* );
 
         impl crate::support::parallel_input_bus::ParallelInputBus for $name {
             type Input = $valtype;

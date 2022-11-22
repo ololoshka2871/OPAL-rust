@@ -1,9 +1,12 @@
-use core::fmt::{Display, Write};
+use core::fmt::Display;
 
-use crate::config;
-use crate::config::HlString as String;
+use alloc::format;
+use alloc::string::String;
 
-pub type LongString = heapless::String<256>;
+use crate::{
+    config, support::format_float_simple::format_float_simple,
+    time_base::master_counter::MasterTimerInfo,
+};
 
 use super::GCode;
 
@@ -46,6 +49,9 @@ where
 
     laser: LASER,
     galvo: GALVO,
+
+    master: MasterTimerInfo,
+    to_nanos: f32,
 }
 
 impl<LASER, GALVO> MotionMGR<LASER, GALVO>
@@ -53,7 +59,7 @@ where
     GALVO: crate::control::xy2_100::XY2_100Interface,
     LASER: crate::control::laser::LaserInterface,
 {
-    pub fn new(galvo: GALVO, laser: LASER) -> Self {
+    pub fn new(galvo: GALVO, laser: LASER, master: MasterTimerInfo, to_nanos: f32) -> Self {
         Self {
             _status: MotionStatus::IDLE,
             is_move_first_interpolation: true,
@@ -80,15 +86,14 @@ where
 
             laser,
             galvo,
+
+            master,
+            to_nanos,
         }
     }
 
     pub fn begin(&mut self) {
         self.set_galvo_position(0.0, 0.0);
-    }
-
-    pub fn is_busy(&self) -> bool {
-        self._status != MotionStatus::IDLE
     }
 
     pub fn process(&mut self, gcode: &GCode) -> Result<Option<String>, String> {
@@ -105,8 +110,8 @@ where
         }
     }
 
-    pub fn tic(&mut self, now_nanos: u64) -> MotionStatus {
-        self._now = now_nanos;
+    pub fn tic(&mut self) -> MotionStatus {
+        self._now = self.nanos();
         if self._status == MotionStatus::INTERPOLATING {
             if self.interpolate_move() {
                 self.set_galvo_position(self.current_cmd_x, self.current_cmd_y);
@@ -246,13 +251,9 @@ where
         nlimit: T,
     ) -> Result<(), String> {
         if src > plimit {
-            let mut s = String::new();
-            write!(&mut s, "{} above limit", name).unwrap();
-            Err(s)
+            Err(format!("{} above limit", name))
         } else if src < nlimit {
-            let mut s = String::new();
-            write!(&mut s, "{} below limit", name).unwrap();
-            Err(s)
+            Err(format!("{} below limit", name))
         } else {
             *dest = src;
             Ok(())
@@ -308,50 +309,31 @@ where
     fn process_other(&mut self, gcode: &GCode) -> Result<(), String> {
         match self.current_code {
             0 | 1 => self.process_gcodes(self.current_code, gcode),
-            c => {
-                let mut s = String::new();
-                write!(&mut s, "Cannot continue move for G{}", c).unwrap();
-                Err(s)
-            }
+            c => Err(format!("Cannot continue move for G{}", c)),
         }
     }
 
-    pub fn process_status_req(&self, req: &super::Request) -> Result<Option<LongString>, String> {
-        use crate::support::format_float_simple;
+    pub fn process_status_req(&self, req: &super::Request) -> Result<Option<String>, String> {
         match req {
-            super::Request::Dollar('G') => {
+            super::Request::Dollar('G') => Ok(Some(format!(
                 // https://github.com/gnea/grbl/blob/master/doc/markdown/commands.md#g---view-gcode-parser-state
-                let mut s = LongString::new();
-                write!(
-                    &mut s,
-                    "[GC:G{} G54 G17 G9{} G91.1 G94 G21 G40 G49 M0 M5 M9 T0 S{} F{}]\n\rok\n\r",
-                    self.current_code,
-                    (!self.current_absolute as u32),
-                    format_float_simple(self.current_s, 1),
-                    format_float_simple(self.current_f, 3),
-                )
-                .unwrap();
-                Ok(Some(s))
-            }
+                "[GC:G{} G54 G17 G9{} G91.1 G94 G21 G40 G49 M0 M5 M9 T0 S{} F{}]\n\rok\n\r",
+                self.current_code,
+                (!self.current_absolute as u32),
+                format_float_simple(self.current_s, 1),
+                format_float_simple(self.current_f, 3),
+            ))),
             super::Request::Status => {
                 // re.compile(r"^<(\w*?),
                 // MPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?,
                 // WPos:([+\-]?\d*\.\d*),([+\-]?\d*\.\d*),([+\-]?\d*\.\d*)(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,[+\-]?\d*\.\d*)?(?:,.*)?>$")
-                let mut s = LongString::new();
-                write!(
-                    &mut s,
+                Ok(Some(format!(
                     "<Idle,MPos:{x:.5},{y:.5},0.0,WPos:{x:.5},{y:.5},0.0>\n\r",
                     x = format_float_simple(self.current_cmd_x, 5),
                     y = format_float_simple(self.current_cmd_y, 5),
-                )
-                .unwrap();
-                Ok(Some(s))
+                )))
             }
-            super::Request::Dollar(dl) => {
-                let mut s = String::new();
-                write!(&mut s, "Unsupported command ${}", dl).unwrap();
-                Err(s)
-            }
+            super::Request::Dollar(dl) => Err(format!("Unsupported command ${}", dl)),
         }
     }
 
@@ -445,6 +427,10 @@ where
         };
 
         self.galvo.set_pos(cmd_x, cmd_y);
+    }
+
+    fn nanos(&self) -> u64 {
+        (self.master.value64().0 as f32 * self.to_nanos) as u64
     }
 }
 

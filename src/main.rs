@@ -1,78 +1,550 @@
-#![no_std]
 #![no_main]
-// For allocator
-#![feature(lang_items)]
-#![feature(alloc_error_handler)]
-#![allow(incomplete_features)]
-#![feature(adt_const_params)]
+#![no_std]
 #![feature(array_zip)]
-#![feature(core_intrinsics)]
 #![feature(macro_metavar_expr)]
 
-extern crate alloc;
-
-// экономим место
-use panic_halt as _;
-
+mod config;
 mod control;
 mod gcode;
+mod hw;
 mod support;
-mod threads;
-mod time_base;
-mod workmodes;
 
-pub mod config;
-pub mod config_pins;
+use panic_abort as _;
+use rtic::app;
 
-#[cfg(debug_assertions)]
-mod master_value_stat;
+use stm32f1xx_hal::afio::AfioExt;
+use stm32f1xx_hal::dma::DmaExt;
+use stm32f1xx_hal::flash::FlashExt;
+use stm32f1xx_hal::gpio::{
+    Floating, GpioExt, Input, Output, PushPull, PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7, PA9, PB3,
+    PB4, PB5, PB6, PC13, PC14, PC15,
+};
+use stm32f1xx_hal::rcc::{HPre, PPre};
+use stm32f1xx_hal::time::Hertz;
+use stm32f1xx_hal::timer::{PwmChannel, Timer};
+use stm32f1xx_hal::usb::{Peripheral, UsbBus, UsbBusType};
 
-use cortex_m_rt::entry;
+use stm32f1xx_hal::dma::dma1;
+use stm32f1xx_hal::pac::{TIM1, TIM2, TIM4};
 
-use stm32f1xx_hal::stm32;
+use usb_device::prelude::{UsbDevice, UsbDeviceBuilder};
 
-use crate::workmodes::{high_performance_mode::HighPerformanceMode, WorkMode};
+use usbd_serial::SerialPort;
 
-//---------------------------------------------------------------
+use systick_monotonic::Systick;
 
-#[global_allocator]
-static GLOBAL: freertos_rust::FreeRtosAllocator = freertos_rust::FreeRtosAllocator;
+use support::clocking::{ClockConfigProvider, MyConfig};
 
-//---------------------------------------------------------------
+use control::xy2_100::XY2_100Interface;
 
-#[entry]
-fn main() -> ! {
-    /*
-    #[cfg(debug_assertions)]
-    cortex_m::asm::bkpt();
-    */
+use hw::{ADC_DEVIDER, AHB_DEVIDER, APB1_DEVIDER, APB2_DEVIDER, PLL_MUL, PLL_P_DIV, USB_DEVIDER};
 
-    defmt::trace!("++ Start up! ++");
+//-----------------------------------------------------------------------------
 
-    let p = unsafe { cortex_m::Peripherals::take().unwrap_unchecked() };
-    let dp = unsafe { stm32::Peripherals::take().unwrap_unchecked() };
+struct HighPerformanceClockConfigProvider;
 
-    start_at_mode::<HighPerformanceMode>(p, dp).expect("expect1");
+impl HighPerformanceClockConfigProvider {
+    fn ahb_dev2val(ahb_dev: HPre) -> u32 {
+        match ahb_dev {
+            HPre::DIV1 => 1,
+            HPre::DIV2 => 2,
+            HPre::DIV4 => 4,
+            HPre::DIV8 => 8,
+            HPre::DIV16 => 16,
+            HPre::DIV64 => 64,
+            HPre::DIV128 => 128,
+            HPre::DIV256 => 256,
+            HPre::DIV512 => 512,
+        }
+    }
 
-    freertos_rust::FreeRtosUtils::start_scheduler();
+    fn apb_dev2val(apb_dev: PPre) -> u32 {
+        match apb_dev {
+            PPre::DIV1 => 1,
+            PPre::DIV2 => 2,
+            PPre::DIV4 => 4,
+            PPre::DIV8 => 8,
+            PPre::DIV16 => 16,
+        }
+    }
+
+    fn pll_mul_bits(mul: u32) -> u8 {
+        (mul - 2) as u8
+    }
+
+    fn ppl_div2val(div: stm32f1xx_hal::device::rcc::cfgr::PLLXTPRE_A) -> u32 {
+        match div {
+            stm32f1xx_hal::device::rcc::cfgr::PLLXTPRE_A::DIV1 => 1,
+            stm32f1xx_hal::device::rcc::cfgr::PLLXTPRE_A::DIV2 => 2,
+        }
+    }
+
+    fn freeze(_acr: &mut stm32f1xx_hal::flash::ACR) -> stm32f1xx_hal::rcc::Clocks {
+        use stm32f1xx_hal::time::MHz;
+
+        let cfg = Self::to_config();
+
+        let clocks = cfg.get_clocks();
+        // adjust flash wait states
+        let acr = unsafe { &*stm32f1xx_hal::device::FLASH::ptr() };
+        unsafe {
+            acr.acr.write(|w| {
+                w.latency().bits(if clocks.sysclk() <= MHz(24) {
+                    0b000
+                } else if clocks.sysclk() <= MHz(48) {
+                    0b001
+                } else {
+                    0b010
+                })
+            })
+        }
+
+        let rcc = unsafe { &*stm32f1xx_hal::device::RCC::ptr() };
+
+        if cfg.hse.is_some() {
+            // enable HSE and wait for it to be ready
+
+            rcc.cr.modify(|_, w| w.hseon().set_bit());
+
+            while rcc.cr.read().hserdy().bit_is_clear() {}
+        }
+
+        if let Some(pllmul_bits) = cfg.pllmul {
+            // enable PLL and wait for it to be ready
+
+            #[allow(unused_unsafe)]
+            rcc.cfgr
+                .modify(|_, w| unsafe { w.pllxtpre().variant(PLL_P_DIV) });
+
+            #[allow(unused_unsafe)]
+            rcc.cfgr.modify(|_, w| unsafe {
+                w.pllmul().bits(pllmul_bits).pllsrc().bit(cfg.hse.is_some())
+            });
+
+            rcc.cr.modify(|_, w| w.pllon().set_bit());
+
+            while rcc.cr.read().pllrdy().bit_is_clear() {}
+        }
+
+        rcc.cfgr.modify(|_, w| unsafe {
+            w.adcpre().variant(cfg.adcpre);
+            w.ppre2()
+                .bits(cfg.ppre2 as u8)
+                .ppre1()
+                .bits(cfg.ppre1 as u8)
+                .hpre()
+                .bits(cfg.hpre as u8)
+                .usbpre()
+                .variant(cfg.usbpre)
+                .sw()
+                .bits(if cfg.pllmul.is_some() {
+                    // PLL
+                    0b10
+                } else if cfg.hse.is_some() {
+                    // HSE
+                    0b1
+                } else {
+                    // HSI
+                    0b0
+                })
+        });
+
+        clocks
+    }
 }
 
-fn start_at_mode<T>(
-    p: cortex_m::Peripherals,
-    dp: stm32::Peripherals,
-) -> Result<(), freertos_rust::FreeRtosError>
-where
-    T: WorkMode<T>,
-{
-    let mut mode = T::new(p, dp);
-    mode.ini_static();
-    mode.configure_clock();
-    mode.print_clock_config();
+impl ClockConfigProvider for HighPerformanceClockConfigProvider {
+    fn core_frequency() -> Hertz {
+        let f = crate::config::XTAL_FREQ / Self::ppl_div2val(PLL_P_DIV) * PLL_MUL
+            / Self::ahb_dev2val(AHB_DEVIDER);
+        Hertz::Hz(f)
+    }
 
-    #[cfg(debug_assertions)]
-    master_value_stat::init_master_getter(time_base::master_counter::MasterCounter::acquire());
+    fn apb1_frequency() -> Hertz {
+        Hertz::Hz(Self::core_frequency().to_Hz() / Self::apb_dev2val(APB1_DEVIDER))
+    }
 
-    mode.start_threads()
+    fn apb2_frequency() -> Hertz {
+        Hertz::Hz(Self::core_frequency().to_Hz() / Self::apb_dev2val(APB2_DEVIDER))
+    }
+
+    // stm32_cube: if APB devider > 1, timers freq APB*2
+    fn master_counter_frequency() -> Hertz {
+        // TIM3 - APB1
+        if APB2_DEVIDER == PPre::DIV1 {
+            Self::core_frequency()
+        } else {
+            Self::core_frequency() * 2
+        }
+    }
+
+    fn xtal2master_freq_multiplier() -> f32 {
+        PLL_MUL as f32
+            / (Self::ppl_div2val(PLL_P_DIV)
+                * Self::ahb_dev2val(AHB_DEVIDER)
+                * Self::apb_dev2val(APB2_DEVIDER)) as f32
+    }
+
+    fn to_config() -> MyConfig {
+        MyConfig {
+            hse_p_div: PLL_P_DIV,
+            hse: Some(crate::config::XTAL_FREQ),
+            pllmul: Some(Self::pll_mul_bits(PLL_MUL)),
+            hpre: AHB_DEVIDER,
+            ppre1: APB1_DEVIDER,
+            ppre2: APB2_DEVIDER,
+            usbpre: USB_DEVIDER,
+            adcpre: ADC_DEVIDER,
+        }
+    }
 }
 
 //-----------------------------------------------------------------------------
+
+crate::simple_parallel_output_bus! { LaserDataBus: u8 =>
+    (
+        pin PA0<Output<PushPull>>,
+        pin PA1<Output<PushPull>>,
+        pin PA2<Output<PushPull>>,
+        pin PA3<Output<PushPull>>,
+        pin PA4<Output<PushPull>>,
+        pin PA5<Output<PushPull>>,
+        pin PA6<Output<PushPull>>,
+        pin PA7<Output<PushPull>>
+    )
+}
+
+crate::simple_parallel_input_bus! { LaserAlarmBus: u8 =>
+    (
+        pin PC13<Input<Floating>>,
+        pin PC14<Input<Floating>>,
+        pin PC15<Input<Floating>>
+    )
+}
+
+//-----------------------------------------------------------------------------
+
+type Galvo = control::xy2_100::XY2_100<
+    TIM2,
+    dma1::C2,
+    (
+        PB3<Output<PushPull>>,
+        PB4<Output<PushPull>>,
+        PB5<Output<PushPull>>,
+        PB6<Output<PushPull>>,
+    ),
+>;
+
+#[app(device = stm32f1xx_hal::pac, peripherals = true, dispatchers = [RTCALARM])]
+mod app {
+    use super::*;
+
+    #[shared]
+    struct Shared {
+        usb_device: UsbDevice<'static, UsbBusType>,
+        serial: SerialPort<'static, UsbBus<Peripheral>>,
+        gcode_queue: heapless::Deque<gcode::GCode, { config::GCODE_QUEUE_SIZE }>,
+        request_queue: heapless::Deque<gcode::Request, { config::GCODE_QUEUE_SIZE }>,
+        motion_mgr: gcode::MotionMGR<
+            control::laser::Laser<
+                LaserDataBus,
+                LaserAlarmBus,
+                PA9<Output<PushPull>>,
+                PwmChannel<TIM4, 2>,
+                PwmChannel<TIM4, 3>,
+                PwmChannel<TIM4, 1>,
+                PwmChannel<TIM1, 2>,
+            >,
+            Galvo,
+        >,
+    }
+
+    #[local]
+    struct Local {}
+
+    #[monotonic(binds = SysTick, default = true)]
+    type MonoTimer = Systick<{ config::SYSTICK_RATE_HZ }>;
+
+    #[init]
+    fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
+        static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBusType>> = None;
+
+        let mut flash = ctx.device.FLASH.constrain();
+
+        let dma_channels = ctx.device.DMA1.split();
+
+        let mut gpioa = ctx.device.GPIOA.split();
+        let mut gpiob = ctx.device.GPIOB.split();
+        let mut gpioc = ctx.device.GPIOC.split();
+
+        let mut afio = ctx.device.AFIO.constrain();
+        let (pa15, pb3, pb4) = afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
+
+        let mut usb_pull_up = pa15.into_push_pull_output_with_state(
+            &mut gpioa.crh,
+            if !config::USB_PULLUP_ACTVE_LEVEL {
+                stm32f1xx_hal::gpio::PinState::High
+            } else {
+                stm32f1xx_hal::gpio::PinState::Low
+            },
+        );
+
+        let laser_power_bus = LaserDataBus(
+            gpioa.pa0.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa1.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa2.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa3.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa4.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa5.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa6.into_push_pull_output(&mut gpioa.crl),
+            gpioa.pa7.into_push_pull_output(&mut gpioa.crl),
+        );
+
+        let laser_alarm_bus = LaserAlarmBus(
+            gpioc.pc13.into_floating_input(&mut gpioc.crh),
+            gpioc.pc14.into_floating_input(&mut gpioc.crh),
+            gpioc.pc15.into_floating_input(&mut gpioc.crh),
+        );
+
+        let clocks = HighPerformanceClockConfigProvider::freeze(&mut flash.acr);
+
+        let mono = Systick::new(ctx.core.SYST, clocks.sysclk().to_Hz());
+
+        let (l_sync, l_em, l_ee): (
+            PwmChannel<TIM4, 1>,
+            PwmChannel<TIM4, 2>,
+            PwmChannel<TIM4, 3>,
+        ) = Timer::new(ctx.device.TIM4, &clocks)
+            .pwm_hz(
+                (
+                    gpiob.pb7.into_alternate_push_pull(&mut gpiob.crl),
+                    gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh),
+                    gpiob.pb9.into_alternate_push_pull(&mut gpiob.crh),
+                ),
+                &mut afio.mapr,
+                Hertz::kHz(crate::config::LASER_SYNC_CLOCK_KHZ),
+            )
+            .split();
+
+        let laser_red_beam_pwm = Timer::new(ctx.device.TIM1, &clocks)
+            .pwm_hz(
+                gpioa.pa10.into_alternate_push_pull(&mut gpioa.crh),
+                &mut afio.mapr,
+                Hertz::kHz(crate::config::LASER_RED_FREQ_KHZ),
+            )
+            .split();
+
+        let usb = Peripheral {
+            usb: ctx.device.USB,
+            pin_dm: gpioa.pa11,
+            pin_dp: gpioa.pa12,
+        };
+
+        unsafe {
+            USB_BUS.replace(UsbBus::new(usb));
+        }
+
+        let serial = SerialPort::new(unsafe { USB_BUS.as_ref().unwrap_unchecked() });
+
+        let usb_dev = UsbDeviceBuilder::new(
+            unsafe { USB_BUS.as_ref().unwrap_unchecked() },
+            usb_device::prelude::UsbVidPid(0x16c0, 0x27dd),
+        )
+        .manufacturer("SCTBElpa")
+        .product("OPAL-rust")
+        .serial_number("1")
+        .device_class(usbd_serial::USB_CLASS_CDC)
+        .build();
+
+        //---------------------------------------------------------------------
+
+        usb_pull_up.toggle(); // enable USB
+
+        //---------------------------------------------------------------------
+
+        let mut galvo_ctrl = control::xy2_100::XY2_100::new(
+            ctx.device.TIM2,
+            dma_channels.2,
+            stm32f1xx_hal::pac::GPIOB::ptr(),
+            (
+                pb3.into_push_pull_output(&mut gpiob.crl),
+                pb4.into_push_pull_output(&mut gpiob.crl),
+                gpiob.pb5.into_push_pull_output(&mut gpiob.crl),
+                gpiob.pb6.into_push_pull_output(&mut gpiob.crl),
+            ),
+        );
+
+        galvo_ctrl.begin(clocks.pclk1_tim());
+
+        let laser = control::laser::Laser::new(
+            laser_power_bus,
+            Some(gpioa.pa9.into_push_pull_output(&mut gpioa.crh)),
+            laser_alarm_bus,
+            l_em,
+            l_ee,
+            l_sync,
+            laser_red_beam_pwm,
+        );
+
+        let mut motion_mgr = gcode::MotionMGR::new(galvo_ctrl, laser);
+
+        motion_mgr.begin();
+
+        //---------------------------------------------------------------------
+
+        (
+            Shared {
+                usb_device: usb_dev,
+                serial,
+                gcode_queue: heapless::Deque::new(),
+                request_queue: heapless::Deque::new(),
+                motion_mgr,
+            },
+            Local {},
+            init::Monotonics(mono),
+        )
+    }
+
+    //-------------------------------------------------------------------------
+
+    #[task(binds = USB_HP_CAN_TX, shared = [usb_device, serial, gcode_queue, request_queue], priority = 1)]
+    fn usb_tx(ctx: usb_tx::Context) {
+        let mut usb_device = ctx.shared.usb_device;
+        let mut serial = ctx.shared.serial;
+        let mut gcode_queue = ctx.shared.gcode_queue;
+        let mut request_queue = ctx.shared.request_queue;
+
+        (
+            &mut usb_device,
+            &mut serial,
+            &mut gcode_queue,
+            &mut request_queue,
+        )
+            .lock(super::usb_poll);
+    }
+
+    #[task(binds = USB_LP_CAN_RX0, shared = [usb_device, serial, gcode_queue, request_queue], priority = 1)]
+    fn usb_rx0(ctx: usb_rx0::Context) {
+        let mut usb_device = ctx.shared.usb_device;
+        let mut serial = ctx.shared.serial;
+        let mut gcode_queue = ctx.shared.gcode_queue;
+        let mut request_queue = ctx.shared.request_queue;
+
+        (
+            &mut usb_device,
+            &mut serial,
+            &mut gcode_queue,
+            &mut request_queue,
+        )
+            .lock(super::usb_poll);
+    }
+
+    #[task(binds = DMA1_CHANNEL2, priority = 2)]
+    fn dma1_ch2(_ctx: dma1_ch2::Context) {
+        unsafe {
+            Galvo::dma_event();
+        }
+    }
+
+    //-------------------------------------------------------------------------
+
+    #[idle(shared=[gcode_queue, request_queue, motion_mgr, serial])]
+    fn idle(ctx: idle::Context) -> ! {
+        use core::str::FromStr;
+
+        const NANOSEC_PER_SYSTICK: u64 = 1_000_000_000u64 / config::SYSTICK_RATE_HZ as u64;
+
+        let mut gcode_queue = ctx.shared.gcode_queue;
+        let mut request_queue = ctx.shared.request_queue;
+        let mut motion_mgr = ctx.shared.motion_mgr;
+        let mut serial = ctx.shared.serial;
+
+        fn send<const N: usize>(
+            serial: &mut shared_resources::serial_that_needs_to_be_locked,
+            msg: Option<heapless::String<N>>,
+        ) {
+            if let Some(msg) = msg {
+                let _ = serial.lock(|s| s.write(msg.as_bytes()));
+            }
+        }
+
+        loop {
+            let res = motion_mgr.lock(|mm| {
+                if mm.tic(monotonics::MonoTimer::now().ticks() * NANOSEC_PER_SYSTICK)
+                    == gcode::MotionStatus::IDLE
+                {
+                    let msg = gcode_queue.lock(|gcq| gcq.pop_front());
+                    if let Some(gcode) = msg {
+                        mm.process(&gcode).unwrap().or(Some(unsafe {
+                            config::HlString::from_str("ok\n\r").unwrap_unchecked()
+                        }))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            });
+
+            send(&mut serial, res);
+
+            let res = motion_mgr.lock(|mm| {
+                if !mm.is_busy() {
+                    if let Some(req) = request_queue.lock(|rq| rq.pop_front()) {
+                        Some(mm.process_status_req(&req))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            });
+
+            match res {
+                Some(Ok(msg)) => {
+                    send(&mut serial, msg);
+                }
+                Some(Err(msg)) => {
+                    send(&mut serial, Some(msg));
+                }
+                _ => {}
+            }
+
+            if motion_mgr.lock(|mm| !mm.is_busy()) {
+                cortex_m::asm::wfi();
+            }
+        }
+    }
+}
+
+fn usb_poll<B: usb_device::bus::UsbBus, const N: usize>(
+    usb_dev: &mut usb_device::prelude::UsbDevice<'static, B>,
+    serial: &mut usbd_serial::SerialPort<'static, B>,
+    gcode_queue: &mut heapless::Deque<gcode::GCode, N>,
+    request_queue: &mut heapless::Deque<gcode::Request, N>,
+) {
+    use gcode::SerialErrResult;
+    use heapless::String;
+
+    static mut BUF: String<{ gcode::MAX_LEN }> = String::new();
+
+    if !usb_dev.poll(&mut [serial]) {
+        return;
+    }
+
+    match gcode::serial_process(serial, unsafe { &mut BUF }, gcode_queue, request_queue) {
+        Ok(trimm_size) => unsafe {
+            if trimm_size > 0 && trimm_size == BUF.len() {
+                BUF.clear()
+            } else {
+                let new_buf = BUF.chars().skip(trimm_size).collect();
+                BUF = new_buf;
+            }
+        },
+        Err(SerialErrResult::OutOfMemory) => {
+            unsafe { BUF.clear() };
+            serial.write(b"Command too long! (150)").unwrap();
+        }
+        _ => {}
+    }
+}
