@@ -4,7 +4,7 @@ use core::str::FromStr;
 use crate::config;
 use crate::config::HlString as String;
 
-pub type LongString = heapless::String<384>;
+pub type LongString = heapless::String<512>;
 
 use super::GCode;
 
@@ -45,6 +45,8 @@ where
     current_red_laserenabled: bool,
     laser_changed: bool,
 
+    avlb: usize,
+
     laser: LASER,
     galvo: GALVO,
 }
@@ -54,7 +56,7 @@ where
     GALVO: crate::control::xy2_100::XY2_100Interface,
     LASER: crate::control::laser::LaserInterface,
 {
-    pub fn new(galvo: GALVO, laser: LASER) -> Self {
+    pub fn new(galvo: GALVO, laser: LASER, buf_sz: usize) -> Self {
         Self {
             _status: MotionStatus::IDLE,
             is_move_first_interpolation: true,
@@ -79,6 +81,8 @@ where
             current_red_laserenabled: false,
             laser_changed: false,
 
+            avlb: buf_sz,
+
             laser,
             galvo,
         }
@@ -92,7 +96,8 @@ where
         self._status != MotionStatus::IDLE
     }
 
-    pub fn process(&mut self, gcode: &GCode) -> Result<Option<String>, String> {
+    pub fn process(&mut self, gcode: &GCode, avlb: usize) -> Result<Option<String>, String> {
+        self.avlb = avlb;
         if self._status == MotionStatus::IDLE {
             use super::gcode::Code;
             match gcode.code() {
@@ -182,6 +187,11 @@ where
                 }
             }
 
+            // g54 - система координат
+            // g17 - плосткость XY
+            // G20/G21 - дюймы/милиметры
+            // g94 - модача ед./мин
+            // g43[.*] - смещеине инструмента
             _ => return Ok(()),
         }
 
@@ -332,6 +342,8 @@ where
     ) -> Result<Option<LongString>, String> {
         use super::Request;
         use crate::support::format_float_simple;
+        let ok = Some(LongString::from_str("ok\r\n").unwrap());
+
         match req {
             Request::Dollar('G') => {
                 let mut s = LongString::new();
@@ -346,23 +358,47 @@ where
                 .unwrap();
                 Ok(Some(s))
             }
-            Request::Jog(code) => {
-                //like a $J=G91 X1 F100000
-                if self.is_busy() {
-                    Err(String::from_str("busy\r\n").unwrap())
-                } else {
-                    self.process_gcodes(&code)?;
-                    Ok(Some(LongString::from_str("ok\r\n").unwrap()))
-                }
+            Request::Dollar('#') => {
+                let mut s = LongString::new();
+                /*"[G54:0.000,0.000,0.000]\r
+                [G55:0.000,0.000,0.000]\r
+                [G56:0.000,0.000,0.000]\r
+                [G57:0.000,0.000,0.000]\r
+                [G58:0.000,0.000,0.000]\r
+                [G59:0.000,0.000,0.000]\r
+                [G28:0.000,0.000,0.000]\r
+                [G30:0.000,0.000,0.000]\r
+                [G92:0.000,0.000,0.000]\r
+                [TLO:0.000]\r
+                [PRB:0.000,0.000,0.000:0]\r
+                ok\r\n"*/
+                write!(
+                    &mut s,
+                    "[G54:0.000,0.000,0.000]\r
+[G55:0.000,0.000,0.000]\r
+[G56:0.000,0.000,0.000]\r
+[TLO:0.000]\r
+[PRB:0.000,0.000,0.000:0]\r
+ok\r\n"
+                )
+                .unwrap();
+                Ok(Some(s))
+            }
+            Request::Dollar('X') => {
+                // unlock
+                Ok(ok)
             }
             Request::Status => {
                 let mut s = LongString::new();
                 write!(
                     &mut s,
-                    "<{state}|MPos:{x:.3},{y:.3},0.000>\r\n",
+                    "<{state}|MPos:{x:.3},{y:.3},0.000|Bf:{bf},150|FS:{f},{s}>\r\n",
                     state = if self.is_busy() { "Run" } else { "Idle" },
-                    x = format_float_simple(self.current_cmd_x, 5),
-                    y = format_float_simple(self.current_cmd_y, 5),
+                    x = format_float_simple(self.current_cmd_x, 3),
+                    y = format_float_simple(self.current_cmd_y, 3),
+                    bf = self.avlb,
+                    s = format_float_simple(self.current_s, 1),
+                    f = format_float_simple(self.current_f, 3),
                 )
                 .unwrap();
                 Ok(Some(s))

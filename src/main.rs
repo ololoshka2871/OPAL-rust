@@ -13,6 +13,7 @@ use panic_abort as _;
 use rtic::app;
 
 use stm32f1xx_hal::afio::AfioExt;
+use stm32f1xx_hal::device::Interrupt;
 use stm32f1xx_hal::dma::DmaExt;
 use stm32f1xx_hal::flash::FlashExt;
 use stm32f1xx_hal::gpio::{
@@ -245,6 +246,10 @@ mod app {
         serial: SerialPort<'static, UsbBus<Peripheral>>,
         gcode_queue: heapless::Deque<gcode::GCode, { config::GCODE_QUEUE_SIZE }>,
         request_queue: heapless::Deque<gcode::Request, { config::GCODE_QUEUE_SIZE }>,
+    }
+
+    #[local]
+    struct Local {
         motion_mgr: gcode::MotionMGR<
             control::laser::Laser<
                 LaserDataBus,
@@ -258,9 +263,6 @@ mod app {
             Galvo,
         >,
     }
-
-    #[local]
-    struct Local {}
 
     #[monotonic(binds = SysTick, default = true)]
     type MonoTimer = Systick<{ config::SYSTICK_RATE_HZ }>;
@@ -386,7 +388,7 @@ mod app {
             laser_red_beam_pwm,
         );
 
-        let mut motion_mgr = gcode::MotionMGR::new(galvo_ctrl, laser);
+        let mut motion_mgr = gcode::MotionMGR::new(galvo_ctrl, laser, config::GCODE_QUEUE_SIZE);
 
         motion_mgr.begin();
 
@@ -398,9 +400,8 @@ mod app {
                 serial,
                 gcode_queue: heapless::Deque::new(),
                 request_queue: heapless::Deque::new(),
-                motion_mgr,
             },
-            Local {},
+            Local { motion_mgr },
             init::Monotonics(mono),
         )
     }
@@ -448,7 +449,7 @@ mod app {
 
     //-------------------------------------------------------------------------
 
-    #[idle(shared=[gcode_queue, request_queue, motion_mgr, serial])]
+    #[idle(shared=[gcode_queue, request_queue, serial], local = [motion_mgr])]
     fn idle(ctx: idle::Context) -> ! {
         use core::str::FromStr;
 
@@ -456,8 +457,9 @@ mod app {
 
         let mut gcode_queue = ctx.shared.gcode_queue;
         let mut request_queue = ctx.shared.request_queue;
-        let mut motion_mgr = ctx.shared.motion_mgr;
         let mut serial = ctx.shared.serial;
+
+        let mm = ctx.local.motion_mgr;
 
         fn send<const N: usize>(
             serial: &mut shared_resources::serial_that_needs_to_be_locked,
@@ -465,40 +467,34 @@ mod app {
         ) {
             if let Some(msg) = msg {
                 let _ = serial.lock(|s| s.write(msg.as_bytes()));
+                //rtic::pend(Interrupt::USB_HP_CAN_TX);
             }
         }
 
         loop {
-            let res = motion_mgr.lock(|mm| {
-                if mm.tic(monotonics::MonoTimer::now().ticks() * NANOSEC_PER_SYSTICK)
-                    == gcode::MotionStatus::IDLE
-                {
-                    let msg = gcode_queue.lock(|gcq| gcq.pop_front());
-                    if let Some(gcode) = msg {
-                        mm.process(&gcode).unwrap().or(Some(unsafe {
-                            config::HlString::from_str("ok\n\r").unwrap_unchecked()
-                        }))
-                    } else {
-                        None
-                    }
+            let res = if mm.tic(monotonics::MonoTimer::now().ticks() * NANOSEC_PER_SYSTICK)
+                == gcode::MotionStatus::IDLE
+            {
+                let (msg, avlb) =
+                    gcode_queue.lock(|gcq| (gcq.pop_front(), gcq.capacity() - gcq.len()));
+                if let Some(gcode) = msg {
+                    mm.process(&gcode, avlb).unwrap().or(Some(unsafe {
+                        config::HlString::from_str("ok\n\r").unwrap_unchecked()
+                    }))
                 } else {
                     None
                 }
-            });
+            } else {
+                None
+            };
 
             send(&mut serial, res);
 
-            let res = motion_mgr.lock(|mm| {
-                if !mm.is_busy() {
-                    if let Some(req) = request_queue.lock(|rq| rq.pop_front()) {
-                        Some(mm.process_status_req(&req))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            });
+            let res = if let Some(req) = request_queue.lock(|rq| rq.pop_front()) {
+                Some(mm.process_status_req(&req))
+            } else {
+                None
+            };
 
             match res {
                 Some(Ok(msg)) => {
@@ -509,10 +505,11 @@ mod app {
                 }
                 _ => {}
             }
-
-            if motion_mgr.lock(|mm| !mm.is_busy()) {
+            /*
+            if !mm.is_busy() {
                 cortex_m::asm::wfi();
             }
+            */
         }
     }
 }

@@ -18,8 +18,6 @@ command = "openocd"
 args = [
     "-f",
     "openocd.cfg",
-    "-f",
-    "${openocd_rtt}"
 ]
 
 ##############

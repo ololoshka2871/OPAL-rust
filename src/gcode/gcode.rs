@@ -15,7 +15,6 @@ pub enum Code {
 #[derive(Clone, Copy)]
 pub enum Request {
     Dollar(char),
-    Jog(GCode),
     Status,
 }
 
@@ -69,7 +68,7 @@ impl GCode {
                         })?);
                         new_code.fill_letters(text)?;
 
-                        Ok(ParceResult::Request(Request::Jog(new_code)))
+                        Ok(ParceResult::GCode(new_code))
                     } else {
                         Err(ParceError::Error(HlString::from_str("jog error").unwrap()))
                     }
@@ -96,10 +95,13 @@ impl GCode {
                 new_code.s = Self::get_val('S', text)
                     .or_else(|_| Err(ParceError::Error("Invalid S value".into())))?;
             } else if Self::has_command('G', text) {
-                new_code.code = Code::G(
-                    Self::search_value('G', text)
-                        .or_else(|_| Err(ParceError::Error("Failed to parse M command".into())))?,
-                );
+                let command_number = Self::search_value::<f32>('G', text)
+                    .or_else(|_| Err(ParceError::Error("Failed to parse Gcode number".into())))?;
+                if command_number > 43.0 && command_number < 43.9 {
+                    new_code.code = Code::G(43); // дробная часть не интересна
+                } else {
+                    new_code.code = Code::G(command_number as u32);
+                }
 
                 if new_code.code == Code::G(90) || new_code.code == Code::G(91) {
                     return Ok(ParceResult::Partial(new_code, 3));

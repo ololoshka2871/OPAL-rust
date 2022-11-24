@@ -20,49 +20,47 @@ pub fn serial_process<'a, B: usb_device::bus::UsbBus, const N: usize, const M: u
 
     let mut consumed_data_len = 0;
 
-    loop {
-        match readline(serial, buf) {
-            Ok(mut s) => {
-                'partial: loop {
-                    match super::GCode::from_string::<N>(s) {
-                        Ok(ParceResult::GCode(gcode)) => {
-                            gcode_queue
-                                .push_back(gcode)
-                                .map_err(|_| SerialErrResult::Incomplead)?;
-                            break 'partial;
-                        }
-                        Ok(ParceResult::Request(req)) => {
-                            request_queue
-                                .push_back(req)
-                                .map_err(|_| SerialErrResult::Incomplead)?;
-                            break 'partial;
-                        }
-                        Ok(ParceResult::Partial(gcode, offset)) => {
-                            gcode_queue
-                                .push_back(gcode)
-                                .map_err(|_| SerialErrResult::Incomplead)?;
-                            s = &s[offset..];
-                            continue 'partial;
-                        }
-                        Err(ParceError::Empty) => {
-                            // нужно посылать "ok" даже на строки не содержащие кода
-                            serial.write("ok\n\r".as_bytes()).unwrap();
-                            break;
-                        }
-                        Err(ParceError::Error(e)) => {
-                            let mut str = crate::config::HlString::new();
-                            let _ = write!(&mut str, "Error: {}\n\r", e);
-                            serial.write(e.as_bytes()).unwrap();
-                            break 'partial;
-                        }
+    match readline(serial, buf) {
+        Ok(mut s) => {
+            'partial: loop {
+                match super::GCode::from_string::<N>(s) {
+                    Ok(ParceResult::GCode(gcode)) => {
+                        gcode_queue
+                            .push_back(gcode)
+                            .map_err(|_| SerialErrResult::Incomplead)?;
+                        break 'partial;
+                    }
+                    Ok(ParceResult::Request(req)) => {
+                        request_queue
+                            .push_back(req)
+                            .map_err(|_| SerialErrResult::Incomplead)?;
+                        break 'partial;
+                    }
+                    Ok(ParceResult::Partial(gcode, offset)) => {
+                        gcode_queue
+                            .push_back(gcode)
+                            .map_err(|_| SerialErrResult::Incomplead)?;
+                        s = &s[offset..];
+                        continue 'partial;
+                    }
+                    Err(ParceError::Empty) => {
+                        // нужно посылать "ok" даже на строки не содержащие кода
+                        //serial.write("ok\n\r".as_bytes()).unwrap();
+                        break;
+                    }
+                    Err(ParceError::Error(e)) => {
+                        let mut str = crate::config::HlString::new();
+                        let _ = write!(&mut str, "Error: {}\n\r", e);
+                        serial.write(e.as_bytes()).unwrap();
+                        break 'partial;
                     }
                 }
-
-                consumed_data_len += s.len();
             }
-            Err(SerialErrResult::OutOfMemory) => return Err(SerialErrResult::OutOfMemory),
-            Err(SerialErrResult::NoData) | Err(SerialErrResult::Incomplead) => break,
+
+            consumed_data_len += s.len();
         }
+        Err(SerialErrResult::OutOfMemory) => return Err(SerialErrResult::OutOfMemory),
+        Err(SerialErrResult::NoData) | Err(SerialErrResult::Incomplead) => {}
     }
 
     Ok(consumed_data_len)

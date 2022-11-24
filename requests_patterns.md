@@ -42,7 +42,7 @@ Responce:
     or
     <Run|MPos:-2.901,-6.000,0.000|Bf:14,127|FS:10,10|WCO:-77.000,33.000,0.000>\r\n
 
-Request: (стоп)
+Request:
     $X
 Responce: 
-    ok
+    ok\r\n
