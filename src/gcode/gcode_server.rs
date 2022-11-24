@@ -10,12 +10,17 @@ pub enum SerialErrResult {
     Incomplead,
 }
 
-pub fn serial_process<'a, B: usb_device::bus::UsbBus, const N: usize, const M: usize>(
+pub fn serial_process<'a, B, GP, RP, const N: usize>(
     serial: &mut usbd_serial::SerialPort<'static, B>,
     buf: &'a mut heapless::String<N>,
-    gcode_queue: &mut heapless::Deque<gcode::GCode, M>,
-    request_queue: &mut heapless::Deque<gcode::Request, M>,
-) -> Result<usize, SerialErrResult> {
+    mut gcode_pusher: GP,
+    request_pusher: RP,
+) -> Result<usize, SerialErrResult>
+where
+    GP: FnMut(gcode::GCode) -> Result<(), gcode::GCode>,
+    RP: FnOnce(gcode::Request) -> Result<(), gcode::Request>,
+    B: usb_device::bus::UsbBus,
+{
     use gcode::{ParceError, ParceResult};
 
     let mut consumed_data_len = 0;
@@ -25,21 +30,15 @@ pub fn serial_process<'a, B: usb_device::bus::UsbBus, const N: usize, const M: u
             'partial: loop {
                 match super::GCode::from_string::<N>(s) {
                     Ok(ParceResult::GCode(gcode)) => {
-                        gcode_queue
-                            .push_back(gcode)
-                            .map_err(|_| SerialErrResult::Incomplead)?;
+                        gcode_pusher(gcode).map_err(|_| SerialErrResult::Incomplead)?;
                         break 'partial;
                     }
                     Ok(ParceResult::Request(req)) => {
-                        request_queue
-                            .push_back(req)
-                            .map_err(|_| SerialErrResult::Incomplead)?;
+                        request_pusher(req).map_err(|_| SerialErrResult::Incomplead)?;
                         break 'partial;
                     }
                     Ok(ParceResult::Partial(gcode, offset)) => {
-                        gcode_queue
-                            .push_back(gcode)
-                            .map_err(|_| SerialErrResult::Incomplead)?;
+                        gcode_pusher(gcode).map_err(|_| SerialErrResult::Incomplead)?;
                         s = &s[offset..];
                         continue 'partial;
                     }
@@ -78,21 +77,25 @@ fn readline<'a, B: usb_device::bus::UsbBus, const N: usize>(
             Ok(count) => {
                 if count == 1 {
                     let ch = ch[0] as char;
+                    defmt::debug!("got char: {}", ch);
                     if ENDLINES.contains(&ch) {
                         // endline
                         return if ch == '?' { Ok("?") } else { Ok(&buf[..]) };
                     } else {
-                        if buf.push(ch).is_ok() {
-                            return Err(SerialErrResult::Incomplead);
-                        } else {
+                        if buf.push(ch).is_err() {
                             return Err(SerialErrResult::OutOfMemory);
                         }
+                        // continue
                     }
                 } else {
+                    defmt::warn!("0 bytes got");
                     return Err(SerialErrResult::NoData);
                 }
             }
-            Err(UsbError::WouldBlock) => return Err(SerialErrResult::NoData),
+            Err(UsbError::WouldBlock) => {
+                defmt::warn!("read: UsbError::WouldBlock");
+                return Err(SerialErrResult::NoData);
+            }
             Err(_) => panic!(),
         }
     }

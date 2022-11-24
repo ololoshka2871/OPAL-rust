@@ -9,16 +9,16 @@ mod gcode;
 mod hw;
 mod support;
 
+use defmt_rtt as _;
 use panic_abort as _;
 use rtic::app;
 
 use stm32f1xx_hal::afio::AfioExt;
-use stm32f1xx_hal::device::Interrupt;
 use stm32f1xx_hal::dma::DmaExt;
 use stm32f1xx_hal::flash::FlashExt;
 use stm32f1xx_hal::gpio::{
     Floating, GpioExt, Input, Output, PushPull, PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7, PA9, PB3,
-    PB4, PB5, PB6, PC13, PC14, PC15,
+    PB4, PB5, PB6, PB9, PC13, PC14, PC15,
 };
 use stm32f1xx_hal::rcc::{HPre, PPre};
 use stm32f1xx_hal::time::Hertz;
@@ -246,22 +246,37 @@ mod app {
         serial: SerialPort<'static, UsbBus<Peripheral>>,
         gcode_queue: heapless::Deque<gcode::GCode, { config::GCODE_QUEUE_SIZE }>,
         request_queue: heapless::Deque<gcode::Request, { config::GCODE_QUEUE_SIZE }>,
-    }
 
-    #[local]
-    struct Local {
         motion_mgr: gcode::MotionMGR<
             control::laser::Laser<
                 LaserDataBus,
                 LaserAlarmBus,
                 PA9<Output<PushPull>>,
                 PwmChannel<TIM4, 2>,
-                PwmChannel<TIM4, 3>,
+                PB9<Output<PushPull>>,
                 PwmChannel<TIM4, 1>,
                 PwmChannel<TIM1, 2>,
             >,
             Galvo,
         >,
+    }
+
+    #[local]
+    struct Local {
+        /*
+        motion_mgr: gcode::MotionMGR<
+            control::laser::Laser<
+                LaserDataBus,
+                LaserAlarmBus,
+                PA9<Output<PushPull>>,
+                PwmChannel<TIM4, 2>,
+                PB9<Output<PushPull>>,
+                PwmChannel<TIM4, 1>,
+                PwmChannel<TIM1, 2>,
+            >,
+            Galvo,
+        >,
+        */
     }
 
     #[monotonic(binds = SysTick, default = true)]
@@ -312,16 +327,11 @@ mod app {
 
         let mono = Systick::new(ctx.core.SYST, clocks.sysclk().to_Hz());
 
-        let (l_sync, l_em, l_ee): (
-            PwmChannel<TIM4, 1>,
-            PwmChannel<TIM4, 2>,
-            PwmChannel<TIM4, 3>,
-        ) = Timer::new(ctx.device.TIM4, &clocks)
+        let (l_sync, l_em) = Timer::new(ctx.device.TIM4, &clocks)
             .pwm_hz(
                 (
                     gpiob.pb7.into_alternate_push_pull(&mut gpiob.crl),
                     gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh),
-                    gpiob.pb9.into_alternate_push_pull(&mut gpiob.crh),
                 ),
                 &mut afio.mapr,
                 Hertz::kHz(crate::config::LASER_SYNC_CLOCK_KHZ),
@@ -383,7 +393,7 @@ mod app {
             Some(gpioa.pa9.into_push_pull_output(&mut gpioa.crh)),
             laser_alarm_bus,
             l_em,
-            l_ee,
+            gpiob.pb9.into_push_pull_output(&mut gpiob.crh),
             l_sync,
             laser_red_beam_pwm,
         );
@@ -400,44 +410,59 @@ mod app {
                 serial,
                 gcode_queue: heapless::Deque::new(),
                 request_queue: heapless::Deque::new(),
+                motion_mgr,
             },
-            Local { motion_mgr },
+            Local { /*motion_mgr*/ },
             init::Monotonics(mono),
         )
     }
 
     //-------------------------------------------------------------------------
 
-    #[task(binds = USB_HP_CAN_TX, shared = [usb_device, serial, gcode_queue, request_queue], priority = 1)]
-    fn usb_tx(ctx: usb_tx::Context) {
+    #[task(binds = USB_HP_CAN_TX, shared = [usb_device, serial, gcode_queue, request_queue, motion_mgr], priority = 1)]
+    fn usb_tx(mut ctx: usb_tx::Context) {
         let mut usb_device = ctx.shared.usb_device;
         let mut serial = ctx.shared.serial;
         let mut gcode_queue = ctx.shared.gcode_queue;
         let mut request_queue = ctx.shared.request_queue;
 
-        (
-            &mut usb_device,
-            &mut serial,
-            &mut gcode_queue,
-            &mut request_queue,
-        )
-            .lock(super::usb_poll);
+        let gcode_pusher = move |gcode| gcode_queue.lock(|q| q.push_back(gcode));
+        let request_pusher = move |request| request_queue.lock(|q| q.push_back(request));
+
+        ctx.shared
+            .motion_mgr
+            .lock(|mm| mm.debug_set_laser_enable(true));
+
+        (&mut usb_device, &mut serial).lock(move |usb_device, serial| {
+            super::usb_poll(usb_device, serial, gcode_pusher, request_pusher)
+        });
+
+        ctx.shared
+            .motion_mgr
+            .lock(|mm| mm.debug_set_laser_enable(false));
     }
 
-    #[task(binds = USB_LP_CAN_RX0, shared = [usb_device, serial, gcode_queue, request_queue], priority = 1)]
-    fn usb_rx0(ctx: usb_rx0::Context) {
+    #[task(binds = USB_LP_CAN_RX0, shared = [usb_device, serial, gcode_queue, request_queue, motion_mgr], priority = 1)]
+    fn usb_rx0(mut ctx: usb_rx0::Context) {
         let mut usb_device = ctx.shared.usb_device;
         let mut serial = ctx.shared.serial;
         let mut gcode_queue = ctx.shared.gcode_queue;
         let mut request_queue = ctx.shared.request_queue;
 
-        (
-            &mut usb_device,
-            &mut serial,
-            &mut gcode_queue,
-            &mut request_queue,
-        )
-            .lock(super::usb_poll);
+        let gcode_pusher = move |gcode| gcode_queue.lock(|q| q.push_back(gcode));
+        let request_pusher = move |request| request_queue.lock(|q| q.push_back(request));
+
+        ctx.shared
+            .motion_mgr
+            .lock(|mm| mm.debug_set_red_laser(true));
+
+        (&mut usb_device, &mut serial).lock(move |usb_device, serial| {
+            super::usb_poll(usb_device, serial, gcode_pusher, request_pusher)
+        });
+
+        ctx.shared
+            .motion_mgr
+            .lock(|mm| mm.debug_set_red_laser(false));
     }
 
     #[task(binds = DMA1_CHANNEL2, priority = 2)]
@@ -449,7 +474,7 @@ mod app {
 
     //-------------------------------------------------------------------------
 
-    #[idle(shared=[gcode_queue, request_queue, serial], local = [motion_mgr])]
+    #[idle(shared=[gcode_queue, request_queue, serial, motion_mgr], local = [/*motion_mgr*/])]
     fn idle(ctx: idle::Context) -> ! {
         use core::str::FromStr;
 
@@ -459,7 +484,8 @@ mod app {
         let mut request_queue = ctx.shared.request_queue;
         let mut serial = ctx.shared.serial;
 
-        let mm = ctx.local.motion_mgr;
+        //let mm = ctx.local.motion_mgr;
+        let mut mm = ctx.shared.motion_mgr;
 
         fn send<const N: usize>(
             serial: &mut shared_resources::serial_that_needs_to_be_locked,
@@ -467,11 +493,36 @@ mod app {
         ) {
             if let Some(msg) = msg {
                 let _ = serial.lock(|s| s.write(msg.as_bytes()));
-                //rtic::pend(Interrupt::USB_HP_CAN_TX);
+                //rtic::pend(stm32f1xx_hal::device::Interrupt::USB_HP_CAN_TX);
             }
         }
 
         loop {
+            //mm.debug_set_red_laser(true);
+            //mm.lock(|mm| mm.debug_set_red_laser(true));
+
+            let res = mm.lock(|mm| {
+                if mm.tic(monotonics::MonoTimer::now().ticks() * NANOSEC_PER_SYSTICK)
+                    == gcode::MotionStatus::IDLE
+                {
+                    let (msg, avlb) =
+                        gcode_queue.lock(|gcq| (gcq.pop_front(), gcq.capacity() - gcq.len()));
+                    if let Some(gcode) = msg {
+                        defmt::debug!("Processing command: {}", defmt::Debug2Format(&gcode));
+                        let res = mm.process(&gcode, avlb).unwrap().or(Some(unsafe {
+                            config::HlString::from_str("ok\n\r").unwrap_unchecked()
+                        }));
+
+                        defmt::debug!("-> result: {}", res.as_deref().unwrap_or("(None)"));
+                        res
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            });
+            /*
             let res = if mm.tic(monotonics::MonoTimer::now().ticks() * NANOSEC_PER_SYSTICK)
                 == gcode::MotionStatus::IDLE
             {
@@ -487,24 +538,47 @@ mod app {
             } else {
                 None
             };
+            */
 
             send(&mut serial, res);
 
+            //mm.debug_set_red_laser(false);
+            //mm.lock(|mm| mm.debug_set_red_laser(false));
+
+            //mm.debug_set_laser_enable(true);
+            //mm.lock(|mm| mm.debug_set_laser_enable(true));
+
+            let res = mm.lock(|mm| {
+                if let Some(req) = request_queue.lock(|rq| rq.pop_front()) {
+                    defmt::debug!("Processing command: {}", defmt::Debug2Format(&req));
+                    let res = mm.process_status_req(&req);
+                    Some(res)
+                } else {
+                    None
+                }
+            });
+            /*
             let res = if let Some(req) = request_queue.lock(|rq| rq.pop_front()) {
                 Some(mm.process_status_req(&req))
             } else {
                 None
             };
+            */
 
             match res {
                 Some(Ok(msg)) => {
+                    defmt::debug!("-> result: Ok({})", msg.as_deref());
                     send(&mut serial, msg);
                 }
                 Some(Err(msg)) => {
+                    defmt::debug!("-> result: Err({})", msg.as_str());
                     send(&mut serial, Some(msg));
                 }
                 _ => {}
             }
+            //mm.debug_set_laser_enable(false);
+            //mm.lock(|mm| mm.debug_set_laser_enable(false));
+
             /*
             if !mm.is_busy() {
                 cortex_m::asm::wfi();
@@ -514,12 +588,16 @@ mod app {
     }
 }
 
-fn usb_poll<B: usb_device::bus::UsbBus, const N: usize>(
+fn usb_poll<B: usb_device::bus::UsbBus, GP, RP>(
     usb_dev: &mut usb_device::prelude::UsbDevice<'static, B>,
     serial: &mut usbd_serial::SerialPort<'static, B>,
-    gcode_queue: &mut heapless::Deque<gcode::GCode, N>,
-    request_queue: &mut heapless::Deque<gcode::Request, N>,
-) {
+    gcode_pusher: GP,
+    request_pusher: RP,
+) where
+    GP: FnMut(gcode::GCode) -> Result<(), gcode::GCode>,
+    RP: FnOnce(gcode::Request) -> Result<(), gcode::Request>,
+    B: usb_device::bus::UsbBus,
+{
     use gcode::SerialErrResult;
     use heapless::String;
 
@@ -529,7 +607,7 @@ fn usb_poll<B: usb_device::bus::UsbBus, const N: usize>(
         return;
     }
 
-    match gcode::serial_process(serial, unsafe { &mut BUF }, gcode_queue, request_queue) {
+    match gcode::serial_process(serial, unsafe { &mut BUF }, gcode_pusher, request_pusher) {
         Ok(trimm_size) => unsafe {
             if trimm_size > 0 && trimm_size == BUF.len() {
                 BUF.clear()

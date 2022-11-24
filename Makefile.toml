@@ -1,5 +1,13 @@
 # usage: https://github.com/sagiegurari/cargo-make
 
+[env]
+#executable={script=["cargo run --bin 2>&1 > /dev/null | tail -n2 | sed -e 's/^ *//;s/ *$//' -e '/^$/d'"]}
+path="target/thumbv7m-none-eabi/debug"
+executable = { script = ["find ${path} -maxdepth 1 -type f ! -name \"*.*\""] }
+
+rtt_addr = { script = ["nm -S ${executable} | grep RTT"] }
+openocd_rtt_src = "./openocd-rtt0.cfg.in"
+openocd_rtt = "/tmp/openocd-rtt0.cfg"
 
 [tasks.format]
 install_crate = "rustfmt"
@@ -13,19 +21,43 @@ dependencies = ["format"]
 
 ##############
 
+[tasks.make_oocd_cfg]
+command = "python"
+args = [
+    "gen_openocd-rtt0_cfg.py",
+    "${openocd_rtt_src}",
+    "${rtt_addr}",
+    "${openocd_rtt}"
+]
+dependencies = ["build"]
+
 [tasks.openocd]
 command = "openocd"
 args = [
     "-f",
     "openocd.cfg",
+    "-f",
+    "${openocd_rtt}"
 ]
+dependencies = ["make_oocd_cfg"]
 
 ##############
 
-[tasks.f]
+[tasks.flash]
 command = "arm-none-eabi-gdb"
 args = ["-x", "flash.gdb"]
 dependencies = ["build"]
+
+[tasks.log]
+script_runner = "@shell"
+script = '''
+echo "######################## RTT 0 ########################"
+nc localhost 8765 | defmt-print -e ${executable}
+'''
+dependencies = ["build"]
+
+[tasks.fl]
+dependencies = ["flash", "log"]
 
 [tasks.callgraph]
 dependencies = ["build"]

@@ -39,6 +39,9 @@ pub trait LaserInterface {
 
     /// установить мощность красного лазера
     fn set_red_laser_power(&mut self, power: f32);
+
+    // отладка включить/выключить сигнал EE
+    fn debug_set_ee(&mut self, enable: bool);
 }
 
 pub struct Laser<PBUS, ABUS, OUTPIN, EM, EE, ES, RL>
@@ -46,6 +49,7 @@ where
     PBUS: ParallelOutputBus<Output = u8>,
     ABUS: ParallelInputBus<Input = u8>,
     OUTPIN: OutputPin<Error = Infallible>,
+    EE: OutputPin<Error = Infallible>,
 {
     power_set_bus: PBUS,
     power_latch_pin: Option<OUTPIN>,

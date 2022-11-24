@@ -5,20 +5,20 @@ use crate::config::HlString;
 
 pub const MAX_LEN: usize = 150;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Code {
     G(u32),
     M(u32),
     Empty,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Request {
     Dollar(char),
     Status,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct GCode {
     code: Code,
 

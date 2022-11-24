@@ -502,6 +502,15 @@ ok\r\n"
 
         self.galvo.set_pos(cmd_x, cmd_y);
     }
+
+    pub fn debug_set_red_laser(&mut self, v: bool) {
+        self.laser
+            .set_red_laser_power(if v { config::MOTION_MAX_S } else { 0.0 });
+    }
+
+    pub fn debug_set_laser_enable(&mut self, v: bool) {
+        self.laser.debug_set_ee(v);
+    }
 }
 
 fn calculate_move_length_nanos(xdist: f32, ydist: f32, move_velocity: f32) -> f32 {
