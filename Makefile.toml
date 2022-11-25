@@ -3,9 +3,9 @@
 [env]
 #executable={script=["cargo run --bin 2>&1 > /dev/null | tail -n2 | sed -e 's/^ *//;s/ *$//' -e '/^$/d'"]}
 path="target/thumbv7m-none-eabi/debug"
-executable = { script = ["find ${path} -maxdepth 1 -type f ! -name \"*.*\""] }
+#executable = { script = ["find ${path} -maxdepth 1 -type f ! -name \"*.*\""] }
 
-rtt_addr = { script = ["nm -S ${executable} | grep RTT"] }
+#rtt_addr = { script = ["nm -S ${executable} | grep RTT"] }
 openocd_rtt_src = "./openocd-rtt0.cfg.in"
 openocd_rtt = "/tmp/openocd-rtt0.cfg"
 
@@ -36,10 +36,10 @@ command = "openocd"
 args = [
     "-f",
     "openocd.cfg",
-    "-f",
-    "${openocd_rtt}"
+    #"-f",
+    #"${openocd_rtt}"
 ]
-dependencies = ["make_oocd_cfg"]
+#dependencies = ["make_oocd_cfg"]
 
 ##############
 

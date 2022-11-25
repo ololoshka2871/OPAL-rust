@@ -96,16 +96,21 @@ where
         self._status != MotionStatus::IDLE
     }
 
-    pub fn process(&mut self, gcode: &GCode, avlb: usize) -> Result<Option<String>, String> {
+    pub fn process(&mut self, gcode: &mut GCode, avlb: usize) -> Result<Option<String>, String> {
         self.avlb = avlb;
         if self._status == MotionStatus::IDLE {
             use super::gcode::Code;
             match gcode.code() {
-                Code::G(_) => self.process_gcodes(gcode),
+                Code::G(_) => {
+                    self.process_gcodes(gcode)?;
+                    Ok(None)
+                }
                 Code::M(code) => self.process_mcodes(code, gcode),
-                Code::Empty => self.process_other(gcode),
-            }?;
-            Ok(None)
+                Code::Empty => {
+                    self.process_other(gcode)?;
+                    Ok(None)
+                }
+            }
         } else {
             Err("Motion busy!".into())
         }
@@ -140,8 +145,13 @@ where
         self._status
     }
 
-    fn process_gcodes(&mut self, gcode: &GCode) -> Result<(), String> {
+    fn process_gcodes(&mut self, gcode: &mut GCode) -> Result<(), String> {
         use super::gcode::Code;
+
+        if gcode.code() == Code::Empty {
+            gcode.set_code(Code::G(if self.current_code == 0 { 0 } else { 1 }));
+        }
+
         match gcode.code() {
             Code::G(0) => {
                 self.current_code = 0;
@@ -171,12 +181,16 @@ where
 
                 self.set_xya(&gcode)?;
             }
+
             Code::G(28) => {
                 self.current_code = 28;
                 self.current_to_x = 0f32;
                 self.current_to_y = 0f32;
             }
-            Code::G(90) => self.current_absolute = true,
+            Code::G(90) => {
+                self.current_absolute = true;
+                return Ok(());
+            }
             Code::G(91) => {
                 self.current_absolute = false;
 
@@ -192,6 +206,7 @@ where
             // G20/G21 - дюймы/милиметры
             // g94 - модача ед./мин
             // g43[.*] - смещеине инструмента
+            // g49 - отмена коррекции длины инструмента
             _ => return Ok(()),
         }
 
@@ -291,8 +306,20 @@ where
         Self::set_value(dest, to, name, plimit, nlimit)
     }
 
-    fn process_mcodes(&mut self, code: u32, gcode: &GCode) -> Result<(), String> {
+    fn process_mcodes(&mut self, code: u32, gcode: &GCode) -> Result<Option<String>, String> {
         match code {
+            2 => {
+                if self.is_busy() {
+                    return Err(unsafe {
+                        String::from_str("[MSG:Pgm End]\r\n").unwrap_unchecked()
+                    });
+                } else {
+                    // костыль, почему-то где-то теряется 3 ok'а
+                    return Ok(Some(unsafe {
+                        String::from_str("ok\r\nok\r\nok\r\nok\r\n").unwrap_unchecked()
+                    }));
+                }
+            }
             3 | 4 => {
                 if let Some(new_s) = gcode.get_s() {
                     if let Err(_) =
@@ -322,10 +349,10 @@ where
 
             _ => {}
         }
-        Ok(())
+        Ok(None)
     }
 
-    fn process_other(&mut self, gcode: &GCode) -> Result<(), String> {
+    fn process_other(&mut self, gcode: &mut GCode) -> Result<(), String> {
         match self.current_code {
             0 | 1 => self.process_gcodes(gcode),
             c => {
@@ -513,7 +540,7 @@ ok\r\n"
     }
 }
 
-fn calculate_move_length_nanos(xdist: f32, ydist: f32, move_velocity: f32) -> f32 {
+fn calculate_move_length_nanos(xdist: f32, ydist: f32, move_velocity: f32) -> f32 /* [ns] */ {
     let length_of_move = libm::sqrtf(xdist * xdist + ydist * ydist);
-    length_of_move * 1000.0 * 1000.0 * 1000.0 / move_velocity
+    1_000_000_000.0 /*[ns/s]*/ * length_of_move /*[mm]*/ / move_velocity /*[mm/s]*/
 }

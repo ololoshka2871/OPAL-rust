@@ -43,6 +43,9 @@ pub enum ParceError {
 
 impl GCode {
     pub fn from_string<const N: usize>(text: &str) -> Result<ParceResult, ParceError> {
+        if text.is_empty() {
+            return Err(ParceError::Empty);
+        }
         let upper_text = text
             .chars()
             .map(|mut c| {
@@ -57,6 +60,10 @@ impl GCode {
         let first_char = text.chars().nth(0).unwrap_or_default();
         if ['/', '(', ':'].contains(&first_char) {
             Err(ParceError::Empty)
+        } else if first_char == '%' {
+            Err(ParceError::Error(unsafe {
+                HlString::from_str("error: 1").unwrap_unchecked()
+            }))
         } else if ['?', '$'].contains(&first_char) {
             if Self::has_command('$', text) {
                 if Self::has_command('J', text) {
@@ -159,6 +166,11 @@ impl GCode {
     #[inline]
     pub fn code(&self) -> Code {
         self.code
+    }
+
+    #[inline]
+    pub fn set_code(&mut self, code: Code) {
+        self.code = code;
     }
 
     #[inline]
