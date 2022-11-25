@@ -7,7 +7,7 @@ use super::gcode;
 pub enum SerialErrResult {
     OutOfMemory,
     NoData,
-    Incomplead,
+    Incomplead(usize),
 }
 
 pub fn serial_process<'a, B, GP, RP, const N: usize>(
@@ -25,47 +25,44 @@ where
 
     let mut consumed_data_len = 0;
 
-    'outer: loop {
-        match readline(serial, buf) {
-            Ok(mut s) => {
-                'partial: loop {
-                    match super::GCode::from_string::<N>(s) {
-                        Ok(ParceResult::GCode(gcode)) => {
-                            consumed_data_len += s.len();
-                            gcode_pusher(gcode).map_err(|_| SerialErrResult::Incomplead)?;
-                            break 'partial;
-                        }
-                        Ok(ParceResult::Request(req)) => {
-                            consumed_data_len += s.len();
-                            request_pusher(req).map_err(|_| SerialErrResult::Incomplead)?;
-                            break 'partial;
-                        }
-                        Ok(ParceResult::Partial(gcode, offset)) => {
-                            consumed_data_len += offset;
-                            gcode_pusher(gcode).map_err(|_| SerialErrResult::Incomplead)?;
-                            s = &s[offset..];
-                            continue 'partial;
-                        }
-                        Err(ParceError::Empty) => {
-                            // нужно посылать "ok" даже на строки не содержащие кода
-                            //serial.write("ok\n\r".as_bytes()).unwrap();
-                            consumed_data_len += s.len();
-                            break 'outer;
-                        }
-                        Err(ParceError::Error(e)) => {
-                            consumed_data_len += s.len();
-                            let mut str = crate::config::HlString::new();
-                            let _ = write!(&mut str, "Error: {}\n\r", e);
-                            serial.write(e.as_bytes()).unwrap();
-                            break 'partial;
-                        }
-                    }
+    match readline(serial, buf) {
+        Ok(mut s) => 'partial: loop {
+            match super::GCode::from_string::<N>(s) {
+                Ok(ParceResult::GCode(gcode)) => {
+                    gcode_pusher(gcode)
+                        .map_err(|_| SerialErrResult::Incomplead(consumed_data_len))?;
+                    consumed_data_len += s.len();
+                    break 'partial;
+                }
+                Ok(ParceResult::Request(req)) => {
+                    request_pusher(req)
+                        .map_err(|_| SerialErrResult::Incomplead(consumed_data_len))?;
+                    consumed_data_len += s.len();
+                    break 'partial;
+                }
+                Ok(ParceResult::Partial(gcode, offset)) => {
+                    gcode_pusher(gcode)
+                        .map_err(|_| SerialErrResult::Incomplead(consumed_data_len))?;
+                    consumed_data_len += offset;
+                    s = &s[offset..];
+                    continue 'partial;
+                }
+                Err(ParceError::Empty) => {
+                    consumed_data_len += s.len();
+                    break 'partial;
+                }
+                Err(ParceError::Error(e)) => {
+                    consumed_data_len += s.len();
+                    let mut str = crate::config::HlString::new();
+                    let _ = write!(&mut str, "Error: {}\n\r", e);
+                    serial.write(e.as_bytes()).unwrap();
+                    break 'partial;
                 }
             }
-            Err(SerialErrResult::OutOfMemory) => return Err(SerialErrResult::OutOfMemory),
-            Err(SerialErrResult::NoData) => break 'outer,
-            Err(SerialErrResult::Incomplead) => {}
-        }
+        },
+        Err(SerialErrResult::OutOfMemory) => return Err(SerialErrResult::OutOfMemory),
+        Err(SerialErrResult::NoData) => {}
+        Err(SerialErrResult::Incomplead(_)) => unreachable!(),
     }
 
     Ok(consumed_data_len)
@@ -77,19 +74,29 @@ fn readline<'a, B: usb_device::bus::UsbBus, const N: usize>(
 ) -> Result<&'a str, SerialErrResult> {
     static ENDLINES: [char; 3] = ['\n', '\r', '?'];
 
+    // если строка уже кончается на что-то из ENDLINES
+    if let Some(ch) = buf.chars().last() {
+        if ENDLINES.contains(&ch) {
+            return Ok(&buf[..]);
+        }
+    }
+
     let mut ch = [0u8; 1];
     loop {
         match serial.read(&mut ch) {
             Ok(count) => {
                 if count == 1 {
                     let ch = ch[0] as char;
+                    if ch == '?' {
+                        return Ok("?");
+                    }
+                    if buf.push(ch).is_err() {
+                        return Err(SerialErrResult::OutOfMemory);
+                    }
                     if ENDLINES.contains(&ch) {
                         // endline
-                        return if ch == '?' { Ok("?") } else { Ok(&buf[..]) };
+                        return Ok(&buf[..]);
                     } else {
-                        if buf.push(ch).is_err() {
-                            return Err(SerialErrResult::OutOfMemory);
-                        }
                         // continue read string
                     }
                 } else {

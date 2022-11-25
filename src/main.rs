@@ -25,7 +25,7 @@ use stm32f1xx_hal::timer::{PwmChannel, Timer};
 use stm32f1xx_hal::usb::{Peripheral, UsbBus, UsbBusType};
 
 use stm32f1xx_hal::dma::dma1;
-use stm32f1xx_hal::pac::{TIM1, TIM2, TIM4};
+use stm32f1xx_hal::pac::{Interrupt, TIM1, TIM2, TIM4};
 
 use usb_device::prelude::{UsbDevice, UsbDeviceBuilder};
 
@@ -413,9 +413,12 @@ mod app {
         let gcode_pusher = move |gcode| gcode_queue.lock(|q| q.push_back(gcode));
         let request_pusher = move |request| request_queue.lock(|q| q.push_back(request));
 
-        (&mut usb_device, &mut serial).lock(move |usb_device, serial| {
+        if !(&mut usb_device, &mut serial).lock(move |usb_device, serial| {
             super::usb_poll(usb_device, serial, gcode_pusher, request_pusher)
-        });
+        }) {
+            cortex_m::peripheral::NVIC::mask(Interrupt::USB_HP_CAN_TX);
+            cortex_m::peripheral::NVIC::mask(Interrupt::USB_LP_CAN_RX0);
+        }
     }
 
     #[task(binds = USB_LP_CAN_RX0, shared = [usb_device, serial, gcode_queue, request_queue], priority = 1)]
@@ -428,9 +431,12 @@ mod app {
         let gcode_pusher = move |gcode| gcode_queue.lock(|q| q.push_back(gcode));
         let request_pusher = move |request| request_queue.lock(|q| q.push_back(request));
 
-        (&mut usb_device, &mut serial).lock(move |usb_device, serial| {
+        if !(&mut usb_device, &mut serial).lock(move |usb_device, serial| {
             super::usb_poll(usb_device, serial, gcode_pusher, request_pusher)
-        });
+        }) {
+            cortex_m::peripheral::NVIC::mask(Interrupt::USB_HP_CAN_TX);
+            cortex_m::peripheral::NVIC::mask(Interrupt::USB_LP_CAN_RX0);
+        }
     }
 
     #[task(binds = DMA1_CHANNEL2, priority = 2)]
@@ -472,6 +478,10 @@ mod app {
                 let (msg, avlb) =
                     gcode_queue.lock(|gcq| (gcq.pop_front(), gcq.capacity() - gcq.len()));
                 if let Some(mut gcode) = msg {
+                    unsafe {
+                        cortex_m::peripheral::NVIC::unmask(Interrupt::USB_HP_CAN_TX);
+                        cortex_m::peripheral::NVIC::unmask(Interrupt::USB_LP_CAN_RX0);
+                    }
                     match mm.process(&mut gcode, avlb - 1) {
                         Ok(Some(s)) => Some(s),
                         Ok(None) => {
@@ -516,7 +526,8 @@ fn usb_poll<B: usb_device::bus::UsbBus, GP, RP>(
     serial: &mut usbd_serial::SerialPort<'static, B>,
     gcode_pusher: GP,
     request_pusher: RP,
-) where
+) -> bool
+where
     GP: FnMut(gcode::GCode) -> Result<(), gcode::GCode>,
     RP: FnMut(gcode::Request) -> Result<(), gcode::Request>,
     B: usb_device::bus::UsbBus,
@@ -527,22 +538,32 @@ fn usb_poll<B: usb_device::bus::UsbBus, GP, RP>(
     static mut BUF: String<{ gcode::MAX_LEN }> = String::new();
 
     if !usb_dev.poll(&mut [serial]) {
-        return;
+        return true;
     }
 
-    match gcode::serial_process(serial, unsafe { &mut BUF }, gcode_pusher, request_pusher) {
-        Ok(trimm_size) => unsafe {
-            if trimm_size > 0 && trimm_size == BUF.len() {
+    let trimm_buff = |trimm_size| unsafe {
+        if trimm_size > 0 {
+            if trimm_size == BUF.len() {
                 BUF.clear()
             } else {
                 let new_buf = BUF.chars().skip(trimm_size).collect();
                 BUF = new_buf;
             }
-        },
+        }
+    };
+
+    match gcode::serial_process(serial, unsafe { &mut BUF }, gcode_pusher, request_pusher) {
+        Ok(trimm_size) => trimm_buff(trimm_size),
         Err(SerialErrResult::OutOfMemory) => {
             unsafe { BUF.clear() };
             serial.write(b"Command too long! (150)").unwrap();
         }
+        Err(SerialErrResult::Incomplead(_trimm_size)) => {
+            //serial.write(b"Command buffer full").unwrap();
+            return false;
+        }
         _ => {}
     }
+
+    true
 }
