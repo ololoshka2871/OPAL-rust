@@ -17,7 +17,7 @@ use stm32f1xx_hal::dma::DmaExt;
 use stm32f1xx_hal::flash::FlashExt;
 use stm32f1xx_hal::gpio::{
     Floating, GpioExt, Input, Output, PushPull, PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7, PA9, PB3,
-    PB4, PB5, PB6, PB9, PC13, PC14, PC15,
+    PB4, PB5, PB6, PC13, PC14, PC15,
 };
 use stm32f1xx_hal::rcc::{HPre, PPre};
 use stm32f1xx_hal::time::Hertz;
@@ -255,7 +255,7 @@ mod app {
                 LaserAlarmBus,
                 PA9<Output<PushPull>>,
                 PwmChannel<TIM4, 2>,
-                PB9<Output<PushPull>>,
+                PwmChannel<TIM4, 3>,
                 PwmChannel<TIM4, 1>,
                 PwmChannel<TIM1, 2>,
             >,
@@ -311,11 +311,12 @@ mod app {
 
         let mono = Systick::new(ctx.core.SYST, clocks.sysclk().to_Hz());
 
-        let (l_sync, l_em) = Timer::new(ctx.device.TIM4, &clocks)
+        let (l_sync, l_em, l_ee) = Timer::new(ctx.device.TIM4, &clocks)
             .pwm_hz(
                 (
                     gpiob.pb7.into_alternate_push_pull(&mut gpiob.crl),
                     gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh),
+                    gpiob.pb9.into_alternate_push_pull(&mut gpiob.crh),
                 ),
                 &mut afio.mapr,
                 Hertz::kHz(crate::config::LASER_SYNC_CLOCK_KHZ),
@@ -377,7 +378,7 @@ mod app {
             Some(gpioa.pa9.into_push_pull_output(&mut gpioa.crh)),
             laser_alarm_bus,
             l_em,
-            gpiob.pb9.into_push_pull_output(&mut gpiob.crh),
+            l_ee,
             l_sync,
             laser_red_beam_pwm,
         );

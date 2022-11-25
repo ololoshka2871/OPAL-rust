@@ -49,7 +49,6 @@ where
     PBUS: ParallelOutputBus<Output = u8>,
     ABUS: ParallelInputBus<Input = u8>,
     OUTPIN: OutputPin<Error = Infallible>,
-    EE: OutputPin<Error = Infallible>,
 {
     power_set_bus: PBUS,
     power_latch_pin: Option<OUTPIN>,

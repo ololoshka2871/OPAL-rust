@@ -12,7 +12,6 @@ impl<PBUS, ABUS, OUTPIN, EM, EE, ES, RL> super::Laser<PBUS, ABUS, OUTPIN, EM, EE
 where
     PBUS: ParallelOutputBus<Output = u8>,
     ABUS: parallel_input_bus::ParallelInputBus<Input = u8>,
-    EE: OutputPin<Error = Infallible>,
     OUTPIN: OutputPin<Error = Infallible>,
 {
     pub fn new(
@@ -58,13 +57,13 @@ where
     }
 }
 
-impl<PBUS, ABUS, EE, OUTPIN> super::LaserInterface
+impl<PBUS, ABUS, OUTPIN> super::LaserInterface
     for super::Laser<
         PBUS,
         ABUS,
         OUTPIN,
         PwmChannel<TIM4, 2>,
-        EE,
+        PwmChannel<TIM4, 3>,
         PwmChannel<TIM4, 1>,
         PwmChannel<TIM1, 2>,
     >
@@ -72,7 +71,6 @@ where
     PBUS: ParallelOutputBus<Output = u8>,
     ABUS: parallel_input_bus::ParallelInputBus<Input = u8>,
     OUTPIN: OutputPin<Error = Infallible>,
-    EE: OutputPin<Error = Infallible>,
 {
     fn enable(&mut self) {
         if !self.enabled {
@@ -81,7 +79,9 @@ where
             self.laser_sync.set_duty(self.laser_sync.get_max_duty() / 2);
             self.laser_sync.enable();
 
-            let _ = self.laser_emission_enable.set_high();
+            self.laser_emission_enable
+                .set_duty(self.laser_emission_enable.get_max_duty());
+            self.laser_emission_enable.enable();
 
             self.laser_emission_modulation
                 .set_duty(self.current_em_mod_seting);
@@ -94,7 +94,8 @@ where
         self.laser_emission_modulation.set_duty(0);
         self.laser_emission_modulation.disable();
 
-        let _ = self.laser_emission_enable.set_low();
+        self.laser_emission_enable.set_duty(0);
+        self.laser_emission_enable.disable();
 
         self.laser_sync.set_duty(0);
         self.laser_sync.disable();
@@ -141,6 +142,10 @@ where
     }
 
     fn debug_set_ee(&mut self, enable: bool) {
-        let _ = self.laser_emission_enable.set_state(enable.into());
+        let _ = self.laser_emission_enable.set_duty(if enable {
+            self.laser_emission_enable.get_max_duty()
+        } else {
+            0
+        });
     }
 }
