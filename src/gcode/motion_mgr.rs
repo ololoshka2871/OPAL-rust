@@ -36,9 +36,9 @@ where
     current_to_y: f32,
     current_cmd_x: f32,
     current_cmd_y: f32,
-    current_f: f32,
-    current_s: f32,
-    current_a: u8,
+    current_f: f32, // mm/min
+    current_s: u8,
+    current_a: f32,
     current_duration: f32,
     current_absolute: bool,
     current_laserenabled: bool,
@@ -73,8 +73,8 @@ where
             current_cmd_x: 0f32,
             current_cmd_y: 0f32,
             current_f: 100f32,
-            current_s: 0f32,
-            current_a: 0,
+            current_s: 0,
+            current_a: 100.0,
             current_duration: 0f32,
             current_absolute: true,
             current_laserenabled: false,
@@ -126,15 +126,15 @@ where
 
         if self.laser_changed {
             if self.current_laserenabled {
-                self.laser.set_pump_power(self.current_a);
-                self.laser.set_power_pwm(self.current_s);
+                self.laser.set_pump_power(self.current_s);
+                self.laser.set_power_pwm(self.current_a);
                 self.laser.enable();
             } else {
                 self.laser.disable()
             }
 
             if self.current_red_laserenabled {
-                self.laser.set_red_laser_power(self.current_s)
+                self.laser.set_red_laser_power(self.current_a)
             } else {
                 self.laser.set_red_laser_power(0.0);
             }
@@ -163,15 +163,15 @@ where
                 if let Some(new_s) = gcode.get_s() {
                     if let Err(_) = Self::set_value(
                         &mut self.current_s,
-                        new_s,
+                        new_s as u8,
                         'S',
-                        config::MOTION_MAX_S,
-                        -01f32,
+                        config::MOTION_MAX_S as u8,
+                        0,
                     ) {
                         if new_s > config::MOTION_MAX_S {
-                            self.current_s = config::MOTION_MAX_S;
+                            self.current_s = config::MOTION_MAX_S as u8;
                         } else {
-                            self.current_s = 0.0;
+                            self.current_s = 0;
                         }
                     }
                 }
@@ -200,11 +200,14 @@ where
                     self.set_xya(&gcode)?;
                 }
             }
+            Code::G(94) => {
+                // подача мм/мин.
+                return Ok(());
+            }
 
             // g54 - система координат
             // g17 - плосткость XY
             // G20/G21 - дюймы/милиметры
-            // g94 - модача ед./мин
             // g43[.*] - смещеине инструмента
             // g49 - отмена коррекции длины инструмента
             _ => return Ok(()),
@@ -261,11 +264,11 @@ where
         }
 
         if let Some(new_a) = gcode.get_a() {
-            if let Err(_) = Self::set_value(&mut self.current_a, new_a as u8, 'A', 0xff, 0) {
-                if new_a > 255.0 {
-                    self.current_a = 0xff;
+            if let Err(_) = Self::set_value(&mut self.current_a, new_a, 'A', 100.0, 0.0) {
+                if new_a > 100.0 {
+                    self.current_a = 100.0; // перебор
                 } else {
-                    self.current_a = 0;
+                    self.current_a = 0.0; // < 0
                 }
             }
         }
@@ -322,13 +325,17 @@ where
             }
             3 | 4 => {
                 if let Some(new_s) = gcode.get_s() {
-                    if let Err(_) =
-                        Self::set_value(&mut self.current_s, new_s, 'S', config::MOTION_MAX_S, 0.0)
-                    {
+                    if let Err(_) = Self::set_value(
+                        &mut self.current_s,
+                        new_s as u8,
+                        'S',
+                        config::MOTION_MAX_S as u8,
+                        0,
+                    ) {
                         if new_s > config::MOTION_MAX_S {
-                            self.current_s = config::MOTION_MAX_S;
+                            self.current_s = config::MOTION_MAX_S as u8;
                         } else {
-                            self.current_s = 0.0;
+                            self.current_s = 0;
                         }
                     }
                 }
@@ -379,7 +386,7 @@ where
                     "[GC:G{g1} G54 G17 G21 G9{g9} G94 M5 M9 T0 F{f} S{s}]\r\nok\r\n",
                     g1 = self.current_code,
                     g9 = (!self.current_absolute as u32),
-                    s = format_float_simple(self.current_s, 1),
+                    s = self.current_s,
                     f = format_float_simple(self.current_f, 3),
                 )
                 .unwrap();
@@ -424,7 +431,7 @@ ok\r\n"
                     x = format_float_simple(self.current_cmd_x, 3),
                     y = format_float_simple(self.current_cmd_y, 3),
                     bf = self.avlb,
-                    s = format_float_simple(self.current_s, 1),
+                    s = self.current_s,
                     f = format_float_simple(self.current_f, 3),
                 )
                 .unwrap();
@@ -542,5 +549,5 @@ ok\r\n"
 
 fn calculate_move_length_nanos(xdist: f32, ydist: f32, move_velocity: f32) -> f32 /* [ns] */ {
     let length_of_move = libm::sqrtf(xdist * xdist + ydist * ydist);
-    1_000_000_000.0 /*[ns/s]*/ * length_of_move /*[mm]*/ / move_velocity /*[mm/s]*/
+    1_000_000_000.0 /*[ns/s]*/ * length_of_move /*[mm]*/ / (move_velocity /*[mm/min]*/ / 60.0 /*[s/min]*/)
 }

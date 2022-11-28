@@ -24,8 +24,8 @@ pub const SYSTICK_RATE_HZ: u32 = 10_000;
 
 //-----------------------------------------------------------------------------
 
-/// max laser S 100 -> 100%
-pub const MOTION_MAX_S: f32 = 100f32;
+/// max laser S 255 -> 100%
+pub const MOTION_MAX_S: f32 = u8::MAX as f32;
 
 /// working range X
 pub const MOTION_X_RANGE: f32 = 250.0;
