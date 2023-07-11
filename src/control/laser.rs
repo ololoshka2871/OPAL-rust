@@ -42,6 +42,9 @@ pub trait LaserInterface {
 
     // отладка включить/выключить сигнал EE
     fn debug_set_ee(&mut self, enable: bool);
+
+    /// установить частоту (Гц по мануалу к лазеру)
+    fn set_frequency(&mut self, frequency: u32);
 }
 
 pub struct Laser<PBUS, ABUS, OUTPIN, EM, EE, ES, RL>
@@ -62,7 +65,10 @@ where
     laser_red_beam: RL,
 
     current_power_seting: u8,
-    current_em_mod_seting: u16,
+    power: f32,
+
+    frequency: u32,
+    laser_tim_freq: systick_monotonic::fugit::Hertz<u32>,
 
     enabled: bool,
 }

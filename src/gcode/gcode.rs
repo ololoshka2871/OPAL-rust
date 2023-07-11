@@ -25,6 +25,7 @@ pub struct GCode {
     x: Option<f32>,
     y: Option<f32>,
     a: Option<f32>, // Laser pump Power
+    b: Option<f32>, // Laser frequency
 
     s: Option<f32>, // Laser pwm Power
     f: Option<f32>, // FeedRate
@@ -149,10 +150,11 @@ impl GCode {
             &mut self.x,
             &mut self.y,
             &mut self.a,
+            &mut self.b,
             &mut self.f,
             &mut self.s,
         ]
-        .zip(['X', 'Y', 'A', 'F', 'S'])
+        .zip(['X', 'Y', 'A', 'B', 'F', 'S'])
         {
             *field = Self::get_val(letter, text).or_else(|_| {
                 let mut str = HlString::new();
@@ -194,6 +196,11 @@ impl GCode {
     }
 
     #[inline]
+    pub fn get_b(&self) -> Option<f32> {
+        self.b
+    }
+
+    #[inline]
     pub fn get_f(&self) -> Option<f32> {
         self.f
     }
@@ -206,6 +213,7 @@ impl Default for GCode {
             x: None,
             y: None,
             a: None,
+            b: None,
 
             s: None,
             f: None,

@@ -311,6 +311,7 @@ mod app {
 
         let mono = Systick::new(ctx.core.SYST, clocks.sysclk().to_Hz());
 
+        let laser_pwm_tim_clocks = clocks.pclk1_tim();
         let (l_sync, l_em, l_ee) = Timer::new(ctx.device.TIM4, &clocks)
             .pwm_hz(
                 (
@@ -381,6 +382,7 @@ mod app {
             l_ee,
             l_sync,
             laser_red_beam_pwm,
+            laser_pwm_tim_clocks,
         );
 
         let mut motion_mgr = gcode::MotionMGR::new(galvo_ctrl, laser, config::GCODE_QUEUE_SIZE);

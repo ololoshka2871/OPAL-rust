@@ -24,6 +24,8 @@ where
         laser_sync: ES,
 
         laser_red_beam: RL,
+
+        laser_tim_freq: systick_monotonic::fugit::Hertz<u32>,
     ) -> Self {
         Self {
             power_set_bus,
@@ -34,8 +36,12 @@ where
             laser_sync,
             laser_red_beam,
 
+            laser_tim_freq,
+
             current_power_seting: 0,
-            current_em_mod_seting: 0,
+            power: 0.0,
+
+            frequency: crate::config::LASER_SYNC_CLOCK_KHZ,
 
             enabled: false,
         }
@@ -53,6 +59,24 @@ where
                 unsafe { asm!("nop") };
             }
             let _ = latch.set_low();
+        }
+    }
+
+    fn impl_set_frequency(&mut self) {
+        use stm32f1xx_hal::pac;
+
+        const fn compute_arr_presc(freq: u32, clock: u32) -> (u32, u32) {
+            let ticks = clock / freq;
+            let psc = (ticks - 1) / (1 << 16);
+            let arr = ticks / (psc + 1) - 1;
+            (psc, arr)
+        }
+
+        let (psc, arr) = compute_arr_presc(self.frequency, self.laser_tim_freq.raw());
+
+        unsafe {
+            (*pac::TIM4::ptr()).psc.write(|w| w.bits(psc));
+            (*pac::TIM4::ptr()).arr.write(|w| w.bits(arr));
         }
     }
 }
@@ -76,6 +100,8 @@ where
         if !self.enabled {
             self.impl_set_pump_power(self.current_power_seting);
 
+            self.impl_set_frequency();
+
             self.laser_sync.set_duty(self.laser_sync.get_max_duty() / 2);
             self.laser_sync.enable();
 
@@ -83,8 +109,11 @@ where
                 .set_duty(self.laser_emission_enable.get_max_duty());
             self.laser_emission_enable.enable();
 
+            let current_em_mod_seting =
+                Self::power2_pwm(self.power, self.laser_emission_modulation.get_max_duty());
             self.laser_emission_modulation
-                .set_duty(self.current_em_mod_seting);
+                .set_duty(current_em_mod_seting);
+
             self.laser_emission_modulation.enable();
             self.enabled = true;
         }
@@ -110,14 +139,19 @@ where
             power = 100.0
         }
 
-        self.current_em_mod_seting =
-            Self::power2_pwm(power, self.laser_emission_modulation.get_max_duty());
-        self.laser_emission_modulation
-            .set_duty(self.current_em_mod_seting);
+        if power < 0.0 {
+            power = 0.0
+        }
+
+        self.power = power;
     }
 
     fn set_pump_power(&mut self, power_code: u8) {
         self.current_power_seting = power_code;
+    }
+
+    fn set_frequency(&mut self, frequency: u32) {
+        self.frequency = frequency;
     }
 
     fn get_status(&self) -> super::LaserStatus {

@@ -39,6 +39,7 @@ where
     current_f: f32, // mm/min
     current_s: u8,
     current_a: f32,
+    current_b: u32,
     current_duration: f32,
     current_absolute: bool,
     current_laserenabled: bool,
@@ -64,18 +65,19 @@ where
             current_endnanos: 0,
             _now: 0,
             current_code: 0,
-            current_from_x: 0f32,
-            current_from_y: 0f32,
-            current_distance_x: 0f32,
-            current_distance_y: 0f32,
-            current_to_x: 0f32,
-            current_to_y: 0f32,
-            current_cmd_x: 0f32,
-            current_cmd_y: 0f32,
-            current_f: 100f32,
+            current_from_x: 0.0,
+            current_from_y: 0.0,
+            current_distance_x: 0.0,
+            current_distance_y: 0.0,
+            current_to_x: 0.0,
+            current_to_y: 0.0,
+            current_cmd_x: 0.0,
+            current_cmd_y: 0.0,
+            current_f: 100.0,
             current_s: 0,
             current_a: 100.0,
-            current_duration: 0f32,
+            current_b: crate::config::LASER_SYNC_CLOCK_KHZ * 1000,
+            current_duration: 0.0,
             current_absolute: true,
             current_laserenabled: false,
             current_red_laserenabled: false,
@@ -127,6 +129,7 @@ where
         if self.laser_changed {
             if self.current_laserenabled {
                 self.laser.set_pump_power(self.current_s);
+                self.laser.set_frequency(self.current_b as u32);
                 self.laser.set_power_pwm(self.current_a);
                 self.laser.enable();
             } else {
@@ -155,7 +158,7 @@ where
         match gcode.code() {
             Code::G(0) => {
                 self.current_code = 0;
-                self.set_xya(&gcode)?;
+                self.set_xyab(&gcode)?;
             }
             Code::G(1) => {
                 self.current_code = 1;
@@ -179,13 +182,13 @@ where
                     Self::set_value(&mut self.current_f, new_f, 'F', i32::MAX as f32, 0.01f32)?;
                 }
 
-                self.set_xya(&gcode)?;
+                self.set_xyab(&gcode)?;
             }
 
             Code::G(28) => {
                 self.current_code = 28;
-                self.current_to_x = 0f32;
-                self.current_to_y = 0f32;
+                self.current_to_x = 0.0;
+                self.current_to_y = 0.0;
             }
             Code::G(90) => {
                 self.current_absolute = true;
@@ -197,7 +200,7 @@ where
                 // ignore F
                 if gcode.get_x().is_some() || gcode.get_y().is_some() {
                     self.current_code = 0;
-                    self.set_xya(&gcode)?;
+                    self.set_xyab(&gcode)?;
                 }
             }
             Code::G(94) => {
@@ -218,7 +221,7 @@ where
         Ok(())
     }
 
-    fn set_xya(&mut self, gcode: &GCode) -> Result<(), String> {
+    fn set_xyab(&mut self, gcode: &GCode) -> Result<(), String> {
         if self.current_absolute {
             if let Some(to_x) = gcode.get_x() {
                 Self::set_value(
@@ -269,6 +272,16 @@ where
                     self.current_a = 100.0; // перебор
                 } else {
                     self.current_a = 0.0; // < 0
+                }
+            }
+        }
+
+        if let Some(new_b) = gcode.get_b() {
+            if let Err(_) = Self::set_value(&mut self.current_b, new_b as u32, 'B', 80000, 20000) {
+                if new_b > 80000.0 {
+                    self.current_b = 80000; // перебор
+                } else {
+                    self.current_b = 20000; // недобор
                 }
             }
         }
