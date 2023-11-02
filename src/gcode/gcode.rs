@@ -154,9 +154,10 @@ impl GCode {
             &mut self.f,
             &mut self.s,
         ]
+        .iter_mut()
         .zip(['X', 'Y', 'A', 'B', 'F', 'S'])
         {
-            *field = Self::get_val(letter, text).or_else(|_| {
+            **field = Self::get_val(letter, text).or_else(|_| {
                 let mut str = HlString::new();
                 let _ = write!(&mut str, r#"Failed to parse {} value "{}""#, letter, text);
                 Err(ParceError::Error(str))

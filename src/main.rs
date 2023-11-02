@@ -1,6 +1,5 @@
 #![no_main]
 #![no_std]
-#![feature(array_zip)]
 #![feature(macro_metavar_expr)]
 
 mod config;
