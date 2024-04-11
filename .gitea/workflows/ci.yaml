@@ -27,6 +27,7 @@ jobs:
 
       - uses: akkuman/gitea-release-action@v1
         with:
+          name: v${{ steps.read_version.outputs.value }}
           body: This is an automatic ${{ steps.read_version.outputs.value }} release!
           prerelease: true
-          files: target/thumbv7m-none-eabi/release/
+          files: target/thumbv7m-none-eabi/release/opal-rust
