@@ -1,4 +1,4 @@
-use core::sync::atomic::AtomicBool;
+use core::{ptr::addr_of_mut, sync::atomic::AtomicBool};
 
 //use stm32f1xx_hal::pac::interrupt;
 
@@ -13,8 +13,8 @@ const TX_POCKET_SIZE: usize = 20;
 static mut OUTPUT_BUF_A: [u16; TX_POCKET_SIZE * 2] = [0; TX_POCKET_SIZE * 2];
 static mut OUTPUT_BUF_B: [u16; TX_POCKET_SIZE * 2] = [0; TX_POCKET_SIZE * 2];
 
-static mut TX_BUF: &mut [u16] = unsafe { &mut OUTPUT_BUF_A };
-static mut BACK_BUF: &mut [u16] = unsafe { &mut OUTPUT_BUF_B };
+static mut TX_BUF: *mut [u16] = unsafe { addr_of_mut!(OUTPUT_BUF_A) };
+static mut BACK_BUF: *mut [u16] = unsafe { addr_of_mut!(OUTPUT_BUF_B) };
 
 static mut BACK_BUF_READY: AtomicBool = AtomicBool::new(false);
 

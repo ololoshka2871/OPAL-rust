@@ -16,7 +16,7 @@ macro_rules! simple_parallel_output_bus {
             fn set(&mut self, value: Self::Output) {
                 $(
                     {
-                        ${ignore(pint)}
+                        ${ignore($pint)}
                         let i = ${index()};
                         if value & (1 << i) != 0 {
                             self.${index()}.set_high();

@@ -1,0 +1,32 @@
+name: Build
+
+on: 
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+
+jobs:
+  build:
+    runs-on: rust-stm32
+    steps:
+      - name: Clone
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build
+        run: cargo build --release
+
+      - uses: SebRollen/toml-action@v1.2.0
+        id: read_version
+        with:
+          file: 'Cargo.toml'
+          field: 'package.version'
+
+      - uses: akkuman/gitea-release-action@v1
+        with:
+          body: This is an automatic ${{ steps.read_version.outputs.value }} release!
+          prerelease: true
+          files: target/thumbv7m-none-eabi/release/

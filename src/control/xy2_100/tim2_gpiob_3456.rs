@@ -105,36 +105,38 @@ impl super::XY2_100Interface
         let data_y = build_msg(y);
 
         unsafe {
-            BACK_BUF.iter_mut().enumerate().for_each(|(i, r)| {
-                let (clk_mask, sync_mask, pin_data_x_mask, pin_data_y_mask) = (
-                    1 << self.outputs.0.pin_id(),
-                    1 << self.outputs.1.pin_id(),
-                    1 << self.outputs.2.pin_id(),
-                    1 << self.outputs.3.pin_id(),
-                );
+            if let Some(back_buf) = BACK_BUF.as_mut() {
+                back_buf.iter_mut().enumerate().for_each(|(i, r)| {
+                    let (clk_mask, sync_mask, pin_data_x_mask, pin_data_y_mask) = (
+                        1 << self.outputs.0.pin_id(),
+                        1 << self.outputs.1.pin_id(),
+                        1 << self.outputs.2.pin_id(),
+                        1 << self.outputs.3.pin_id(),
+                    );
 
-                let bit_n = i / 2;
+                    let bit_n = i / 2;
 
-                *r = sync_mask; // sync == 1 by default
+                    *r = sync_mask; // sync == 1 by default
 
-                // clk
-                if i & 1 == 0 {
-                    *r |= clk_mask;
-                }
-                // sync == 0 only last bit
-                if bit_n == TX_POCKET_SIZE - 1 {
-                    *r &= !sync_mask;
-                }
+                    // clk
+                    if i & 1 == 0 {
+                        *r |= clk_mask;
+                    }
+                    // sync == 0 only last bit
+                    if bit_n == TX_POCKET_SIZE - 1 {
+                        *r &= !sync_mask;
+                    }
 
-                // data
-                let chk_mask = 1u32 << (TX_POCKET_SIZE - bit_n - 1);
-                if data_x & chk_mask != 0 {
-                    *r |= pin_data_x_mask
-                }
-                if data_y & chk_mask != 0 {
-                    *r |= pin_data_y_mask
-                }
-            });
+                    // data
+                    let chk_mask = 1u32 << (TX_POCKET_SIZE - bit_n - 1);
+                    if data_x & chk_mask != 0 {
+                        *r |= pin_data_x_mask
+                    }
+                    if data_y & chk_mask != 0 {
+                        *r |= pin_data_y_mask
+                    }
+                });
+            }
 
             BACK_BUF_READY.store(true, Ordering::SeqCst);
 
@@ -202,14 +204,21 @@ impl
         }
 
         BACK_BUF_READY.store(false, Ordering::SeqCst); // back buffer not ready
-        core::mem::swap(&mut TX_BUF, &mut BACK_BUF); // swap buffers
+        {
+            // swap buffers
+            let back_buf = BACK_BUF;
+            BACK_BUF = TX_BUF;
+            TX_BUF = back_buf;
+        }
 
         // stop dma1_ch2
         dma.ifcr.write(|w| w.cgif2().set_bit()); // reset interrupt flag
         dma.ch2.cr.modify(|_, w| w.en().clear_bit());
 
-        // set font buffer adress
-        dma.ch2.mar.write(|w| w.ma().bits(TX_BUF.as_ptr() as u32));
+        // set font buffer address
+        dma.ch2
+            .mar
+            .write(|w| w.ma().bits(TX_BUF as *const u16 as u32));
 
         // transfer length
         dma.ch2

@@ -553,7 +553,12 @@ where
         }
     };
 
-    match gcode::serial_process(serial, unsafe { &mut BUF }, gcode_pusher, request_pusher) {
+    match gcode::serial_process(
+        serial,
+        unsafe { &mut *core::ptr::addr_of_mut!(BUF) },
+        gcode_pusher,
+        request_pusher,
+    ) {
         Ok(trimm_size) => trimm_buff(trimm_size),
         Err(SerialErrResult::OutOfMemory) => {
             unsafe { BUF.clear() };

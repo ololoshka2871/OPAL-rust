@@ -15,7 +15,7 @@ macro_rules! simple_parallel_input_bus {
                 let mut res = 0;
                 $(
                     {
-                        ${ignore(pint)}
+                        ${ignore($pint)}
                         let i = ${index()};
                         if self.${index()}.is_high() {
                             res |= 1 << i;
